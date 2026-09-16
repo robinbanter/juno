@@ -102,6 +102,65 @@
 
 /* Map semantic vars → Tailwind utilities. `inline` keeps the var
    reference so dark/light switching stays reactive. */
+/* ============================================================
+   Juno — scoped to `.juno`.
+
+   Deep-space dark rather than Zora's white: Juno is its own
+   product and should not read as a clone of one. The accent is
+   Jupiter amber, reserved for the brand mark and the graduation
+   bar; trade direction stays on the conventional green/red axis
+   so buy and sell are never ambiguous.
+
+   Scoped because the Norr app above owns `:root`; `.juno`
+   establishes an independent context for the Juno routes.
+   ============================================================ */
+.juno {
+  color-scheme: dark;
+
+  /* Canvas — near-black with a violet cast, so the ambers read warm
+     against it instead of muddy. */
+  --j-bg: #0d0b12;
+  --j-ink: #f4f1f8;
+  --j-muted: #a79fb8;
+  --j-faint: #6f6684;
+
+  /* Raised surfaces: chips, search pill, stat cards, inputs. */
+  --j-surface: #171320;
+  --j-input: #141020;
+  --j-line: #241e31;
+  --j-line-strong: #3a3150;
+
+  /* Brand. Used for the mark and the graduation bar — never for a
+     control, so it never competes with buy/sell. */
+  --j-brand: #ffb020;
+  --j-brand-dim: #c9861a;
+
+  /* Direction. Positive is jade, negative is coral — far enough apart
+     in hue and lightness to stay separable for deuteranopes, which
+     Zora's green/magenta pairing is not. */
+  --j-pos: #1fd98a;
+  --j-pos-press: #17c079;
+  --j-neg: #ff5c6c;
+
+  --j-danger: #ff4d4d;   /* amount exceeds balance */
+  --j-focus: #7c6bff;    /* focus ring */
+
+  /* Graduation heat: jade while there is curve left to buy through,
+     amber as the pool approaches its migration threshold. */
+  --j-curve: linear-gradient(90deg, #1fd98a 0%, #ffb020 62%, #ffe066 100%);
+  --j-media-progress: linear-gradient(90deg, #1fd98a 0%, #ffb020 100%);
+
+  --j-radius: 12px;
+  --j-radius-lg: 16px;
+
+  /* Dark surfaces need more shadow spread than light ones to read as
+     lifted at all. */
+  --j-shadow-pop: 0 12px 40px rgba(0, 0, 0, 0.6);
+
+  background: var(--j-bg);
+  color: var(--j-ink);
+}
+
 @theme inline {
   --color-bg: var(--bg);
   --color-surface: var(--surface);
@@ -137,6 +196,28 @@
   --font-mono: var(--font-geist-mono);
 
   --ease-veil: cubic-bezier(0.22, 1, 0.36, 1);
+
+  /* Juno (scoped to `.juno`) — resolved at the use site, so the `.juno`
+     scope drives them without needing a second Tailwind entry. */
+  --color-j-bg: var(--j-bg);
+  --color-j-ink: var(--j-ink);
+  --color-j-muted: var(--j-muted);
+  --color-j-faint: var(--j-faint);
+  --color-j-surface: var(--j-surface);
+  --color-j-input: var(--j-input);
+  --color-j-line: var(--j-line);
+  --color-j-line-strong: var(--j-line-strong);
+  --color-j-brand: var(--j-brand);
+  --color-j-brand-dim: var(--j-brand-dim);
+  --color-j-pos: var(--j-pos);
+  --color-j-pos-press: var(--j-pos-press);
+  --color-j-neg: var(--j-neg);
+  --color-j-danger: var(--j-danger);
+  --color-j-focus: var(--j-focus);
+
+  --radius-j: var(--j-radius);
+  --radius-j-lg: var(--j-radius-lg);
+
 }
 
 /* ============================================================

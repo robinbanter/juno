@@ -2,7 +2,10 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { ShieldAlert } from "lucide-react";
+
+import { isJunoRoute } from "@/lib/juno/routes";
 
 /**
  * 18+ confirmation shown before any content is visible.
@@ -23,6 +26,7 @@ export function AgeGate() {
   // Start hidden so the gate never flashes over the page for a returning
   // visitor, and never renders at all during SSR where localStorage is absent.
   const [decided, setDecided] = useState(true);
+  const pathname = usePathname();
 
   useEffect(() => {
     try {
@@ -34,7 +38,9 @@ export function AgeGate() {
     }
   }, []);
 
-  if (decided) return null;
+  // Juno shares this root layout but is a different product with no adult
+  // content, so the gate does not apply there.
+  if (decided || isJunoRoute(pathname)) return null;
 
   function confirm() {
     try {

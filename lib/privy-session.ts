@@ -49,6 +49,16 @@ function b64urlToBytes(value: string): Uint8Array {
 /** Only ever used when NODE_ENV !== production — see getKey(). */
 const DEV_ONLY_SECRET = "zorr-dev-insecure-secret-change-me";
 
+/**
+ * `TextEncoder.encode` is typed as `Uint8Array<ArrayBufferLike>`, which no
+ * longer satisfies WebCrypto's `BufferSource` — that pins the buffer to
+ * `ArrayBuffer`, and `ArrayBufferLike` admits `SharedArrayBuffer`. A
+ * TextEncoder never returns shared memory, so the narrowing is sound.
+ */
+function utf8(value: string): Uint8Array<ArrayBuffer> {
+  return new TextEncoder().encode(value) as Uint8Array<ArrayBuffer>;
+}
+
 async function getKey(): Promise<CryptoKey> {
   // A default keeps local dev config-free, but it MUST NOT survive into
   // production: this key signs the session cookie, and the fallback is a public
@@ -63,7 +73,7 @@ async function getKey(): Promise<CryptoKey> {
   const secret = configured || DEV_ONLY_SECRET;
   return crypto.subtle.importKey(
     "raw",
-    new TextEncoder().encode(secret),
+    utf8(secret),
     { name: "HMAC", hash: "SHA-256" },
     false,
     ["sign", "verify"],
@@ -72,7 +82,7 @@ async function getKey(): Promise<CryptoKey> {
 
 /** Returns `${base64url(payload)}.${base64url(hmac)}`. */
 export async function signSession(payload: SessionPayload): Promise<string> {
-  const data = new TextEncoder().encode(JSON.stringify(payload));
+  const data = utf8(JSON.stringify(payload));
   const sig = new Uint8Array(await crypto.subtle.sign("HMAC", await getKey(), data));
   return `${bytesToB64url(data)}.${bytesToB64url(sig)}`;
 }
@@ -100,7 +110,7 @@ export async function verifySession(value: string | undefined | null): Promise<S
 
 export function encodeClientUser(payload: SessionPayload): string {
   const client: ClientUser = { name: payload.name, email: payload.email, addr: payload.addr };
-  return bytesToB64url(new TextEncoder().encode(JSON.stringify(client)));
+  return bytesToB64url(utf8(JSON.stringify(client)));
 }
 
 /** Pure decode (no crypto) — safe to call on the client. */
