@@ -1,0 +1,1 @@
+ALTER TABLE "user_balances" ADD CONSTRAINT "user_balances_escrow_non_negative" CHECK ("user_balances"."escrowed_balance" >= 0);

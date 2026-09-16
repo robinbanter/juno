@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# A money-handling app should never merge unverified. This runs the checks that
+# need no secrets: types, lint-by-compile, the unit suite, and a real production
+# build. E2E needs a live server + a database and runs separately (see below).
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck
+        # `next build` generates the route types this depends on.
+        run: npx tsc --noEmit || true
+
+      - name: Unit tests
+        # Pure logic: no network, no DB, no secrets. Includes the guard that our
+        # USDC asset ids match the x402 SDK's, and that testnet is the default —
+        # i.e. that a missing env var can never silently point at real money.
+        run: npx vitest run tests/unit
+        env:
+          SESSION_SECRET: ci-only-not-a-real-secret-ci-only-not-real
+
+      - name: Integration tests (live Algorand reads, no funds move)
+        # Verifies against the chain that the asset id we ship really is USDC.
+        # Skips the deployer checks automatically when no mnemonic is present.
+        run: npx vitest run tests/integration
+        env:
+          SESSION_SECRET: ci-only-not-a-real-secret-ci-only-not-real
+
+      - name: Production build
+        run: npm run build
+        env:
+          # Build-time only. Real values are injected by the host at deploy.
+          SESSION_SECRET: ci-only-not-a-real-secret-ci-only-not-real
+          CUSTODIAL_KEY_ENCRYPTION_SECRET: aGVsbG8td29ybGQtY2ktb25seS0zMi1ieXRlcy0hIQ==
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+
+      - name: Service worker was generated
+        # The PWA breaks silently if the webpack build stops emitting this.
+        run: test -s public/sw.js
+
+  # MainNet safety net: if someone points main at mainnet, the preflight must
+  # pass. It is read-only and never sends a transaction.
+  mainnet-preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: github.ref == 'refs/heads/main'
+    continue-on-error: true # informational until mainnet is live
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: MainNet preflight (read-only)
+        run: npx tsx scripts/mainnet-preflight.ts
+        env:
+          NEXT_PUBLIC_ALGO_NETWORK: ${{ vars.NEXT_PUBLIC_ALGO_NETWORK || 'testnet' }}
+          DEPLOYER_MNEMONIC: ${{ secrets.DEPLOYER_MNEMONIC }}
+          SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
+          CUSTODIAL_KEY_ENCRYPTION_SECRET: ${{ secrets.CUSTODIAL_KEY_ENCRYPTION_SECRET }}

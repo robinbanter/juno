@@ -1,0 +1,34 @@
+# Strategy B — the whole auto-blur chain as ONE hosted Replicate model.
+# Detect (Grounding DINO) → track (SAM2) → composite (ffmpeg) all run on the GPU
+# box, so the orchestrator makes a single prediction per asset (no re-downloads,
+# no ffmpeg-in-serverless).
+#
+# Build + push (needs Docker + the cog CLI + a Replicate account):
+#   cd auto-blur/cog
+#   cog build
+#   cog push r8.im/<your-username>/veil-autoblur
+# Then set REPLICATE_VEIL_AUTOBLUR_VERSION to the pushed version hash.
+build:
+  gpu: true
+  cuda: "12.1"
+  python_version: "3.11"
+  system_packages:
+    - "ffmpeg"
+    - "libgl1-mesa-glx"
+    - "libglib2.0-0"
+  python_packages:
+    - "torch==2.3.1"
+    - "torchvision==0.18.1"
+    - "numpy==1.26.4"
+    - "opencv-python-headless==4.10.0.84"
+    - "supervision==0.22.0"
+    - "groundingdino-py==0.4.0"
+  run:
+    # SAM2 installs from source; pin a commit at build time for reproducibility.
+    - "pip install git+https://github.com/facebookresearch/sam2.git"
+    # Pre-bake weights into the image so cold starts don't download them.
+    # NOTE: verify these URLs/paths at build time — they move between releases.
+    - "mkdir -p /weights"
+    - "curl -fsSL -o /weights/sam2_hiera_large.pt https://dl.fbaipublicfiles.com/segment_anything_2/072824/sam2_hiera_large.pt"
+    - "curl -fsSL -o /weights/groundingdino_swint_ogc.pth https://github.com/IDEA-Research/GroundingDINO/releases/download/v0.1.0-alpha/groundingdino_swint_ogc.pth"
+predict: "predict.py:Predictor"

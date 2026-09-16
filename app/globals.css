@@ -1,0 +1,684 @@
+@import "tailwindcss";
+
+/* ============================================================
+   Veil design tokens — see docs/design-prd.md §3 (authoritative).
+   Dark is the default (:root). Light is the .light override.
+   ============================================================ */
+
+:root {
+  color-scheme: dark;
+
+  /* Canvas & surfaces — violet-tinted near-black */
+  --bg: #0f0d15;
+  --header-bg: #08060d;
+  --header-fg: #f4f2f7;
+  --header-fg-muted: #a5a0ac;
+  --header-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+  --surface: #17141f;
+  --surface-2: #1d1927;
+  --surface-3: #272132;
+  --hairline: rgba(255, 255, 255, 0.08);
+  --hairline-strong: rgba(255, 255, 255, 0.14);
+
+  /* Brand — violet */
+  --primary: #7c3aed;
+  --primary-hover: #8b5cf6;
+  --primary-press: #6d28d9;
+  --primary-fg: #ffffff;
+  --primary-glow: rgba(124, 58, 237, 0.45);
+  --primary-tint: rgba(124, 58, 237, 0.12);
+
+  /* Text */
+  --text: #f5f2f3;
+  --text-muted: #a8a0a4;
+  /* Lifted from #6e666b (~3.3:1) to meet WCAG AA (4.5:1) on bg + cards. */
+  --text-faint: #8d858b;
+
+  /* Status (used sparingly) */
+  --success: #34d399;
+  --gold: #e8b339;
+  --danger: #f0506e;
+
+  /* Short-form aliases used by the ported prototype markup.
+     They reference the canonical vars above, so the .light overrides
+     flow through automatically (var() resolves at the use site). */
+  --muted: var(--text-muted);
+  --faint: var(--text-faint);
+  --glow: var(--primary-glow);
+  --tint: var(--primary-tint);
+  --hairline-2: var(--hairline-strong);
+
+  /* Radius */
+  --radius-card: 24px;
+  --radius-md: 16px;
+  --radius-pill: 9999px;
+
+  /* Elevation — tint + soft shadow, no harsh lines */
+  --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 6px 20px rgba(0, 0, 0, 0.30);
+  --shadow-nav: 0 -1px 0 rgba(255, 255, 255, 0.05), 0 -6px 18px rgba(0, 0, 0, 0.18);
+  --shadow-cta: 0 8px 28px var(--primary-glow);
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur-fast: 140ms;
+  --dur-base: 240ms;
+  --dur-reveal: 620ms;
+}
+
+.light {
+  color-scheme: light;
+
+  /* Soft warm-gray canvas so the white islands read as distinct surfaces. */
+  --bg: #f1efec;
+  --header-bg: #ffffff;
+  --header-fg: #1a1718;
+  --header-fg-muted: #5c5559;
+  --header-shadow: 0 1px 0 rgba(0, 0, 0, 0.04), 0 4px 14px rgba(0, 0, 0, 0.05);
+  --surface: #ffffff;
+  --surface-2: #ffffff;
+  --surface-3: #f0eeeb;
+  --hairline: rgba(0, 0, 0, 0.07);
+  --hairline-strong: rgba(0, 0, 0, 0.12);
+
+  --primary: #6d28d9;
+  --primary-hover: #7c3aed;
+  --primary-press: #5b21b6;
+  --primary-fg: #ffffff;
+  --primary-glow: rgba(124, 58, 237, 0.28);
+  --primary-tint: rgba(124, 58, 237, 0.1);
+
+  --text: #1a1718;
+  --text-muted: #5c5559;
+  /* Lifted from #8a8287 (~3.6:1) to meet WCAG AA (4.5:1) on white + surfaces. */
+  --text-faint: #726c70;
+
+  --success: #15a06b;
+  --gold: #b8860b;
+  --danger: #d23150;
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.04), 0 6px 16px rgba(0, 0, 0, 0.05);
+  --shadow-nav: 0 -1px 0 rgba(0, 0, 0, 0.05), 0 -6px 16px rgba(0, 0, 0, 0.03);
+}
+
+/* Map semantic vars → Tailwind utilities. `inline` keeps the var
+   reference so dark/light switching stays reactive. */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-hairline: var(--hairline);
+  --color-hairline-strong: var(--hairline-strong);
+  --color-border: var(--hairline-strong);
+
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-press: var(--primary-press);
+  --color-primary-fg: var(--primary-fg);
+  --color-primary-tint: var(--primary-tint);
+
+  --color-text: var(--text);
+  --color-muted: var(--text-muted);
+  --color-faint: var(--text-faint);
+  --color-muted-foreground: var(--text-muted);
+
+  --color-success: var(--success);
+  --color-gold: var(--gold);
+  --color-danger: var(--danger);
+
+  --radius-card: var(--radius-card);
+  --radius-md: var(--radius-md);
+  --radius-pill: var(--radius-pill);
+
+  --shadow-card: var(--shadow-card);
+  --shadow-cta: var(--shadow-cta);
+
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+
+  --ease-veil: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* ============================================================
+   Keyframes (mirrors the approved prototype)
+   ============================================================ */
+@keyframes vspin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes vshimmer {
+  0% {
+    transform: translateX(-130%) skewX(-14deg);
+    opacity: 0;
+  }
+  28% {
+    opacity: 0.85;
+  }
+  100% {
+    transform: translateX(135%) skewX(-14deg);
+    opacity: 0;
+  }
+}
+/* Reveal: full media springs in over its blurred preview. Replaces the former
+   framer-motion spring so framer stays off the feed's critical-path bundle. */
+@keyframes vreveal {
+  from {
+    opacity: 0;
+    filter: blur(15px);
+    transform: scale(1.06);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: scale(1);
+  }
+}
+/* Patch: a partial-reveal region crop fading in (lighter — no scale). */
+@keyframes vpatch {
+  from {
+    opacity: 0;
+    filter: blur(12px);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+  }
+}
+@keyframes vspring {
+  0% {
+    transform: translateY(12px) scale(0.92);
+    opacity: 0;
+  }
+  58% {
+    transform: translateY(-3px) scale(1.03);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+@keyframes vpulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.55);
+  }
+  70% {
+    box-shadow: 0 0 0 6px rgba(52, 211, 153, 0);
+  }
+}
+@keyframes vglow {
+  0%,
+  100% {
+    box-shadow: 0 8px 26px var(--primary-glow);
+  }
+  50% {
+    box-shadow: 0 10px 40px var(--primary-glow);
+  }
+}
+@keyframes vrise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes vfade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes vtyping-bubble {
+  0%,
+  100% {
+    transform: translateY(0) scaleX(1);
+  }
+  45% {
+    transform: translateY(-1px) scaleX(1.04);
+  }
+}
+@keyframes vtyping-dot {
+  0%,
+  70%,
+  100% {
+    opacity: 0.34;
+    transform: translateY(0) scale(0.82);
+  }
+  35% {
+    opacity: 1;
+    transform: translateY(-4px) scale(1);
+  }
+}
+@keyframes vdrawer {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+@keyframes vscrim {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes vlikepop {
+  0% {
+    transform: scale(1);
+  }
+  28% {
+    transform: scale(0.78);
+  }
+  58% {
+    transform: scale(1.28);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+@keyframes vsavepop {
+  0% {
+    transform: scale(1);
+  }
+  38% {
+    transform: scale(0.76) translateY(-2px);
+  }
+  68% {
+    transform: scale(1.2);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+@keyframes vburst {
+  0% {
+    transform: scale(0.2) rotate(-14deg);
+    opacity: 0;
+  }
+  22% {
+    transform: scale(1.18) rotate(2deg);
+    opacity: 1;
+  }
+  64% {
+    transform: scale(0.98);
+    opacity: 0.95;
+  }
+  100% {
+    transform: scale(1.12);
+    opacity: 0;
+  }
+}
+@keyframes vbalbump {
+  0% {
+    transform: scale(1);
+  }
+  45% {
+    transform: scale(1.14);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+@keyframes vcoin {
+  0% {
+    transform: translateY(8px) scale(0.5);
+    opacity: 0;
+  }
+  25% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-104px) scale(1);
+    opacity: 0;
+  }
+}
+@keyframes vtipsuccess {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes vtiparrow {
+  0% {
+    opacity: 0;
+    transform: translateY(24px) scale(0.86);
+  }
+  48% {
+    opacity: 1;
+    transform: translateY(-8px) scale(1.04);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(-2px) scale(1);
+  }
+}
+@keyframes vtiptrail {
+  0% {
+    opacity: 0;
+    transform: translateY(28px) scaleY(0.35);
+  }
+  35% {
+    opacity: 0.85;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-42px) scaleY(1);
+  }
+}
+@keyframes vtipcopy {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes vsheet {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+@keyframes scanBlob {
+  from {
+    transform: translateX(-48%) scale(0.9);
+  }
+  to {
+    transform: translateX(310%) scale(1.08);
+  }
+}
+@keyframes vsheetout {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(100%);
+  }
+}
+@keyframes vtabin {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes routefade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes routeslide {
+  from {
+    transform: translateX(var(--slide-offset));
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+@keyframes accordion-down {
+  from {
+    height: 0;
+  }
+  to {
+    height: var(--radix-accordion-content-height);
+  }
+}
+@keyframes accordion-up {
+  from {
+    height: var(--radix-accordion-content-height);
+  }
+  to {
+    height: 0;
+  }
+}
+
+/* Reveal/patch animation hooks (play once on mount; `both` holds the end state). */
+.motion-reveal {
+  animation: vreveal var(--dur-reveal) var(--ease-out) both;
+}
+.motion-patch {
+  animation: vpatch 550ms var(--ease-out) both;
+}
+
+/* ============================================================
+   Base
+   ============================================================ */
+html {
+  background: var(--bg);
+  overflow-x: hidden;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans), -apple-system, BlinkMacSystemFont, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  overflow-x: hidden;
+}
+
+::view-transition-old(.nav-forward) {
+  --slide-offset: -44px;
+  animation:
+    150ms ease-in both routefade reverse,
+    340ms var(--ease-out) both routeslide reverse;
+}
+
+::view-transition-new(.nav-forward) {
+  --slide-offset: 44px;
+  animation:
+    170ms ease-out 90ms both routefade,
+    340ms var(--ease-out) both routeslide;
+}
+
+::view-transition-old(.nav-back) {
+  --slide-offset: 44px;
+  animation:
+    150ms ease-in both routefade reverse,
+    340ms var(--ease-out) both routeslide reverse;
+}
+
+::view-transition-new(.nav-back) {
+  --slide-offset: -44px;
+  animation:
+    170ms ease-out 90ms both routefade,
+    340ms var(--ease-out) both routeslide;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(*),
+  ::view-transition-new(*),
+  ::view-transition-group(*) {
+    animation-duration: 1ms !important;
+  }
+}
+
+.feed-scroll {
+  max-height: calc(100dvh - 73px);
+  scroll-behavior: auto;
+  overscroll-behavior-y: contain;
+}
+
+/* The card sizes to its content (header + caption + media + actions) instead of
+   being pinned to a full-screen height — no dead space below short posts. The
+   `mb-4` between cards provides the bit of breathing room between posts. */
+.feed-card > .relative {
+  min-height: 0;
+}
+
+/* Keep tall media from exceeding the viewport; object-cover handles the crop. */
+.feed-media {
+  max-height: calc(100dvh - 260px - env(safe-area-inset-bottom, 0px));
+}
+
+.feed-card :where(img, video) {
+  max-height: 100%;
+}
+
+.tab-panel {
+  animation: vtabin 220ms var(--ease-out) both;
+}
+
+.typing-bubble {
+  display: flex;
+  height: 38px;
+  min-width: 68px;
+  align-items: center;
+  gap: 5px;
+  border-radius: 20px;
+  background: var(--surface-2);
+  padding: 0 15px;
+  animation: vtyping-bubble 1.35s var(--ease-veil) infinite;
+}
+
+.typing-bubble span {
+  display: block;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--muted);
+  animation: vtyping-dot 1.1s ease-in-out infinite;
+}
+
+.typing-bubble span:nth-child(2) {
+  animation-delay: 0.16s;
+}
+
+.typing-bubble span:nth-child(3) {
+  animation-delay: 0.32s;
+}
+
+.tip-success-screen {
+  animation: vtipsuccess 280ms var(--ease-out) both;
+}
+
+.tip-success-arrow {
+  animation: vtiparrow 760ms var(--ease-out) 90ms both;
+}
+
+.tip-success-trail {
+  animation: vtiptrail 820ms var(--ease-out) 90ms both;
+}
+
+.tip-success-copy {
+  animation: vtipcopy 340ms var(--ease-out) 420ms both;
+}
+
+.animate-accordion-down {
+  animation: accordion-down 220ms var(--ease-out) both;
+}
+
+.animate-accordion-up {
+  animation: accordion-up 180ms var(--ease-out) both;
+}
+
+button,
+a,
+input,
+textarea {
+  touch-action: manipulation;
+}
+
+button:not(:disabled),
+[role="button"]:not([aria-disabled="true"]) {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: default;
+}
+
+/* Mono numerals — tabular so prices/settle-ms/balances line up. */
+.tabular {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Hide scrollbars for the native-app feel. */
+* {
+  scrollbar-width: none;
+}
+*::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+/* Focus ring in crimson, only for keyboard users. */
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* Typable fields signal focus through their own border/ring treatment, so the
+   global outline above would just box them in an off-shape crimson rectangle
+   while you type. Drop it for text fields; buttons, links, and other controls
+   keep their keyboard focus ring. (This rule is unlayered + higher specificity,
+   so it reliably overrides the Tailwind `outline-none` utility too.) */
+input[type="text"]:focus-visible,
+input[type="search"]:focus-visible,
+input[type="email"]:focus-visible,
+input[type="password"]:focus-visible,
+input[type="number"]:focus-visible,
+input[type="tel"]:focus-visible,
+input[type="url"]:focus-visible,
+input:not([type]):focus-visible,
+textarea:focus-visible,
+[contenteditable]:focus-visible {
+  outline: none;
+}
+
+/* iOS safe-area helpers for fixed top/bottom chrome */
+.pb-safe {
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
+}
+.pt-safe {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 1ms !important;
+  }
+
+  /* Reveal/patch collapse to instant via the 1ms duration above (the `both`
+     fill still lands on the revealed end state). The shimmer is pure flourish —
+     hide it outright rather than freeze a bright stripe mid-sweep. */
+  .motion-shimmer,
+  .tip-success-trail {
+    display: none !important;
+  }
+
+  .tip-success-screen,
+  .tip-success-arrow,
+  .tip-success-copy {
+    animation: none !important;
+  }
+}

@@ -1,0 +1,62 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1781827049430,
+      "tag": "0000_eager_imperial_guard",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1781829872141,
+      "tag": "0001_fixed_james_howlett",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1781863296430,
+      "tag": "0002_tempo_custodial_wallet_funding",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1781866129423,
+      "tag": "0003_melted_pretty_boy",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1781867437981,
+      "tag": "0004_safe_sentinel",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1781874792530,
+      "tag": "0005_real_zuras",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1781875200000,
+      "tag": "0006_mpp_call_ledger",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1781875300000,
+      "tag": "0007_profile_bio",
+      "breakpoints": true
+    }
+  ]
+}

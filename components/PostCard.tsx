@@ -1,0 +1,486 @@
+"use client";
+
+import { useState, useCallback, useRef } from "react";
+import dynamic from "next/dynamic";
+import { useRouter } from "next/navigation";
+import {
+  Heart,
+  MessageCircle,
+  CircleDollarSign,
+  Bookmark,
+  Lock,
+  MessageSquare,
+  UserCheck,
+  UserPlus,
+  Flag,
+} from "lucide-react";
+import { Avatar } from "./ui/Avatar";
+import { UnlockButton } from "./UnlockButton";
+import { RevealMedia } from "./RevealMedia";
+import { PartialImageStage } from "./PartialImageStage";
+import { VideoStage } from "./VideoStage";
+import { PartialVideoStage, type PartialRegion } from "./PartialVideoStage";
+import { useAppAuth } from "./useAppAuth";
+
+// Interaction-only sheets — split out of the eager feed bundle and fetched the
+// first time a fan opens comments / tips (they only render when opened anyway).
+const CommentsSheet = dynamic(() =>
+  import("./CommentsSheet").then((m) => m.CommentsSheet),
+);
+const TipSheet = dynamic(() => import("./TipSheet").then((m) => m.TipSheet));
+const ReportSheet = dynamic(() =>
+  import("./ReportSheet").then((m) => m.ReportSheet),
+);
+
+export type PostSocialState = {
+  likeCount: number;
+  commentCount: number;
+  liked: boolean;
+  saved: boolean;
+};
+
+export type FeedPost = {
+  id: string;
+  title: string;
+  blurredPreviewUrl: string;
+  unlockPrice: string;
+  mediaType: "image" | "video";
+  accessMode: "full" | "partial";
+  unlocked?: boolean;
+  revealedUrl?: string | null;
+  poster?: string | null;
+  clientBlurPreview?: boolean;
+  gateAfterSeconds?: number | null;
+  regions?: PartialRegion[];
+  createdAt?: string;
+  social?: PostSocialState;
+  creator: {
+    id?: string;
+    username: string | null;
+    avatar: string | null;
+    wallet: string | null;
+    following?: boolean;
+  };
+};
+
+function fmtCount(n: number) {
+  if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, "") + "k";
+  return String(n);
+}
+
+function haptic(pattern: number | number[]) {
+  if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+    try {
+      navigator.vibrate(pattern);
+    } catch {
+      /* unsupported */
+    }
+  }
+}
+
+export function PostCard({
+  post,
+  isUnlocked: initialUnlocked,
+  initialSignedUrl,
+  priority = false,
+}: {
+  post: FeedPost;
+  isUnlocked?: boolean;
+  initialSignedUrl?: string | null;
+  priority?: boolean;
+}) {
+  const { isSignedIn } = useAppAuth();
+  const router = useRouter();
+  const free = Number(post.unlockPrice) === 0;
+  const [unlocked, setUnlocked] = useState(initialUnlocked ?? false);
+  const [signedUrl, setSignedUrl] = useState<string | null>(initialSignedUrl ?? null);
+  const [messaging, setMessaging] = useState(false);
+  const initiallyRevealedRef = useRef(Boolean(initialUnlocked && initialSignedUrl));
+
+  // Social state (optimistic; seeded from the server-rendered feed).
+  const [liked, setLiked] = useState(post.social?.liked ?? false);
+  const [likeCount, setLikeCount] = useState(post.social?.likeCount ?? 0);
+  const [saved, setSaved] = useState(post.social?.saved ?? false);
+  const [following, setFollowing] = useState(post.creator.following ?? false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [followPending, setFollowPending] = useState(false);
+  const [commentCount, setCommentCount] = useState(
+    post.social?.commentCount ?? 0,
+  );
+  const [burst, setBurst] = useState(false);
+  const [commentsOpen, setCommentsOpen] = useState(false);
+  const [commentsClosing, setCommentsClosing] = useState(false);
+  const [tipOpen, setTipOpen] = useState(false);
+  const [tipClosing, setTipClosing] = useState(false);
+
+  const requireAuth = useCallback(() => {
+    if (!isSignedIn) {
+      router.push("/sign-in");
+      return false;
+    }
+    return true;
+  }, [isSignedIn, router]);
+
+  const handleUnlock = useCallback((url: string, _settlementMs: number) => {
+    setSignedUrl(url);
+    setUnlocked(true);
+  }, []);
+
+  const toggleLike = useCallback(async () => {
+    if (!requireAuth()) return;
+    haptic(6);
+    const next = !liked;
+    setLiked(next);
+    setLikeCount((c) => c + (next ? 1 : -1));
+    try {
+      const res = await fetch(`/api/posts/${post.id}/like`, { method: "POST" });
+      if (res.ok) {
+        const d = (await res.json()) as { liked: boolean; likeCount: number };
+        setLiked(d.liked);
+        setLikeCount(d.likeCount);
+      }
+    } catch {
+      // revert on failure
+      setLiked(!next);
+      setLikeCount((c) => c - (next ? 1 : -1));
+    }
+  }, [liked, post.id, requireAuth]);
+
+  const doubleTapLike = useCallback(() => {
+    if (!(free || unlocked)) return;
+    haptic([5, 30, 8]);
+    setBurst(true);
+    setTimeout(() => setBurst(false), 900);
+    if (!liked) void toggleLike();
+  }, [free, unlocked, liked, toggleLike]);
+
+  const toggleSave = useCallback(async () => {
+    if (!requireAuth()) return;
+    haptic(6);
+    const next = !saved;
+    setSaved(next);
+    try {
+      const res = await fetch(`/api/posts/${post.id}/save`, { method: "POST" });
+      if (res.ok) {
+        const d = (await res.json()) as { saved: boolean };
+        setSaved(d.saved);
+      }
+    } catch {
+      setSaved(!next);
+    }
+  }, [saved, post.id, requireAuth]);
+
+  const toggleFollow = useCallback(async () => {
+    if (!requireAuth() || !post.creator.username || followPending) return;
+    haptic(5);
+    const next = !following;
+    setFollowing(next);
+    setFollowPending(true);
+    try {
+      const res = await fetch("/api/follow", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: post.creator.username }),
+      });
+      if (res.ok) {
+        const d = (await res.json()) as { following: boolean };
+        setFollowing(d.following);
+      }
+    } catch {
+      setFollowing(!next);
+    } finally {
+      setFollowPending(false);
+    }
+  }, [followPending, following, post.creator.username, requireAuth]);
+
+  const openComments = useCallback(() => {
+    setCommentsOpen(true);
+    setCommentsClosing(false);
+  }, []);
+
+  const openTip = useCallback(() => {
+    if (!requireAuth()) return;
+    setTipOpen(true);
+    setTipClosing(false);
+  }, [requireAuth]);
+
+  const closeComments = useCallback(() => {
+    setCommentsClosing(true);
+    window.setTimeout(() => {
+      setCommentsOpen(false);
+      setCommentsClosing(false);
+    }, 220);
+  }, []);
+
+  const closeTip = useCallback(() => {
+    setTipClosing(true);
+    window.setTimeout(() => {
+      setTipOpen(false);
+      setTipClosing(false);
+    }, 220);
+  }, []);
+
+  const messageCreator = useCallback(async () => {
+    if (!requireAuth()) return;
+    if (!post.creator.wallet || messaging) return;
+    setMessaging(true);
+    try {
+      const res = await fetch("/api/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ creatorWallet: post.creator.wallet }),
+      });
+      if (res.ok) {
+        const { threadId } = (await res.json()) as { threadId: string };
+        router.push(`/messages/${threadId}`, { transitionTypes: ["nav-forward"] });
+      }
+    } finally {
+      setMessaging(false);
+    }
+  }, [post.creator.wallet, messaging, router, requireAuth]);
+
+  const username = post.creator.username ?? "creator";
+  const revealed = unlocked || free;
+  const canDouble = free || unlocked;
+
+  return (
+    <article
+      className="feed-card bg-surface-2 border-hairline mb-4 flex flex-col overflow-hidden rounded-md border"
+      style={{ boxShadow: "var(--shadow-card)" }}
+    >
+      {/* Creator header */}
+      <header className="flex items-center gap-3 px-4 pt-3 pb-2.5">
+        <Avatar name={username} src={post.creator.avatar} size="lg" verified />
+        <div className="min-w-0 flex-1">
+          <p className="text-[15px] leading-tight font-semibold">{username}</p>
+          <p className="text-faint text-[12.5px] leading-snug">@{username}</p>
+        </div>
+        <button
+          type="button"
+          onClick={messageCreator}
+          disabled={messaging || !post.creator.wallet}
+          className="bg-surface-3 text-muted hover:text-text flex size-9 items-center justify-center rounded-full disabled:opacity-50"
+          aria-label="Chat with creator"
+        >
+          <MessageSquare size={18} />
+        </button>
+        {/* Reporting must be reachable from the content itself — a report flow
+            buried in settings is one nobody finds at the moment they need it.
+            No auth gate: the API allows anonymous reports on purpose. */}
+        <button
+          type="button"
+          onClick={() => setReportOpen(true)}
+          className="bg-surface-3 text-muted hover:text-text flex size-9 items-center justify-center rounded-full"
+          aria-label="Report this post"
+          title="Report"
+        >
+          <Flag size={16} />
+        </button>
+        <button
+          type="button"
+          onClick={toggleFollow}
+          disabled={followPending || !post.creator.username}
+          className="border-hairline text-muted hover:text-text flex h-9 items-center gap-1.5 rounded-pill border px-3 text-[12.5px] font-semibold disabled:opacity-50"
+          aria-label={following ? "Unfollow creator" : "Follow creator"}
+          style={{
+            background: following ? "var(--surface-3)" : "var(--primary-tint)",
+            color: following ? "var(--muted)" : "var(--primary)",
+          }}
+        >
+          {following ? <UserCheck size={15} /> : <UserPlus size={15} />}
+          <span>{following ? "Following" : "Follow"}</span>
+        </button>
+      </header>
+
+      {/* Caption */}
+      <p className="text-text line-clamp-2 px-4 pb-2.5 text-[15px] leading-snug">
+        {post.title}
+      </p>
+
+      {/* Media + blur gate / reveal */}
+      <div
+        className="relative"
+        onDoubleClick={canDouble ? doubleTapLike : undefined}
+      >
+        {(() => {
+          // Partial video plays free; each blurred region is its own micro-unlock,
+          // so it manages its own gating instead of a whole-post lock overlay.
+          if (post.mediaType === "video" && post.accessMode === "partial") {
+            return (
+              <PartialVideoStage
+                postId={post.id}
+                previewUrl={post.blurredPreviewUrl}
+                price={post.unlockPrice}
+                regions={post.regions ?? []}
+                poster={post.poster ?? undefined}
+              />
+            );
+          }
+          if (post.mediaType === "image" && post.accessMode === "partial") {
+            return (
+              <PartialImageStage
+                postId={post.id}
+                previewUrl={post.blurredPreviewUrl}
+                price={post.unlockPrice}
+                regions={post.regions ?? []}
+              />
+            );
+          }
+
+          const overlay = !free && (
+            <div
+              className="absolute inset-0 flex flex-col items-center justify-center gap-4 p-6"
+              style={{ background: "rgba(8,6,8,.46)" }}
+            >
+              <div
+                className="border-hairline-strong flex size-[54px] items-center justify-center rounded-full"
+                style={{ background: "rgba(8,6,8,.55)", borderWidth: 1 }}
+              >
+                <Lock size={24} />
+              </div>
+              {!revealed && (
+                <UnlockButton
+                  postId={post.id}
+                  price={post.unlockPrice}
+                  onUnlock={handleUnlock}
+                />
+              )}
+            </div>
+          );
+
+          return post.mediaType === "video" ? (
+            <VideoStage
+              previewUrl={post.blurredPreviewUrl}
+              revealedUrl={signedUrl}
+              revealed={revealed}
+              overlay={overlay}
+              animateReveal={!initiallyRevealedRef.current}
+              clientBlurPreview={post.clientBlurPreview}
+              gateAfterSeconds={post.gateAfterSeconds ?? undefined}
+            />
+          ) : (
+            <RevealMedia
+              previewUrl={post.blurredPreviewUrl}
+              revealedUrl={signedUrl}
+              revealed={revealed}
+              alt={post.title}
+              priority={priority}
+              overlay={overlay}
+              animateReveal={!initiallyRevealedRef.current}
+              clientBlurPreview={post.clientBlurPreview ?? !free}
+            />
+          );
+        })()}
+
+        {/* Double-tap heart burst */}
+        {burst && (
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+            <Heart
+              size={104}
+              style={{
+                fill: "#fff",
+                color: "#fff",
+                filter: "drop-shadow(0 8px 24px rgba(0,0,0,.5))",
+                animation: "vburst .9s cubic-bezier(.22,1,.36,1) both",
+              }}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Footer */}
+      <footer className="px-4 pt-3 pb-3">
+        <div className="text-muted flex items-center gap-4">
+          <button
+            type="button"
+            onClick={toggleLike}
+            className="flex items-center gap-1.5 text-[13.5px] transition-transform active:scale-90"
+            style={{ color: liked ? "var(--primary)" : undefined }}
+            aria-label="Like"
+          >
+            <Heart
+              size={23}
+              strokeWidth={1.9}
+              style={{
+                fill: liked ? "var(--primary)" : "none",
+                color: liked ? "var(--primary)" : "currentColor",
+                animation: liked
+                  ? "vlikepop .42s cubic-bezier(.22,1,.36,1)"
+                  : undefined,
+              }}
+            />
+            {likeCount > 0 && <span>{fmtCount(likeCount)}</span>}
+          </button>
+          <button
+            type="button"
+            onClick={openComments}
+            aria-label="Comments"
+            className="hover:text-text flex items-center gap-1.5 text-[13.5px] transition-transform active:scale-90"
+          >
+            <MessageCircle size={22} strokeWidth={1.9} />
+            {commentCount > 0 && <span>{fmtCount(commentCount)}</span>}
+          </button>
+          <button
+            type="button"
+            onClick={openTip}
+            className="hover:text-text flex items-center gap-1.5 text-[13px] font-semibold transition-transform active:scale-90"
+            aria-label="Tip"
+          >
+            <CircleDollarSign size={22} strokeWidth={1.9} />
+            <span>Tip</span>
+          </button>
+          <div className="flex-1" />
+          <button
+            type="button"
+            onClick={toggleSave}
+            aria-label="Save"
+            className="hover:text-text flex items-center transition-transform active:scale-90"
+            style={{ color: saved ? "var(--primary)" : undefined }}
+          >
+            <Bookmark
+              size={22}
+              strokeWidth={1.9}
+              style={{
+                fill: saved ? "var(--primary)" : "none",
+                color: saved ? "var(--primary)" : "currentColor",
+                animation: saved
+                  ? "vsavepop .42s cubic-bezier(.22,1,.36,1)"
+                  : undefined,
+              }}
+            />
+          </button>
+        </div>
+      </footer>
+
+      {commentsOpen && (
+        <CommentsSheet
+          postId={post.id}
+          caption={post.title}
+          authorHandle={username}
+          authorAvatar={post.creator.avatar}
+          postedAt={post.createdAt}
+          closing={commentsClosing}
+          onClose={closeComments}
+          onCountChange={(d) => setCommentCount((c) => Math.max(0, c + d))}
+        />
+      )}
+
+      {tipOpen && (
+        <TipSheet
+          postId={post.id}
+          creatorName={username}
+          creatorHandle={`@${username}`}
+          creatorAvatar={post.creator.avatar}
+          closing={tipClosing}
+          onClose={closeTip}
+        />
+      )}
+
+      <ReportSheet
+        postId={post.id}
+        open={reportOpen}
+        onClose={() => setReportOpen(false)}
+      />
+    </article>
+  );
+}
