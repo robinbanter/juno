@@ -82,7 +82,11 @@ export function TradePanel({
   const [side, setSide] = useState<TradeSide>("buy");
   const [buyAmount, setBuyAmount] = useState("20");
   const [sellAmount, setSellAmount] = useState("");
-  const [token, setToken] = useState<QuoteToken>(quoteTokens[0]);
+  // Default to the pool's own quote mint. Anything else has to be routed, and
+  // opening on a token the pool does not accept misstates what a buy costs.
+  const [token, setToken] = useState<QuoteToken>(
+    () => quoteTokens.find((t) => t.mint === coin.quote.mint) ?? coin.quote,
+  );
   const [comment, setComment] = useState("");
   const [quote, setQuote] = useState<TradeQuoteResult | null>(null);
   const [quoting, setQuoting] = useState(false);
@@ -123,12 +127,12 @@ export function TradePanel({
   // Secondary read-out under the field: the quote-token amount on a buy, the
   // dollar value on a sell.
   const echo = useMemo(() => {
-    if (amountIn <= 0) return buying ? "0" : "≈ $0";
+    if (amountIn <= 0) return "0";
     if (buying) {
-      // No price means no honest conversion; a dash beats a confident guess.
-      return quotePrice > 0 ? quoteAmount(amountIn / quotePrice) : "—";
+      // Dollar equivalent, only where one is actually known.
+      return quotePrice > 0 ? `≈ ${usd(amountIn * quotePrice)}` : "—";
     }
-    return `≈ ${usd(amountIn * coin.priceUsd)}`;
+    return coin.priceUsd > 0 ? `≈ ${usd(amountIn * coin.priceUsd)}` : "—";
   }, [amountIn, buying, quotePrice, coin.priceUsd]);
 
   const estimated =
@@ -178,11 +182,13 @@ export function TradePanel({
       >
         <div className="flex items-center gap-3">
           <label htmlFor={amountId} className="sr-only">
-            {buying ? "Amount in US dollars" : `Amount of ${coin.symbol} to sell`}
+            {buying ? `Amount in ${token.symbol}` : `Amount of ${coin.symbol} to sell`}
           </label>
 
           <div className="flex min-w-0 flex-1 items-center">
-            {buying && (
+            {/* Only stablecoin pools are denominated in dollars; a SOL pool
+                showing "$20" would misstate what is being spent. */}
+            {buying && STABLES.has(token.symbol) && (
               <span
                 className={cn(
                   "text-[28px] leading-none font-semibold",
@@ -226,7 +232,7 @@ export function TradePanel({
           <span className="tabular-nums">{echo}</span>
           <span>
             {buying
-              ? `Balance: ${usd(balanceUsd)}`
+              ? `Balance: ${STABLES.has(token.symbol) ? usd(balanceUsd) : `${quoteAmount(balanceUsd)} ${token.symbol}`}`
               : `Holding: ${tokenAmount(holding)}`}
           </span>
         </div>

@@ -81,7 +81,7 @@ Legend: `DONE` · `IN PROGRESS` · `NOT STARTED` · `BLOCKED`
 | 2.3 | `useLaunch()` hook with per-step status | DONE |
 | 2.4 | Create form signs and sends for real | DONE — verified via CLI on the same code path |
 | 2.5 | Post-launch receipt with Solscan links | DONE |
-| 2.6 | Verify connect → launch → receipt in a real browser wallet | NOT STARTED |
+| 2.6 | Verify connect → launch → receipt in a real browser wallet | NOT STARTED — needs a human with a funded browser wallet; same code path verified via CLI |
 
 ### Phase 3 — Persistence (kill the mocks)
 | # | Task | Status |
@@ -121,14 +121,14 @@ Legend: `DONE` · `IN PROGRESS` · `NOT STARTED` · `BLOCKED`
 | # | Task | Status |
 |---|---|---|
 | 6.1 | Launch an equity-preset pool named for a real ticker | DONE (AAPLx Issuance) |
-| 6.2 | Issuance mode in `/create`: pick ticker → preset → NAV feed | NOT STARTED |
+| 6.2 | Issuance mode in `/create`: pick ticker → preset → NAV feed | NOT STARTED — depends on 5.3 (Pyth key) to be worth building |
 | 6.3 | Seed 2–3 equity issuances across presets for the demo | DONE — AAPLx (ipo-book), NVDAx (thin-name) |
 
 ### Phase 7 — Graduation
 | # | Task | Status |
 |---|---|---|
 | 7.1 | Surface migration threshold + progress from chain | DONE (in snapshot) |
-| 7.2 | Graduation state on coin page when `isMigrated` | NOT STARTED |
+| 7.2 | Graduation state on coin page when `isMigrated` | DONE — CoinSummary swaps to the graduated notice |
 | 7.3 | Link to DAMM v2 pool post-migration | NOT STARTED |
 
 ### Phase 8 — Submission

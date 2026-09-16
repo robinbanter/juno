@@ -98,7 +98,11 @@ export type Coin = {
   volume24h: number | null;
   totalVolume: number | null;
   creatorRewards: number;
-  holders: number;
+  /**
+   * Null when the read failed — a rate-limited RPC must not render as a
+   * confident zero, which is what "no holders" would claim.
+   */
+  holders: number | null;
 
   /** Price of one coin, in the quote token's USD terms. */
   priceUsd: number;

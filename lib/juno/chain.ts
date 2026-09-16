@@ -68,8 +68,12 @@ export async function hydratePool(row: JunoPoolRow): Promise<Coin | null> {
     client.state.getPoolFeeMetrics(row.poolAddress).catch(() => null),
   ]);
 
+  // null, not 0: `largest` is null when the RPC refused, and "0 holders" is
+  // a claim we would not have earned.
   const holders =
-    largest?.value.filter((account) => (account.uiAmount ?? 0) > 0).length ?? 0;
+    largest === null
+      ? null
+      : largest.value.filter((account) => (account.uiAmount ?? 0) > 0).length;
 
   const creatorRewards = fees
     ? bnToUi(fees.current.creatorQuoteFee, snapshot.quoteDecimals) * rate

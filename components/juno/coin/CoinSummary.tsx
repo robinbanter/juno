@@ -27,9 +27,11 @@ export function CoinSummary({ coin }: { coin: Coin }) {
         </Link>
 
         <div className="ml-auto flex shrink-0 items-center gap-1">
-          <span className="text-[13px] text-j-muted">
-            {compact(coin.holders, 1)} holders
-          </span>
+          {coin.holders !== null && (
+            <span className="text-[13px] text-j-muted">
+              {compact(coin.holders, 1)} holders
+            </span>
+          )}
           <IconButton label="Share" className="size-9 border-0">
             <Share size={17} strokeWidth={1.75} />
           </IconButton>
