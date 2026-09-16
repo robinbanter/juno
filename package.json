@@ -74,6 +74,7 @@
     "framer-motion": "^12.40.0",
     "lucide-react": "^1.21.0",
     "lute-connect": "^1.7.0",
+    "mongodb": "^7.6.0",
     "mppx": "^0.7.0",
     "next": "16.2.9",
     "pg": "^8.21.0",
