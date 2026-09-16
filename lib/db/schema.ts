@@ -1023,3 +1023,56 @@ export const followsRelations = relations(follows, ({ one }) => ({
     references: [users.id],
   }),
 }));
+
+/* ==================================================================
+   Juno — the index of pools this app launched.
+   ==================================================================
+   The Dynamic Bonding Curve program is the source of truth for every
+   number that moves: price, reserves, curve progress, graduation. None
+   of that is duplicated here, because a cached copy of a live market is
+   a cache that is always wrong.
+
+   What the chain cannot tell us is which of the many thousands of DBC
+   pools belong to Juno, or what a creator typed when they launched one.
+   That is what this table holds: identity and provenance, not state.
+   ================================================================== */
+export const junoCoinFormatEnum = pgEnum("juno_coin_format", ["post", "reel"]);
+
+export const junoPools = pgTable(
+  "juno_pools",
+  {
+    /** The base mint. Canonical id everywhere in the app and in URLs. */
+    baseMint: varchar("base_mint", { length: 44 }).primaryKey(),
+    poolAddress: varchar("pool_address", { length: 44 }).notNull(),
+    configAddress: varchar("config_address", { length: 44 }).notNull(),
+    quoteMint: varchar("quote_mint", { length: 44 }).notNull(),
+    creatorWallet: varchar("creator_wallet", { length: 44 }).notNull(),
+
+    /** Which cluster this pool lives on — devnet rows must not leak to mainnet. */
+    cluster: varchar("cluster", { length: 16 }).notNull(),
+
+    name: text("name").notNull(),
+    symbol: varchar("symbol", { length: 16 }).notNull(),
+    description: text("description"),
+    format: junoCoinFormatEnum("format").notNull().default("post"),
+    /** Which `lib/juno/curves.ts` preset it was launched with. */
+    curvePreset: varchar("curve_preset", { length: 32 }).notNull(),
+
+    mediaUrl: text("media_url"),
+    posterUrl: text("poster_url"),
+    mediaWidth: integer("media_width"),
+    mediaHeight: integer("media_height"),
+
+    /** Pyth feed id for equity presets, so the coin page can show NAV. */
+    navFeedId: text("nav_feed_id"),
+
+    /** The launch signature — the receipt a judge clicks. */
+    createSignature: varchar("create_signature", { length: 96 }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("juno_pools_cluster_created_idx").on(table.cluster, table.createdAt),
+    index("juno_pools_creator_idx").on(table.creatorWallet),
+    uniqueIndex("juno_pools_pool_address_idx").on(table.poolAddress),
+  ],
+);

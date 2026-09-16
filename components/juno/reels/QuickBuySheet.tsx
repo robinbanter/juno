@@ -78,7 +78,7 @@ export function QuickBuySheet({
         </div>
 
         <div className="mt-4 flex items-baseline justify-between">
-          <Delta value={coin.marketCap} direction={coin.marketCapChangePct} />
+          <Delta value={coin.marketCap} direction={coin.marketCapChangePct} currency={coin.marketCapCurrency} />
           <span className="text-[12px] text-j-faint">
             {Math.round(coin.curve.progress * 100)}% to graduation
           </span>

@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import { usd } from "@/lib/juno/format";
+import { compact, usd } from "@/lib/juno/format";
 
 /**
  * A value with a direction triangle. Green up, magenta down — the same two
@@ -11,12 +11,15 @@ export function Delta({
   direction,
   className,
   compact = true,
+  currency = "USD",
 }: {
   value: number;
   /** Defaults to the sign of `value`. */
   direction?: number;
   className?: string;
   compact?: boolean;
+  /** Non-USD values are shown in their own unit rather than a dollar sign. */
+  currency?: string;
 }) {
   const up = (direction ?? value) >= 0;
   return (
@@ -28,9 +31,17 @@ export function Delta({
       )}
     >
       <Triangle up={up} />
-      {usd(value, { compact })}
+      {currency === "USD"
+        ? usd(value, { compact })
+        : `${compactValue(value, compact)} ${currency}`}
     </span>
   );
+}
+
+function compactValue(value: number, useCompact: boolean): string {
+  return useCompact && Math.abs(value) >= 1000
+    ? compact(value)
+    : value.toFixed(Math.abs(value) < 1 ? 4 : 2);
 }
 
 export function Triangle({ up, size = 8 }: { up: boolean; size?: number }) {

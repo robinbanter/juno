@@ -31,6 +31,12 @@ export type Creator = {
   posts: number;
   /** Creator-coin market cap in USD. */
   marketCap: number;
+  /**
+   * What `marketCap` is denominated in. Falls back to the quote token's own
+   * symbol when no USD price feed is available, so the figure is never
+   * mislabelled as dollars.
+   */
+  marketCapCurrency: string;
   marketCapChangePct: number;
 };
 
@@ -77,9 +83,20 @@ export type Coin = {
   quote: QuoteToken;
 
   marketCap: number;
+  /**
+   * What `marketCap` is denominated in. Falls back to the quote token's own
+   * symbol when no USD price feed is available, so the figure is never
+   * mislabelled as dollars.
+   */
+  marketCapCurrency: string;
   marketCapChangePct: number;
-  volume24h: number;
-  totalVolume: number;
+  /**
+   * Null when unknown. Rolling volume needs an indexer over swap events —
+   * the program exposes cumulative fees, not a 24h window — and showing a
+   * number we cannot derive would be a lie on a trading screen.
+   */
+  volume24h: number | null;
+  totalVolume: number | null;
   creatorRewards: number;
   holders: number;
 

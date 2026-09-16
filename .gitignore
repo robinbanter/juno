@@ -62,3 +62,4 @@ __pycache__/
 # fund a wallet — it already did once (f.tmp.mjs, 690efc7). Name temp work
 # *.tmp.* and it cannot happen again.
 *.tmp.*
+.juno/

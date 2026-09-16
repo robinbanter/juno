@@ -1,28 +1,36 @@
-import { DEMO_ACTIVITY, DEMO_ALL } from "@/lib/juno/mock";
+import { listPoolActivity } from "@/lib/juno/activity";
+import { cluster } from "@/lib/juno/cluster";
+import { listPools } from "@/lib/juno/registry";
 import { ActivityList } from "@/components/juno/coin/ActivityList";
 
 export const metadata = { title: "Activity" };
+export const dynamic = "force-dynamic";
 
-export default function ActivityPage() {
-  // Every trade across every Juno pool. Replace with an indexer query over the
-  // program's swap events; the row shape is already what `ActivityList` wants.
-  const feed = DEMO_ACTIVITY.flatMap((item, i) =>
-    DEMO_ALL.slice(0, 4).map((coin, j) => ({
-      ...item,
-      id: `${item.id}-${coin.address}`,
-      timestamp: new Date(
-        Date.parse(item.timestamp) - (i * 4 + j) * 1_800_000,
-      ).toISOString(),
-      coinName: coin.name,
-      coinAddress: coin.address,
-    })),
-  ).sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp));
+export default async function ActivityPage() {
+  const pools = await listPools(20);
+
+  // One RPC page per pool, merged newest-first. Fine at this scale; an
+  // indexer is the answer once there are more pools than fit in one screen.
+  const perPool = await Promise.all(
+    pools.map(async (pool) => {
+      const rows = await listPoolActivity(pool.poolAddress, 10);
+      return rows.map((row) => ({
+        ...row,
+        coinName: pool.name,
+        coinAddress: pool.baseMint,
+      }));
+    }),
+  );
+
+  const feed = perPool
+    .flat()
+    .sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp));
 
   return (
     <div className="mx-auto w-full max-w-[600px] px-4 pt-4 lg:px-8">
       <h1 className="mb-1 text-[24px] font-bold tracking-tight">Activity</h1>
       <p className="mb-4 text-[14px] text-j-muted">
-        Every trade across Juno, newest first.
+        Every transaction against a Juno pool on {cluster()}, newest first.
       </p>
       <ActivityList items={feed} showCoin empty="Nothing has traded yet." />
     </div>

@@ -1,14 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { Clapperboard, ImageIcon, Upload } from "lucide-react";
+import { useWallet } from "@solana/wallet-adapter-react";
+import { Clapperboard, ExternalLink, ImageIcon, Upload } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { CURVE_PRESET_LIST, CURVE_PRESETS } from "@/lib/juno/curves";
 import { QUOTE_TOKENS } from "@/lib/juno/dbc";
 import { usd } from "@/lib/juno/format";
 import type { CoinFormat, CurvePresetId } from "@/lib/juno/types";
+import { cluster, explorer, meteoraPoolUrl } from "@/lib/juno/cluster";
 import { Button } from "@/components/juno/ui/Button";
+import { useLaunch } from "@/components/juno/wallet/useLaunch";
 
 const FORMATS: Array<{ id: CoinFormat; label: string; hint: string; Icon: typeof ImageIcon }> = [
   { id: "post", label: "Post", hint: "Image or video, shown in the grid", Icon: ImageIcon },
@@ -33,16 +36,37 @@ export function CreateForm() {
   const [initialMc, setInitialMc] = useState(1_000);
   const [migrationMc, setMigrationMc] = useState(25_000);
 
+  const { connected } = useWallet();
+  const { state, launch, reset } = useLaunch();
+
   const active = CURVE_PRESETS[preset];
-  const ready = name.trim().length > 0 && symbol.trim().length > 0;
+  const valid =
+    name.trim().length > 0 && symbol.trim().length > 0 && migrationMc > initialMc;
+  const busy = state.status === "building" || state.status === "signing";
+
+  if (state.status === "done") {
+    return <LaunchResult result={state.result} onReset={reset} />;
+  }
 
   return (
     <form
       className="mt-6 flex flex-col gap-7"
       onSubmit={(e) => {
         e.preventDefault();
-        // Wire to `buildLaunchTransaction` in lib/juno/dbc.ts once a wallet
-        // adapter is connected: it takes exactly these fields.
+        if (!valid) return;
+        void launch({
+          quote,
+          format,
+          description: description.trim() || undefined,
+          name: name.trim(),
+          symbol: symbol.trim(),
+          // Metadata hosting is not built yet. The program accepts an empty
+          // URI, and shipping a dead link would be worse than none.
+          uri: "",
+          preset,
+          initialMarketCap: initialMc,
+          migrationMarketCap: migrationMc,
+        });
       }}
     >
       <Field label="Format">
@@ -201,20 +225,102 @@ export function CreateForm() {
       </div>
 
       <div>
-        <Button
-          type="submit"
-          variant="buy"
-          size="lg"
-          className="w-full"
-          disabled={!ready || migrationMc <= initialMc}
-        >
-          {ready ? "Launch" : "Add a name and ticker"}
+        <Button type="submit" variant="buy" size="lg" className="w-full" disabled={!valid || busy}>
+          {state.status === "building"
+            ? "Building transactions…"
+            : state.status === "signing"
+              ? `${state.label} (${state.step}/${state.total})`
+              : !connected
+              ? "Connect wallet to launch"
+              : !valid
+                ? "Add a name and ticker"
+                : `Launch on ${cluster()}`}
         </Button>
+
+        {state.status === "error" && (
+          <p role="alert" className="mt-3 rounded-j border border-j-danger/40 bg-j-danger/10 px-3 py-2 text-[13px] text-j-danger">
+            {state.message}
+          </p>
+        )}
+
         <p className="mt-3 text-center text-[12px] text-j-faint">
-          Connect a wallet to launch. Creating a pool costs network fees only.
+          Creates a config key and a virtual pool in one transaction. Costs
+          network fees and account rent.
         </p>
       </div>
     </form>
+  );
+}
+
+/**
+ * Post-launch receipt. Every address is a link, because the whole point of
+ * launching on-chain is that someone else can go and verify it.
+ */
+function LaunchResult({
+  result,
+  onReset,
+}: {
+  result: { signature: string; signatures: string[]; pool: string; config: string; baseMint: string };
+  onReset: () => void;
+}) {
+  return (
+    <div className="mt-6 flex flex-col gap-4">
+      <div className="rounded-j border border-j-pos/40 bg-j-pos/10 px-4 py-3">
+        <p className="text-[15px] font-semibold text-j-pos">Pool is live</p>
+        <p className="mt-1 text-[13px] text-j-muted">
+          The bonding curve is open on {cluster()}. Anyone can trade it now.
+        </p>
+      </div>
+
+      <dl className="flex flex-col gap-2 text-[13px]">
+        <ProofRow label="Transaction" value={result.signature} href={explorer.tx(result.signature)} />
+        <ProofRow label="Pool" value={result.pool} href={explorer.account(result.pool)} />
+        <ProofRow label="Token mint" value={result.baseMint} href={explorer.token(result.baseMint)} />
+        <ProofRow label="Config key" value={result.config} href={explorer.account(result.config)} />
+      </dl>
+
+      <div className="flex gap-2">
+        <Button
+          variant="buy"
+          size="lg"
+          className="flex-1"
+          onClick={() => window.open(`/coin/${result.baseMint}`, "_self")}
+        >
+          Open the coin
+        </Button>
+        <Button variant="outline" size="lg" onClick={onReset}>
+          Launch another
+        </Button>
+      </div>
+
+      <a
+        href={meteoraPoolUrl(result.pool)}
+        target="_blank"
+        rel="noreferrer noopener"
+        className="text-center text-[12px] text-j-muted underline hover:text-j-ink"
+      >
+        View the curve on Meteora
+      </a>
+    </div>
+  );
+}
+
+function ProofRow({ label, value, href }: { label: string; value: string; href: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <dt className="text-j-muted">{label}</dt>
+      <dd>
+        <a
+          href={href}
+          target="_blank"
+          rel="noreferrer noopener"
+          className="flex items-center gap-1.5 font-mono text-[12px] hover:underline"
+        >
+          {value.slice(0, 6)}…{value.slice(-6)}
+          <ExternalLink size={12} className="text-j-muted" />
+        </a>
+      </dd>
+    </div>
   );
 }
 

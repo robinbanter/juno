@@ -25,7 +25,10 @@
     "mainnet:preflight": "dotenv -e .env.local -- tsx scripts/mainnet-preflight.ts",
     "db:migrate": "dotenv -e .env.local -- drizzle-kit migrate",
     "db:baseline": "dotenv -e .env.local -- tsx scripts/db-baseline.ts",
-    "keys:rotate": "dotenv -e .env.local -- tsx scripts/rotate-custodial-keys.ts"
+    "keys:rotate": "dotenv -e .env.local -- tsx scripts/rotate-custodial-keys.ts",
+    "juno:launch": "dotenv -e .env.local -- tsx scripts/juno-launch.ts",
+    "juno:inspect": "dotenv -e .env.local -- tsx scripts/juno-inspect.ts",
+    "juno:trade": "dotenv -e .env.local -- tsx scripts/juno-trade.ts"
   },
   "dependencies": {
     "@agoralabs-sh/avm-web-provider": "^1.7.0",

@@ -4,15 +4,15 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Activity, CircleUser, Clapperboard, House, Plus } from "lucide-react";
 
+import { useWallet } from "@solana/wallet-adapter-react";
+
 import { cn } from "@/lib/utils";
-import { DEMO_CREATOR } from "@/lib/juno/mock";
 
 const ITEMS = [
   { href: "/explore", label: "Home", Icon: House },
   { href: "/reels", label: "Reels", Icon: Clapperboard },
   { href: "/create", label: "Create", Icon: Plus },
   { href: "/activity", label: "Activity", Icon: Activity },
-  { href: `/creator/${DEMO_CREATOR.handle}`, label: "Profile", Icon: CircleUser },
 ] as const;
 
 /**
@@ -23,6 +23,14 @@ const ITEMS = [
  */
 export function MobileNav() {
   const pathname = usePathname();
+  const { publicKey } = useWallet();
+  // Your profile is your wallet; with none connected, send them to create.
+  const items = [
+    ...ITEMS,
+    publicKey
+      ? { href: `/creator/${publicKey.toBase58()}`, label: "Profile", Icon: CircleUser }
+      : { href: "/create", label: "Launch", Icon: CircleUser },
+  ];
 
   return (
     <nav
@@ -30,7 +38,7 @@ export function MobileNav() {
       className="fixed inset-x-0 bottom-0 z-40 border-t border-j-line bg-j-bg/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md lg:hidden"
     >
       <ul className="flex items-stretch">
-        {ITEMS.map(({ href, label, Icon }) => {
+        {items.map(({ href, label, Icon }) => {
           const active = pathname === href;
           return (
             <li key={href} className="flex-1">

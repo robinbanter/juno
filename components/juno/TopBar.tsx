@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { Search } from "lucide-react";
 
-import { Button } from "./ui/Button";
 import { JunoMark } from "./ui/JunoMark";
+import { ConnectButton } from "./wallet/ConnectButton";
 
 /**
  * Sticky header, full width above the rail: brand lockup left, search centred,
@@ -14,7 +14,7 @@ import { JunoMark } from "./ui/JunoMark";
  * and the wordmark does not fit beside the mark at that width — stacking it
  * there would have read as two logos rather than one.
  */
-export function TopBar({ connected = false }: { connected?: boolean }) {
+export function TopBar() {
   return (
     <header className="sticky top-0 z-40 h-16 bg-j-bg/85 backdrop-blur-md">
       <div className="flex h-16 items-center gap-3 px-4 lg:px-5">
@@ -48,27 +48,7 @@ export function TopBar({ connected = false }: { connected?: boolean }) {
         </form>
 
         <div className="flex shrink-0 items-center gap-2">
-          {connected ? (
-            /* `hidden` and `inline-flex` sit in the same Tailwind layer, so a
-               `hidden sm:inline-flex` on the Button loses to the Button's own
-               `inline-flex`. The wrapper owns display instead. */
-            <span className="hidden sm:block">
-              <Button variant="outline" size="sm">
-                Connected
-              </Button>
-            </span>
-          ) : (
-            <>
-              <span className="hidden sm:block">
-                <Button variant="ghost" size="sm">
-                  Login
-                </Button>
-              </span>
-              <Button variant="contrast" size="sm">
-                Sign up
-              </Button>
-            </>
-          )}
+          <ConnectButton />
         </div>
       </div>
     </header>

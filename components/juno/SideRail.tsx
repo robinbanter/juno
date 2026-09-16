@@ -4,8 +4,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Activity, CircleUser, Clapperboard, House, Plus, Zap } from "lucide-react";
 
+import { useWallet } from "@solana/wallet-adapter-react";
+
 import { cn } from "@/lib/utils";
-import { DEMO_CREATOR } from "@/lib/juno/mock";
 
 const NAV = [
   { href: "/explore", label: "Home", Icon: House },
@@ -15,9 +16,6 @@ const NAV = [
 
 const NAV_BOTTOM = [
   { href: "/activity", label: "Activity", Icon: Activity },
-  // Points at the signed-in creator once auth exists; the demo profile
-  // stands in so the link is never dead.
-  { href: `/creator/${DEMO_CREATOR.handle}`, label: "Profile", Icon: CircleUser },
 ] as const;
 
 /**
@@ -26,6 +24,10 @@ const NAV_BOTTOM = [
  */
 export function SideRail() {
   const pathname = usePathname();
+  const { publicKey } = useWallet();
+  // Your profile is your wallet. With none connected there is no profile to
+  // link to, so the item routes to the connect flow instead of a dead page.
+  const profileHref = publicKey ? `/creator/${publicKey.toBase58()}` : "/create";
 
   return (
     <nav
@@ -58,6 +60,15 @@ export function SideRail() {
       {NAV_BOTTOM.map((item) => (
         <RailLink key={item.href} {...item} active={pathname === item.href} />
       ))}
+
+      {publicKey && (
+        <RailLink
+          href={profileHref}
+          label="Profile"
+          Icon={CircleUser}
+          active={pathname === profileHref}
+        />
+      )}
     </nav>
   );
 }

@@ -32,8 +32,12 @@ export function compact(value: number, digits = 2): string {
  * `$748.18` under 1k, `$6.73k` above — matching how Zora switches from exact
  * dollars to compact once a number stops fitting in a stat cell.
  */
-export function usd(value: number, opts: { compact?: boolean } = {}): string {
-  if (!Number.isFinite(value)) return "—";
+export function usd(
+  value: number | null | undefined,
+  opts: { compact?: boolean } = {},
+): string {
+  // Null means genuinely unknown — an em dash, never a confident zero.
+  if (value === null || value === undefined || !Number.isFinite(value)) return "—";
   const abs = Math.abs(value);
   const sign = value < 0 ? "-" : "";
   if (opts.compact !== false && abs >= 1000) return `${sign}$${compact(abs)}`;

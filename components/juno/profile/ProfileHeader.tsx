@@ -62,7 +62,7 @@ export function ProfileHeader({
           edge would hide it entirely. */}
       <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-[14px]">
         <span className="flex items-center gap-1">
-          <Delta value={creator.marketCap} direction={creator.marketCapChangePct} />
+          <Delta value={creator.marketCap} direction={creator.marketCapChangePct} currency={creator.marketCapCurrency} />
           <span className="text-j-muted">MC</span>
         </span>
         <Stat value={creator.posts} label="Posts" />

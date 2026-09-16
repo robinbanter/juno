@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { JunoShell } from "@/components/juno/JunoShell";
+import { JunoWalletProvider } from "@/components/juno/wallet/JunoWalletProvider";
 
 export const metadata: Metadata = {
   title: {
@@ -12,5 +13,9 @@ export const metadata: Metadata = {
 };
 
 export default function JunoLayout({ children }: { children: React.ReactNode }) {
-  return <JunoShell>{children}</JunoShell>;
+  return (
+    <JunoWalletProvider>
+      <JunoShell>{children}</JunoShell>
+    </JunoWalletProvider>
+  );
 }

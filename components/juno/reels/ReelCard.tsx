@@ -256,9 +256,10 @@ function ReelFooter({ coin, onBuy }: { coin: Coin; onBuy: () => void }) {
           Buy
         </Button>
         <span className="flex flex-col leading-tight">
-          <Delta value={coin.marketCap} direction={coin.marketCapChangePct} />
+          <Delta value={coin.marketCap} direction={coin.marketCapChangePct} currency={coin.marketCapCurrency} />
           <span className="text-[11px] text-white/60">
-            {compact(coin.holders, 1)} holders · {usd(coin.volume24h)} 24h
+            {compact(coin.holders, 1)} holders
+            {coin.volume24h !== null && <> · {usd(coin.volume24h)} 24h</>}
           </span>
         </span>
       </div>

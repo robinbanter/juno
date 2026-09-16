@@ -21,9 +21,16 @@ import {
   type PoolConfig,
   type VirtualPool,
 } from "@meteora-ag/dynamic-bonding-curve-sdk";
-import { Connection, PublicKey, type Commitment, type Transaction } from "@solana/web3.js";
+import {
+  Connection,
+  Keypair,
+  PublicKey,
+  Transaction,
+  type Commitment,
+} from "@solana/web3.js";
 import BN from "bn.js";
 
+import { isMainnet, rpcEndpoint } from "./cluster";
 import { buildPresetParams, type BuildPresetOptions } from "./curves";
 import type { CurveState, QuoteToken, TradeSide } from "./types";
 
@@ -61,29 +68,31 @@ function poolState(pool: VirtualPool): PoolStateFields {
   return (pool as unknown as { poolState: PoolStateFields }).poolState;
 }
 
-/** USDC on Solana mainnet — Juno's default quote token. */
-export const USDC: QuoteToken = {
-  mint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
-  symbol: "USDC",
-  decimals: 6,
-};
-
-/** Wrapped SOL, for creators who would rather quote in SOL. */
+/**
+ * Wrapped SOL. The one mint with the same address on every cluster, which
+ * makes it the only quote token a devnet rehearsal can rely on.
+ */
 export const WSOL: QuoteToken = {
   mint: "So11111111111111111111111111111111111111112",
   symbol: "SOL",
   decimals: 9,
 };
 
-export const QUOTE_TOKENS: QuoteToken[] = [USDC, WSOL];
+/** Circle USDC. Different mint per cluster — quoting the wrong one fails. */
+export const USDC: QuoteToken = {
+  mint: isMainnet()
+    ? "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+    : "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+  symbol: "USDC",
+  decimals: 6,
+};
 
-export function rpcEndpoint(): string {
-  return (
-    process.env.NEXT_PUBLIC_SOLANA_RPC ??
-    process.env.SOLANA_RPC ??
-    "https://api.mainnet-beta.solana.com"
-  );
-}
+/**
+ * Equity-shaped launches quote in USDC so the curve is denominated in the
+ * same unit as the underlying. SOL is offered for content coins, where a
+ * SOL-denominated market is the convention.
+ */
+export const QUOTE_TOKENS: QuoteToken[] = [USDC, WSOL];
 
 let cachedConnection: Connection | null = null;
 
@@ -234,31 +243,60 @@ export async function quoteTrade(params: {
 /* Writes                                                              */
 /* ------------------------------------------------------------------ */
 
-/**
- * Build the unsigned transaction that launches a coin: one config key built
- * from a Juno curve preset, plus the virtual pool, in a single transaction.
- *
- * The caller signs with both the payer wallet and a fresh `configKeypair` /
- * `baseMintKeypair`.
- */
-export async function buildLaunchTransaction(params: {
+export type LaunchRequest = {
   payer: PublicKey;
   creator: PublicKey;
-  config: PublicKey;
-  baseMint: PublicKey;
   quote: QuoteToken;
-  /** Token metadata. */
   name: string;
   symbol: string;
+  /** Token metadata URI. Empty string is accepted by the program. */
   uri: string;
   preset: BuildPresetOptions["preset"];
   initialMarketCap: number;
   migrationMarketCap: number;
-  /** Who collects the partner share of trading fees — Juno's treasury. */
-  feeClaimer: PublicKey;
+  /** Who collects the partner share of trading fees. Defaults to the creator. */
+  feeClaimer?: PublicKey;
   leftoverReceiver?: PublicKey;
-}): Promise<Transaction> {
+};
+
+export type LaunchStep = {
+  /** Shown while this step is in flight. */
+  label: string;
+  transaction: Transaction;
+  /** Freshly generated accounts that must co-sign this step. */
+  signers: Keypair[];
+};
+
+export type LaunchPlan = {
+  /** Sent in order. Each must confirm before the next is valid. */
+  steps: LaunchStep[];
+  config: PublicKey;
+  baseMint: PublicKey;
+  pool: PublicKey;
+};
+
+/**
+ * Plan a launch: create a config key from a Juno curve preset, then initialise
+ * its virtual pool.
+ *
+ * This is deliberately two transactions rather than the SDK's
+ * `createConfigAndPool` convenience. A sixteen-segment curve serialises to
+ * ~739 bytes of instruction data on its own; bundled with the pool init and
+ * three signatures the message reaches ~1488 bytes, well past Solana's 1232
+ * byte packet limit, and the send fails outright. Splitting keeps both steps
+ * comfortably inside one packet without giving up curve resolution — and
+ * sixteen segments is the whole point of Juno's presets.
+ *
+ * The config account and the base mint are new accounts, so both are generated
+ * here and returned as co-signers; the SDK builds instructions but does not
+ * create or sign for them.
+ */
+export async function planLaunch(params: LaunchRequest): Promise<LaunchPlan> {
   const client = getDbcClient();
+
+  const configKeypair = Keypair.generate();
+  const baseMintKeypair = Keypair.generate();
+  const quoteMint = new PublicKey(params.quote.mint);
 
   const curve = buildCurveWithLiquidityWeights(
     buildPresetParams({
@@ -269,21 +307,118 @@ export async function buildLaunchTransaction(params: {
     }),
   );
 
-  return client.partner.createConfigAndPool({
-    ...curve,
-    config: params.config,
-    feeClaimer: params.feeClaimer,
-    leftoverReceiver: params.leftoverReceiver ?? params.creator,
-    payer: params.payer,
-    quoteMint: new PublicKey(params.quote.mint),
-    preCreatePoolParam: {
-      name: params.name,
-      symbol: params.symbol,
-      uri: params.uri,
-      poolCreator: params.creator,
-      baseMint: params.baseMint,
-    },
+  // `createConfigAndPoolWithFirstBuy` with no first buy is the only builder
+  // that returns the two transactions *separately*. `createConfigAndPool`
+  // bundles them past the packet limit, and `creator.createPool` on its own
+  // reads the config account from chain — which does not exist yet.
+  const { createConfigTx, createPoolWithFirstBuyTx } =
+    await client.partner.createConfigAndPoolWithFirstBuy({
+      ...curve,
+      config: configKeypair.publicKey,
+      feeClaimer: params.feeClaimer ?? params.creator,
+      // Must not be the default key: the program rejects an all-zeroes
+      // receiver, which would burn the leftover supply at migration.
+      leftoverReceiver: params.leftoverReceiver ?? params.creator,
+      payer: params.payer,
+      quoteMint,
+      preCreatePoolParam: {
+        name: params.name,
+        symbol: params.symbol,
+        uri: params.uri,
+        poolCreator: params.creator,
+        baseMint: baseMintKeypair.publicKey,
+      },
+    });
+
+  return {
+    steps: [
+      { label: "Creating the curve config", transaction: createConfigTx, signers: [configKeypair] },
+      { label: "Opening the pool", transaction: createPoolWithFirstBuyTx, signers: [baseMintKeypair] },
+    ],
+    config: configKeypair.publicKey,
+    baseMint: baseMintKeypair.publicKey,
+    pool: deriveDbcPoolAddress(quoteMint, baseMintKeypair.publicKey, configKeypair.publicKey),
+  };
+}
+
+/**
+ * Finish and send a transaction the SDK built.
+ *
+ * The SDK returns bare instructions — no fee payer, no blockhash, nothing
+ * signed. All three are this function's job, in that order, because a
+ * transaction cannot be signed before it knows what it is paying for.
+ */
+export async function sendTransaction(params: {
+  transaction: Transaction;
+  payer: PublicKey;
+  signTransaction: (tx: Transaction) => Promise<Transaction>;
+  /** Newly created accounts that must co-sign, e.g. a config or mint. */
+  signers?: Keypair[];
+  /** Fired once the cluster has accepted the transaction, before confirmation. */
+  onSent?: (signature: string) => void;
+}): Promise<string> {
+  const connection = getConnection();
+  const { transaction, payer, signers = [] } = params;
+
+  const { blockhash, lastValidBlockHeight } =
+    await connection.getLatestBlockhash(COMMITMENT);
+  transaction.feePayer = payer;
+  transaction.recentBlockhash = blockhash;
+
+  // Co-signers first: the wallet's signature must cover the final message, so
+  // nothing may be added to the transaction after it signs.
+  if (signers.length > 0) transaction.partialSign(...signers);
+
+  const signed = await params.signTransaction(transaction);
+  const signature = await connection.sendRawTransaction(signed.serialize(), {
+    skipPreflight: false,
+    maxRetries: 3,
   });
+
+  params.onSent?.(signature);
+
+  const result = await connection.confirmTransaction(
+    { signature, blockhash, lastValidBlockHeight },
+    COMMITMENT,
+  );
+  if (result.value.err) {
+    throw new Error(
+      `Transaction ${signature} failed: ${JSON.stringify(result.value.err)}`,
+    );
+  }
+
+  return signature;
+}
+
+/**
+ * Send a plan's steps in order, confirming each before starting the next.
+ *
+ * Sequential rather than batched because the pool init references the config
+ * account by address — it is only a valid instruction once the config exists
+ * on-chain. Each step gets a fresh blockhash for the same reason: signing
+ * both up front risks the second expiring while the first confirms.
+ */
+export async function sendLaunch(params: {
+  plan: LaunchPlan;
+  payer: PublicKey;
+  signTransaction: (tx: Transaction) => Promise<Transaction>;
+  onStep?: (step: { index: number; total: number; label: string }) => void;
+}): Promise<string[]> {
+  const signatures: string[] = [];
+
+  for (const [index, step] of params.plan.steps.entries()) {
+    params.onStep?.({ index, total: params.plan.steps.length, label: step.label });
+    signatures.push(
+      await sendTransaction({
+        transaction: step.transaction,
+        payer: params.payer,
+        signTransaction: params.signTransaction,
+        signers: step.signers,
+      }),
+    );
+  }
+
+  return signatures;
 }
 
 /** Build the unsigned buy/sell transaction for an existing pool. */

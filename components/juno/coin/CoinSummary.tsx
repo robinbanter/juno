@@ -57,7 +57,7 @@ export function CoinSummary({ coin }: { coin: Coin }) {
         items={[
           {
             label: "Market Cap",
-            value: <Delta value={coin.marketCap} direction={coin.marketCapChangePct} />,
+            value: <Delta value={coin.marketCap} direction={coin.marketCapChangePct} currency={coin.marketCapCurrency} />,
           },
           {
             label: "24H Volume",

@@ -1,0 +1,136 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import { useWallet } from "@solana/wallet-adapter-react";
+import { useWalletModal } from "@solana/wallet-adapter-react-ui";
+import { PublicKey } from "@solana/web3.js";
+
+import {
+  buildSwapTransaction,
+  fetchPoolSnapshot,
+  getConnection,
+  sendTransaction,
+  type PoolSnapshot,
+} from "@/lib/juno/dbc";
+import type { Coin, TradeSide } from "@/lib/juno/types";
+import { describeError } from "./useLaunch";
+
+export type TradeState =
+  | { status: "idle" }
+  | { status: "signing" }
+  | { status: "confirming" }
+  | { status: "done"; signature: string }
+  | { status: "error"; message: string };
+
+/**
+ * Live pool state, wallet balances and the swap itself.
+ *
+ * The snapshot is fetched in the browser rather than passed down from the
+ * server page: a quote has to price against the pool as it is *now*, and a
+ * server-rendered snapshot is already stale by the time someone types an
+ * amount into the field.
+ */
+export function useTrade(coin: Coin) {
+  const { publicKey, signTransaction } = useWallet();
+  const { setVisible } = useWalletModal();
+
+  const [snapshot, setSnapshot] = useState<PoolSnapshot | null>(null);
+  const [balanceUsd, setBalanceUsd] = useState(0);
+  const [holding, setHolding] = useState(0);
+  const [state, setState] = useState<TradeState>({ status: "idle" });
+
+  const refresh = useCallback(async () => {
+    const next = await fetchPoolSnapshot(coin.pool).catch(() => null);
+    if (next) setSnapshot(next);
+  }, [coin.pool]);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  // Balances drive the "insufficient" state, so they must be real reads.
+  const refreshBalances = useCallback(async () => {
+    if (!publicKey) {
+      setBalanceUsd(0);
+      setHolding(0);
+      return;
+    }
+    const connection = getConnection();
+
+    const [quote, base] = await Promise.all([
+      connection
+        .getParsedTokenAccountsByOwner(publicKey, {
+          mint: new PublicKey(coin.quote.mint),
+        })
+        .catch(() => null),
+      connection
+        .getParsedTokenAccountsByOwner(publicKey, {
+          mint: new PublicKey(coin.address),
+        })
+        .catch(() => null),
+    ]);
+
+    const sum = (accounts: typeof quote) =>
+      accounts?.value.reduce(
+        (total, entry) =>
+          total + (entry.account.data.parsed?.info?.tokenAmount?.uiAmount ?? 0),
+        0,
+      ) ?? 0;
+
+    setBalanceUsd(sum(quote));
+    setHolding(sum(base));
+  }, [publicKey, coin.quote.mint, coin.address]);
+
+  useEffect(() => {
+    void refreshBalances();
+  }, [refreshBalances]);
+
+  const swap = useCallback(
+    async (input: { side: TradeSide; amountIn: number; minimumAmountOut: number }) => {
+      if (!publicKey || !signTransaction) {
+        setVisible(true);
+        return;
+      }
+      const current = snapshot ?? (await fetchPoolSnapshot(coin.pool));
+      if (!current) {
+        setState({ status: "error", message: "Pool is not readable right now." });
+        return;
+      }
+
+      try {
+        setState({ status: "signing" });
+        const transaction = await buildSwapTransaction({
+          snapshot: current,
+          owner: publicKey,
+          side: input.side,
+          amountIn: input.amountIn,
+          minimumAmountOut: input.minimumAmountOut,
+        });
+
+        const signature = await sendTransaction({
+          transaction,
+          payer: publicKey,
+          signTransaction,
+          onSent: () => setState({ status: "confirming" }),
+        });
+
+        setState({ status: "done", signature });
+        // The trade moved the curve and the wallet; re-read both.
+        await Promise.all([refresh(), refreshBalances()]);
+      } catch (error) {
+        setState({ status: "error", message: describeError(error) });
+      }
+    },
+    [publicKey, signTransaction, setVisible, snapshot, coin.pool, refresh, refreshBalances],
+  );
+
+  return {
+    snapshot,
+    balanceUsd,
+    holding,
+    state,
+    swap,
+    reset: () => setState({ status: "idle" }),
+    connected: Boolean(publicKey),
+  };
+}
