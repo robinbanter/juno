@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
-import { Clapperboard, ExternalLink, ImageIcon, LoaderCircle, Upload, X } from "lucide-react";
+import { Clapperboard, ExternalLink, ImageIcon, LoaderCircle, TrendingUp, Upload, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { CURVE_PRESET_LIST, CURVE_PRESETS } from "@/lib/juno/curves";
@@ -20,15 +20,70 @@ const FORMATS: Array<{ id: CoinFormat; label: string; hint: string; Icon: typeof
   { id: "reel", label: "Reel", hint: "Vertical video, shown in the swipe feed", Icon: Clapperboard },
 ];
 
+type EquityTemplate = {
+  ticker: string;
+  company: string;
+  name: string;
+  symbol: string;
+  preset: CurvePresetId;
+  quoteSymbol: "USDC" | "SOL";
+  navFeedId: string;
+  description: string;
+};
+
+const EQUITY_TEMPLATES: EquityTemplate[] = [
+  {
+    ticker: "AAPL",
+    company: "Apple Inc.",
+    name: "AAPLx Issuance",
+    symbol: "AAPLXI",
+    preset: "ipo-book",
+    quoteSymbol: "USDC",
+    navFeedId: "Equity.US.AAPL/USD",
+    description: "Tokenized AAPL exposure issued on an IPO-book curve: deep at the open, real discovery mid-curve, flat near the target cap.",
+  },
+  {
+    ticker: "NVDA",
+    company: "NVIDIA Corp",
+    name: "NVDAx Issuance",
+    symbol: "NVDAXI",
+    preset: "thin-name",
+    quoteSymbol: "SOL",
+    navFeedId: "Equity.US.NVDA/USD",
+    description: "Tokenized NVDA exposure on a thin-name curve: liquidity front-loaded so early size fills at the issue price instead of gapping the print.",
+  },
+  {
+    ticker: "TSLA",
+    company: "Tesla Inc",
+    name: "TSLAx Issuance",
+    symbol: "TSLAXI",
+    preset: "tight-nav",
+    quoteSymbol: "USDC",
+    navFeedId: "Equity.US.TSLA/USD",
+    description: "Tokenized TSLA exposure on a tight-NAV curve: uniform liquidity across all sixteen segments, behaving like a spread.",
+  },
+  {
+    ticker: "MSFT",
+    company: "Microsoft Corp",
+    name: "MSFTx Issuance",
+    symbol: "MSFTXI",
+    preset: "ipo-book",
+    quoteSymbol: "USDC",
+    navFeedId: "Equity.US.MSFT/USD",
+    description: "Tokenized MSFT exposure issued on an IPO-book curve with balanced liquidity discovery.",
+  },
+];
+
 /**
  * The launch form.
  *
- * The curve preset is the consequential choice here, so it gets the most
- * space and each option states what it does to the market rather than naming
- * a shape. Format defaults to post; picking reel switches the default curve to
- * `content`, since reels are bought on impulse.
+ * Supports both Content Coin launches (posts/reels) and STOCKLANA Tokenized Equity
+ * issuances (ticker -> preset -> Pyth NAV feed).
  */
 export function CreateForm() {
+  const [issuanceType, setIssuanceType] = useState<"content" | "equity">("content");
+  const [selectedEquityTicker, setSelectedEquityTicker] = useState<string | null>(null);
+  const [navFeedId, setNavFeedId] = useState<string | null>(null);
   const [format, setFormat] = useState<CoinFormat>("post");
   const [preset, setPreset] = useState<CurvePresetId>("content");
   const [name, setName] = useState("");
@@ -80,6 +135,18 @@ export function CreateForm() {
     }
   }
 
+  function applyEquityTemplate(template: EquityTemplate) {
+    setSelectedEquityTicker(template.ticker);
+    setName(template.name);
+    setSymbol(template.symbol);
+    setPreset(template.preset);
+    setDescription(template.description);
+    setNavFeedId(template.navFeedId);
+    setFormat("post");
+    const quoteToken = QUOTE_TOKENS.find((t) => t.symbol === template.quoteSymbol) ?? QUOTE_TOKENS[0];
+    setQuote(quoteToken);
+  }
+
   const active = CURVE_PRESETS[preset];
 
   // Computed locally from `buildCurveWithLiquidityWeights` — pure maths, no
@@ -119,37 +186,123 @@ export function CreateForm() {
           name: name.trim(),
           symbol: symbol.trim(),
           preset,
+          navFeedId: navFeedId || null,
           initialMarketCap: initialMc,
           migrationMarketCap: migrationMc,
         });
       }}
     >
-      <Field label="Format">
+      <Field label="Issuance mode" hint="Content launchpad or institutional tokenized stock pool (STOCKLANA).">
         <div className="grid grid-cols-2 gap-2">
-          {FORMATS.map(({ id, label, hint, Icon }) => (
-            <button
-              key={id}
-              type="button"
-              aria-pressed={format === id}
-              onClick={() => {
-                setFormat(id);
-                if (id === "reel") setPreset("content");
-              }}
-              className={cn(
-                "flex flex-col items-start gap-1 rounded-j border p-3 text-left transition-colors",
-                "focus-visible:ring-2 focus-visible:ring-j-focus focus-visible:outline-none",
-                format === id
-                  ? "border-j-ink bg-j-surface"
-                  : "border-j-line hover:border-j-line-strong",
-              )}
-            >
-              <Icon size={18} className={format === id ? "text-j-ink" : "text-j-muted"} />
-              <span className="text-[14px] font-semibold">{label}</span>
-              <span className="text-[12px] leading-snug text-j-muted">{hint}</span>
-            </button>
-          ))}
+          <button
+            type="button"
+            aria-pressed={issuanceType === "content"}
+            onClick={() => {
+              setIssuanceType("content");
+              setNavFeedId(null);
+              setSelectedEquityTicker(null);
+            }}
+            className={cn(
+              "flex items-center gap-2.5 rounded-j border p-3 text-left transition-colors",
+              "focus-visible:ring-2 focus-visible:ring-j-focus focus-visible:outline-none",
+              issuanceType === "content"
+                ? "border-j-ink bg-j-surface"
+                : "border-j-line hover:border-j-line-strong",
+            )}
+          >
+            <ImageIcon size={18} className={issuanceType === "content" ? "text-j-ink" : "text-j-muted"} />
+            <div>
+              <span className="block text-[14px] font-semibold">Content Coin</span>
+              <span className="text-[12px] text-j-muted">Media post or reel</span>
+            </div>
+          </button>
+          <button
+            type="button"
+            aria-pressed={issuanceType === "equity"}
+            onClick={() => {
+              setIssuanceType("equity");
+              applyEquityTemplate(EQUITY_TEMPLATES[0]);
+            }}
+            className={cn(
+              "flex items-center gap-2.5 rounded-j border p-3 text-left transition-colors",
+              "focus-visible:ring-2 focus-visible:ring-j-focus focus-visible:outline-none",
+              issuanceType === "equity"
+                ? "border-j-ink bg-j-surface"
+                : "border-j-line hover:border-j-line-strong",
+            )}
+          >
+            <TrendingUp size={18} className={issuanceType === "equity" ? "text-j-brand" : "text-j-muted"} />
+            <div>
+              <span className="block text-[14px] font-semibold">Stock Issuance</span>
+              <span className="text-[12px] text-j-muted">Ticker · Curve · Pyth NAV</span>
+            </div>
+          </button>
         </div>
       </Field>
+
+      {issuanceType === "equity" && (
+        <Field label="Equity asset" hint="Select a benchmark ticker or configure custom stock metadata.">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {EQUITY_TEMPLATES.map((tmpl) => (
+              <button
+                key={tmpl.ticker}
+                type="button"
+                aria-pressed={selectedEquityTicker === tmpl.ticker}
+                onClick={() => applyEquityTemplate(tmpl)}
+                className={cn(
+                  "flex flex-col items-start rounded-j border p-2.5 text-left transition-colors",
+                  "focus-visible:ring-2 focus-visible:ring-j-focus focus-visible:outline-none",
+                  selectedEquityTicker === tmpl.ticker
+                    ? "border-j-brand bg-j-surface"
+                    : "border-j-line hover:border-j-line-strong",
+                )}
+              >
+                <span className="text-[13px] font-bold text-j-ink">{tmpl.ticker}x</span>
+                <span className="text-[11px] text-j-faint truncate w-full">{tmpl.company}</span>
+                <span className="mt-1 text-[10px] text-j-brand uppercase font-mono">{tmpl.preset}</span>
+              </button>
+            ))}
+          </div>
+          <div className="mt-2.5 rounded-j border border-j-line bg-j-surface/50 p-3">
+            <div className="flex items-center justify-between">
+              <span className="text-[12px] font-semibold text-j-ink">Pyth Oracle Tracking</span>
+              <span className="font-mono text-[11px] text-j-muted">{navFeedId ?? "None"}</span>
+            </div>
+            <p className="mt-1 text-[11px] leading-relaxed text-j-faint">
+              Oracle price reference bound to on-chain metadata. Equity presets carry <code className="text-j-ink">navBandBps</code> allowing trades to verify against underlying market marks.
+            </p>
+          </div>
+        </Field>
+      )}
+
+      {issuanceType === "content" && (
+        <Field label="Format">
+          <div className="grid grid-cols-2 gap-2">
+            {FORMATS.map(({ id, label, hint, Icon }) => (
+              <button
+                key={id}
+                type="button"
+                aria-pressed={format === id}
+                onClick={() => {
+                  setFormat(id);
+                  if (id === "reel") setPreset("content");
+                }}
+                className={cn(
+                  "flex flex-col items-start gap-1 rounded-j border p-3 text-left transition-colors",
+                  "focus-visible:ring-2 focus-visible:ring-j-focus focus-visible:outline-none",
+                  format === id
+                    ? "border-j-ink bg-j-surface"
+                    : "border-j-line hover:border-j-line-strong",
+                )}
+              >
+                <Icon size={18} className={format === id ? "text-j-ink" : "text-j-muted"} />
+                <span className="text-[14px] font-semibold">{label}</span>
+                <span className="text-[12px] leading-snug text-j-muted">{hint}</span>
+              </button>
+            ))}
+          </div>
+        </Field>
+      )}
 
       <Field label="Media" optional>
         {media ? (
@@ -335,7 +488,9 @@ export function CreateForm() {
       <div className="rounded-j border border-j-line p-3">
         <p className="text-[13px] font-semibold">Summary</p>
         <dl className="mt-2 flex flex-col gap-1.5 text-[13px]">
+          <SummaryRow label="Mode">{issuanceType === "equity" ? "Stock Issuance (STOCKLANA)" : "Content Coin"}</SummaryRow>
           <SummaryRow label="Format">{format === "reel" ? "Reel" : "Post"}</SummaryRow>
+          {navFeedId && <SummaryRow label="Pyth NAV">{navFeedId}</SummaryRow>}
           <SummaryRow label="Curve">{active.label}</SummaryRow>
           <SummaryRow label="Quote">{quote.symbol}</SummaryRow>
           <SummaryRow label="Opens at">{usd(initialMc)}</SummaryRow>
@@ -507,14 +662,14 @@ function Field({
   children: React.ReactNode;
 }) {
   return (
-    <label className="flex flex-col gap-2">
+    <div className="flex flex-col gap-2">
       <span className="flex items-baseline gap-2">
         <span className="text-[13px] font-semibold">{label}</span>
         {optional && <span className="text-[12px] text-j-faint">optional</span>}
       </span>
       {hint && <span className="-mt-1 text-[12px] leading-snug text-j-muted">{hint}</span>}
       {children}
-    </label>
+    </div>
   );
 }
 

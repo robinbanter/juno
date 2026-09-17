@@ -63,3 +63,4 @@ __pycache__/
 # *.tmp.* and it cannot happen again.
 *.tmp.*
 .juno/
+.juno

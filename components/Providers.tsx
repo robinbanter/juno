@@ -2,7 +2,6 @@
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState } from "react";
-import { PasskeyEnrollmentPrompt } from "./PasskeyEnrollmentPrompt";
 import { RouteTransition } from "./RouteTransition";
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -17,7 +16,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       <RouteTransition>{children}</RouteTransition>
-      <PasskeyEnrollmentPrompt />
     </QueryClientProvider>
   );
 }
+

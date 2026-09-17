@@ -17,6 +17,9 @@ export const PYTH_FEEDS = {
   "Crypto.SOL/USD": "ef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d",
   "Equity.US.AAPL/USD": "49f6b65cb1de6b10eaf75e7c03ca029c306d0357e91b5311b175084a5ad55688",
   "Equity.US.NVDA/USD": "b1073854ed24cbc755dc527418f52b7d271f6cc967bbf8d8129112b18860a593",
+  "Equity.US.TSLA/USD": "16b47ff0d046f56191f636a4454790088924b13c714e082c90e1fc84cf734994",
+  "Equity.US.MSFT/USD": "e62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43",
+  "Equity.US.AMZN/USD": "5ca6524316a5047b7117e7d6cf6ecc5e6488730eb6022e37e96b3a0e44b80b2a",
 } as const;
 
 export type PythFeedName = keyof typeof PYTH_FEEDS;
