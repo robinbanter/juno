@@ -2,15 +2,16 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Norr",
-    short_name: "Norr",
+    name: "Juno",
+    short_name: "Juno",
     description:
-      "Pay-per-tap premium content with invisible app-balance payments.",
-    start_url: "/",
+      "A social app on Solana where publishing a post launches a Meteora " +
+      "Dynamic Bonding Curve pool for it.",
+    start_url: "/explore",
     display: "standalone",
     // Match the layout viewport themeColor so the splash + status bar agree.
-    background_color: "#000000",
-    theme_color: "#000000",
+    background_color: "#0d0b12",
+    theme_color: "#0d0b12",
     orientation: "portrait",
     icons: [
       {
@@ -26,6 +27,6 @@ export default function manifest(): MetadataRoute.Manifest {
         purpose: "any",
       },
     ],
-    categories: ["entertainment", "social"],
+    categories: ["finance", "social"],
   };
 }

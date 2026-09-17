@@ -4,8 +4,6 @@ import localFont from "next/font/local";
 import Script from "next/script";
 import "./globals.css";
 import { Providers } from "@/components/Providers";
-import { WalletProviders } from "@/components/WalletProviders";
-import { AgeGate } from "@/components/AgeGate";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -26,22 +24,23 @@ const brandSatoshi = localFont({
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 const SITE_DESCRIPTION =
-  "Pay-per-tap premium content with invisible app-balance payments.";
+  "A social app on Solana where publishing a post launches a Meteora Dynamic " +
+  "Bonding Curve pool for it.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
-  // Per-route layouts set `title: "Search"` etc. and inherit this template,
-  // producing unique, descriptive document titles ("Search · Norr").
+  // Per-route layouts set `title: "Explore"` etc. and inherit this template,
+  // producing unique, descriptive document titles ("Explore · Juno").
   title: {
-    default: "Norr — lift the veil",
-    template: "%s · Norr",
+    default: "Juno — every post is a market",
+    template: "%s · Juno",
   },
   description: SITE_DESCRIPTION,
-  applicationName: "Norr",
+  applicationName: "Juno",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Norr",
+    title: "Juno",
   },
   formatDetection: { telephone: false },
   manifest: "/manifest.webmanifest",
@@ -52,14 +51,14 @@ export const metadata: Metadata = {
   // automatically; these tags give shared links a title + description.
   openGraph: {
     type: "website",
-    siteName: "Norr",
-    title: "Norr — lift the veil",
+    siteName: "Juno",
+    title: "Juno — every post is a market",
     description: SITE_DESCRIPTION,
     url: SITE_URL,
   },
   twitter: {
     card: "summary_large_image",
-    title: "Norr — lift the veil",
+    title: "Juno — every post is a market",
     description: SITE_DESCRIPTION,
   },
 };
@@ -68,11 +67,11 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover", // handles iPhone notch
-  themeColor: "#000000",
+  themeColor: "#0d0b12", // --j-bg
 };
 
 // Applies the persisted theme before paint (dark default → no class). No FOUC.
-const themeScript = `(function(){try{if(localStorage.getItem('veil-theme')==='light'){document.documentElement.classList.add('light')}}catch(e){}})();`;
+const themeScript = `(function(){try{if(localStorage.getItem('juno-theme')==='light'){document.documentElement.classList.add('light')}}catch(e){}})();`;
 
 export default function RootLayout({
   children,
@@ -87,16 +86,13 @@ export default function RootLayout({
     >
       <body className="bg-bg text-text flex min-h-full flex-col">
         <Script
-          id="veil-theme"
+          id="juno-theme"
           strategy="beforeInteractive"
           dangerouslySetInnerHTML={{ __html: themeScript }}
         />
-        <WalletProviders>
-          <Providers>{children}</Providers>
-        </WalletProviders>
-        {/* Renders above everything until confirmed. A self-attestation, not
-            age verification — see the component. */}
-        <AgeGate />
+        {/* Wallets are provided by `app/(juno)/layout.tsx`, not here — the
+            adapter is only needed inside the Juno route group. */}
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

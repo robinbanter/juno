@@ -32,6 +32,9 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# ...except the template, which is the only way a new checkout knows what to set.
+# `.env*` above matches it, so this negation is required, not decorative.
+!.env.local.example
 
 # vercel
 .vercel

@@ -2,7 +2,7 @@ import { ImageResponse } from "next/og";
 
 // Branded social-share card. Next wires this in as og:image AND twitter:image
 // for every route that doesn't define its own opengraph-image.
-export const alt = "Norr — lift the veil";
+export const alt = "Juno — every post is a market";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -17,20 +17,22 @@ export default function OpengraphImage() {
           flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
+          // Juno's canvas: near-black with a violet cast, so the amber reads warm.
           background:
-            "radial-gradient(120% 80% at 50% -10%, #1e1233, #0f0d15 60%)",
-          color: "#f5f2f3",
+            "radial-gradient(120% 80% at 50% -10%, #1d1630, #0d0b12 60%)",
+          color: "#f4f1f8",
           fontFamily: "sans-serif",
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 28 }}>
+          {/* The banded gas-giant mark, in the brand amber. */}
           <div
             style={{
               width: 84,
               height: 84,
               borderRadius: 9999,
               background:
-                "radial-gradient(circle at 35% 30%, #a78bfa, #7c3aed 45%, #4c1d95)",
+                "radial-gradient(circle at 35% 30%, #ffe066, #ffb020 45%, #b56d00)",
             }}
           />
           <div
@@ -41,20 +43,21 @@ export default function OpengraphImage() {
               paddingLeft: 6,
             }}
           >
-            NORR
+            JUNO
           </div>
         </div>
         <div
           style={{
             marginTop: 36,
             fontSize: 40,
-            color: "#c9c2c6",
-            maxWidth: 820,
+            color: "#a79fb8",
+            maxWidth: 900,
             textAlign: "center",
             lineHeight: 1.25,
           }}
         >
-          Pay-per-tap premium content with invisible app-balance payments.
+          Every post is a market. Publishing launches a Meteora bonding curve on
+          Solana.
         </div>
       </div>
     ),

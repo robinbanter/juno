@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { sql } from "drizzle-orm";
+
 import { getDb } from "@/lib/db";
-import { getAlgod, getPaymentAssetId, getPlatformAddress, isOptedIn } from "@/lib/algorand";
-import { algoNetwork } from "@/lib/constants";
-import { scanningEnabled } from "@/lib/moderation/scan";
+import { cluster, usingPublicRpc } from "@/lib/juno/cluster";
+import { getConnection } from "@/lib/juno/dbc";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,13 +11,14 @@ export const dynamic = "force-dynamic";
 /**
  * Health check for uptime monitoring and deploy gates.
  *
- * Checks the dependencies whose failure silently breaks money rather than
- * throwing something visible: the database (balances, custodial keys), algod
- * (every payment), and whether the platform can still receive revenue at all.
+ * Checks the two dependencies whose failure breaks the product quietly rather
+ * than loudly: Postgres, which holds the pool registry, and the Solana RPC,
+ * which supplies every number the app renders. Lose either and pages still
+ * return 200 while showing nothing.
  *
- * 200 = serving. 503 = degraded; the body says which dependency and monitors can
- * alert on it. Deliberately public and detail-light — it names *which* component
- * is down, never addresses, versions, or error internals.
+ * 200 = serving. 503 = degraded; the body names which component so monitors
+ * can alert on it. Deliberately detail-light — it names the component, never
+ * endpoints, credentials or error internals.
  */
 
 type Component = { ok: boolean; detail?: string };
@@ -31,48 +32,34 @@ async function checkDb(): Promise<Component> {
   }
 }
 
-async function checkChain(): Promise<Component> {
+async function checkRpc(): Promise<Component> {
   try {
-    const status = await getAlgod().status().do();
-    return { ok: true, detail: `round ${status.lastRound}` };
+    const slot = await getConnection().getSlot("confirmed");
+    return { ok: true, detail: `slot ${slot}` };
   } catch {
-    return { ok: false, detail: "algod unreachable" };
-  }
-}
-
-/**
- * The platform must be opted in to USDC or every unlock fails to settle — a
- * failure mode that is otherwise invisible until revenue quietly stops.
- */
-async function checkPlatform(): Promise<Component> {
-  try {
-    if (!process.env.DEPLOYER_MNEMONIC) return { ok: false, detail: "not configured" };
-    const ready = await isOptedIn(getPlatformAddress(), getPaymentAssetId());
-    return ready ? { ok: true } : { ok: false, detail: "not opted in to USDC" };
-  } catch {
-    return { ok: false, detail: "unavailable" };
+    return { ok: false, detail: "rpc unreachable" };
   }
 }
 
 export async function GET() {
-  const [db, chain, platform] = await Promise.all([checkDb(), checkChain(), checkPlatform()]);
-  // Reported but NOT part of `ok`: scanning being off is a deployment decision,
-  // not an outage, and flapping the health check would just get it ignored.
-  // It's here so "are we scanning?" is answerable without reading the env.
-  const scanning: Component = scanningEnabled()
-    ? { ok: true }
-    : { ok: false, detail: "no scanner configured — uploads publish unexamined" };
-  const ok = db.ok && chain.ok && platform.ok;
+  const [database, rpc] = await Promise.all([checkDb(), checkRpc()]);
+
+  // Reported but NOT part of `ok`: running on the public endpoint is a
+  // deployment decision, not an outage. It belongs here because it is the
+  // single biggest predictor of the swap indexer degrading to em-dashes, and
+  // "are we on a dedicated RPC?" should be answerable without reading the env.
+  const dedicatedRpc: Component = usingPublicRpc()
+    ? { ok: false, detail: "public endpoint — per-method quota will throttle reads" }
+    : { ok: true };
+
+  const ok = database.ok && rpc.ok;
 
   return NextResponse.json(
     {
       status: ok ? "ok" : "degraded",
-      network: algoNetwork(),
-      checks: { database: db, chain, platform, contentScanning: scanning },
+      cluster: cluster(),
+      checks: { database, rpc, dedicatedRpc },
     },
-    {
-      status: ok ? 200 : 503,
-      headers: { "cache-control": "no-store" },
-    },
+    { status: ok ? 200 : 503, headers: { "cache-control": "no-store" } },
   );
 }
