@@ -103,7 +103,7 @@ Legend: `DONE` · `IN PROGRESS` · `NOT STARTED` · `BLOCKED`
 |---|---|---|
 | 4.1 | Trade panel calls real `quoteTrade` | DONE |
 | 4.2 | Buy sends a real signed swap | DONE — verified on devnet |
-| 4.3 | Sell sends a real signed swap | DONE — verified on devnet (tx xWxpJFtZ…, 5000 NVDAx) |
+| 4.3 | Sell sends a real signed swap | DONE — `xWxpJFtZB8Zzp…CRYQJg9`, slot 499958074, `err: null`, re-verified against devnet RPC. 5,000 NVDAx into pool `FGcLWvDc…RBHpK`; `juno:inspect` shows curve progress 0.0117% → **0.0114%** |
 | 4.7 | Partial-fill swaps (`swap2` + `SwapMode.PartialFill`) | DONE — verified completing a curve |
 | 4.8 | Creator fee claiming (`claimCreatorTradingFee`) | DONE — verified, 0.009653 SOL |
 | 4.9 | Graduation (`migrateToDammV2`) | DONE — verified, DAMM v2 pool exists |
@@ -124,7 +124,7 @@ Legend: `DONE` · `IN PROGRESS` · `NOT STARTED` · `BLOCKED`
 | # | Task | Status |
 |---|---|---|
 | 6.1 | Launch an equity-preset pool named for a real ticker | DONE (AAPLx Issuance) |
-| 6.2 | Issuance mode in `/create`: pick ticker → preset → NAV feed | NOT STARTED — depends on 5.3 (Pyth key) to be worth building |
+| 6.2 | Issuance mode in `/create`: pick ticker → preset → NAV feed | DONE — `758e62f`; Content/Stock switch, ticker templates (AAPL/NVDA/TSLA/MSFT), preset + `Equity.US.<T>/USD` feed id. Degrades without a Pyth key rather than blocking on 5.3 |
 | 6.4 | Media upload + IPFS token metadata | DONE — Pinata; URI verified on the mint's Metaplex account |
 | 6.3 | Seed 2–3 equity issuances across presets for the demo | DONE — AAPLx (ipo-book), NVDAx (thin-name) |
 
@@ -138,7 +138,7 @@ Legend: `DONE` · `IN PROGRESS` · `NOT STARTED` · `BLOCKED`
 ### Phase 8 — Submission
 | # | Task | Status |
 |---|---|---|
-| 8.1 | Juno README: what is on-chain vs mock, explorer links, dep disclosure | DONE — `JUNO.md` |
+| 8.1 | Juno README: what is on-chain vs mock, explorer links, dep disclosure | DONE — root `README.md` rewritten from Norr to Juno (`38cb298`, `834e6ef`); `JUNO.md` reconciled against it. All 27 explorer links re-verified against devnet RPC |
 | 8.2 | Deploy to a public URL | NOT STARTED |
 | 8.3 | Set `NEXT_PUBLIC_SOLANA_RPC` to a dedicated endpoint | BLOCKED — no RPC key in env |
 | 8.4 | Pitch video ≤3 min | NOT STARTED (human) |
@@ -150,77 +150,140 @@ Legend: `DONE` · `IN PROGRESS` · `NOT STARTED` · `BLOCKED`
 
 ## 3. Honest Measurement & Gap List
 
-Last verified: 2026-09-18 against running devnet and Neon Postgres.
+Last verified: 2026-09-18 against running devnet, Neon Postgres, and the source.
 
-### Overall Completion: ~82% (41 / 50 technical tasks verified complete)
+> **Read this section sceptically.** It has been materially wrong twice, in both
+> directions, and both errors survived because nobody checked it against the code:
+>
+> 1. **Block 4 prescribed the wrong database.** It called for `juno_comments`,
+>    `juno_likes` and `juno_follows` Drizzle tables in Postgres. Comments were
+>    *already implemented* in MongoDB (`lib/juno/social.ts`). Building that block as
+>    written would have duplicated a working layer into the wrong store and thrown
+>    away a deliberate architectural decision. Corrected below.
+> 2. **The completion figure was unsourced.** It read "~82% (41 / 50 technical tasks)".
+>    §2 contains **66** numbered tasks, not 50, and no counting method was given, so
+>    the number could not be checked. Recomputed below with the arithmetic shown.
+>
+> A third near-miss: `JUNO.md` claimed 4 devnet pools while this section said 7. The
+> registry holds 7 — §3 was right that time and `JUNO.md` was stale. The lesson is not
+> that one document is reliable; it is that **both must be checked against code, chain
+> and database before being trusted.**
 
-The user's initial estimate was "20% done, only the UI". That estimate is **disproven by on-chain and database evidence**:
-- **7 live devnet DBC pools** created and persisted in Neon Postgres (`juno_pools`).
-- **Real devnet buys landed**: e.g., NVDAx 0.5 SOL buy (`59DBxUgPPjANJhKEmuxp5FMXL4sSR77Uxs8kefRhMuKQkptnVMgSbPvN6YZfUCQ2KfUJWXWZjmSyEzuZzQJwdGzV`), moving curve 0.0000% → 0.0117%.
-- **Full graduation loop executed**: driven 0% → 100.0000% on devnet, migrated to DAMM v2 pool `EhvtVimkraeSqtNZGqBj3zMxHMUVHdwMDUwZF8MMYy7L` (migration tx: `4HatkGNZKu5d9S79ZtjyAng9tRFshjhJRFbhqJQczqbgyAEonhm7cF5fmUy52CFbGgzdtRvHmWPmNo4uKbMVTZtc`).
-- **Creator trading fees claimed on-chain**: 0.009653 SOL claimed (`3X4g3aDgpW8QKAF8WB3JD18L7S73SqUjen8MYFunqWLBdGxykWYVGT2t1DiwUMgANBpU9zx3d2c2zWGyZnA9HdAN`).
-- **Token metadata & video media pinned to IPFS** via Pinata; IPFS gateway proxy `/api/ipfs/[cid]` operational with streaming and Range caching.
-- **140 unit tests passing** (including Meteora SDK parameter validation).
-- **All 6 UI routes** (`/explore`, `/reels`, `/coin/[address]`, `/creator/[handle]`, `/create`, `/activity`) render live data with zero console errors.
+### Completion, with the arithmetic
 
----
+Counting every numbered task in §2, plus the gap-list blocks below that §2 never
+itemised. A task counts as complete only if its status line starts with `DONE`.
 
-### Itemized Remaining Gaps & Granular Todo List
+| Group | Complete | Total | |
+|---|---|---|---|
+| Phase 0 — product surface | 9 | 9 | |
+| Phase 1 — on-chain core | 12 | 12 | |
+| Phase 2 — wallet | 5 | 6 | 2.6 needs a human with a funded browser wallet |
+| Phase 3 — persistence | 11 | 11 | |
+| Phase 4 — trading | 9 | 9 | |
+| Phase 5 — Pyth | 3 | 5 | 5.3, 5.4 blocked on a Hermes key |
+| Phase 6 — stock wedge | 4 | 4 | |
+| Phase 7 — graduation | 3 | 3 | |
+| **Phases 0–7 subtotal** | **56** | **59** | **94.9%** |
+| Block 3 — swap indexer | 0 | 4 | indexer, 24h volume, activity detail, price chart |
+| Block 4 — social | 1 | 3 | comments done; likes and follows not started |
+| Block 5 — legacy purge | 0 | 1 | in progress, uncommitted |
+| **Engineering total** | **57** | **67** | **85.1%** |
 
-#### Block 1: Real On-Chain Sell Execution (Task 4.3) — COMPLETED
-- [x] Execute a real signed sell transaction on devnet from launcher key (`9CHr5g24EdzUKg9GZFUvEuAvHAjZGCsF1Z3zVPudWYoE`), which holds NVDAx tokens.
-  - Landed signature: [`xWxpJFtZB8ZzpHLVPZshHgYvuEHSJ9vKertf9yrovrfu1rup1oGLzaVs8W5BEx1mB8XD8QkkBks47JL4CRYQJg9`](https://solscan.io/tx/xWxpJFtZB8ZzpHLVPZshHgYvuEHSJ9vKertf9yrovrfu1rup1oGLzaVs8W5BEx1mB8XD8QkkBks47JL4CRYQJg9?cluster=devnet)
-  - Sold 5,000 NVDAx tokens back to pool `FGcLWvDcKibyFnm1VRbWvX3CGwNDt6nCmWnPjT7RBHpK`.
-- [x] Confirm signature lands on Solscan and verify the curve moves down.
-- [x] Record the transaction signature and update on-chain tables.
+**Engineering: 57 / 67 = 85.1%.**
 
-#### Block 2: Stock Wedge — Issuance Mode in `/create` (Task 6.2)
-- [ ] Add an "Issuance Mode" switch to `/create` (Post / Reel / Stock Token Issuance).
-- [ ] When in Stock Issuance mode:
-  - Provide stock ticker search / selector (e.g. AAPLx, NVDAx, TSLAx, MSFTx, AMZNx).
-  - Automatically recommend curve preset (`thin-name` for low-float, `ipo-book` for book-building, `tight-nav` for ETF/index tracker).
-  - Associate Pyth feed ID (`Equity.US.<TICKER>/USD`) in pool metadata.
-  - Gracefully display NAV reference info without failing if `PYTH_API_KEY` is absent.
+**Submission readiness is much lower, and is the real risk.** Phase 8 is **1 / 7 =
+14%**. The one done item is the README. Still open: deploy to a public URL (8.2), a
+dedicated RPC (8.3), the ≤3 min pitch video (8.4), the ≤5 min technical video (8.5),
+a mainnet pool (8.6), and actually submitting (8.7). Four of those need a human and
+two need funds or credentials. **Deadline: Fri 25 Sep 2026, 16:00 ET.**
 
-#### Block 3: Swap-Event Indexer, Price Chart, 24h Volume & Activity Feed (Tasks 3.9, 4.4, UI Enhancements)
-- [ ] Build a lightweight on-chain swap indexer in `lib/juno/indexer.ts` querying RPC `getSignaturesForAddress` + `getParsedTransactions` for the DBC pool.
-- [ ] Parse DBC swap instruction logs to extract:
-  - Trade direction (`Buy` vs `Sell`).
-  - Base and quote amounts.
-  - Price at swap execution.
-  - Trader wallet and timestamp.
-- [ ] Compute real 24-hour volume on `/coin/[address]` and `/explore` (replacing `—`).
-- [ ] Display rich trade direction, size, and tokens in `/activity` and the coin Activity tab.
-- [ ] Render a real SVG price chart in `CoinMedia.tsx` using parsed swap points, replacing `PriceChartPlaceholder`.
+These two numbers must not be blended. A judge cannot see 85% of engineering; they
+see a repo, a URL and a video, and two of those three do not exist yet.
 
-#### Block 4: Social Persistence (Comments, Likes, Follows)
-- [ ] Add Drizzle schemas in `lib/db/schema.ts` for `juno_comments`, `juno_likes`, `juno_follows`.
-- [ ] Apply migration / schema push to Neon Postgres.
-- [ ] Create API routes:
-  - `GET /api/juno/comments?baseMint=<mint>`
-  - `POST /api/juno/comments` (wallet signed or simulated author)
-  - `POST /api/juno/likes` & `GET /api/juno/likes`
-- [ ] Wire `CommentComposer` and comments tab on `/coin/[address]` to write and read from Postgres.
+### What the evidence actually supports
 
-#### Block 5: Quarantine / Purge Dead Non-Solana Code (Norr / Algorand / x402 / Privy / Clerk / Stripe)
-- [ ] Inventory legacy non-Solana code:
-  - `lib/algorand.ts`, `lib/x402.ts`, `lib/custodial*`, `lib/avm*`
-  - `app/api/x402`, `app/api/account`, `app/add-funds`, `app/withdraw`
-  - `components/WalletProviders.tsx` (remove Privy/Algorand wrappers, keep pure `@solana/wallet-adapter`)
-- [ ] Remove or cleanly quarantine legacy non-Solana files so the repo reads cleanly as a Solana-only project.
-- [ ] Verify unit tests and Next.js build pass cleanly without breaking `app/(juno)`.
+Verified on chain, in Postgres, and by running the test suite:
 
-#### Block 6: Submission Readiness & Build Verification (Tasks 8.1, 8.2)
-- [ ] Verify `npm run build` succeeds with zero errors.
-- [ ] Update root `README.md` to showcase Juno (replacing Norr documentation) with architecture, DBC innovation, devnet explorer links, and hackathon details.
-- [ ] Ensure all documentation is aligned and truthful.
-
-#### Legitimate Blockers (Do NOT Fake or Bypass):
-- `PYTH_API_KEY`: Hermes price endpoints require API authentication. Code handles fallback cleanly.
-- `NEXT_PUBLIC_SOLANA_RPC`: Public devnet RPC is currently used; rate-limiting is handled with aggressive client caching and fast-failure policies.
-- Mainnet SOL (Task 8.6): Requires real funds and explicit user authorization.
+- **7 live devnet DBC pools**, all in `juno_pools`, all four presets exercised. All 7
+  creation signatures confirmed `err: null` against `api.devnet.solana.com`.
+- **A real buy**: NVDAx 0.5 SOL (`59DBxUgP…QJwdGzV`), curve 0.0000% → 0.0117%.
+- **A real sell**: 5,000 NVDAx (`xWxpJFtZ…CRYQJg9`, slot 499958074), curve back to
+  0.0114% — independently corroborated by `juno:inspect`.
+- **A full graduation**: driven 0% → 100.0000%, migrated to DAMM v2 pool
+  `EhvtVimk…MYy7L` (`4HatkGNZ…bMVTZtc`). `juno:inspect` reports `graduated true`.
+- **Creator fees claimed**: 0.009653 SOL (`3X4g3aDg…9HdAN`).
+- **IPFS**: token metadata and three reel videos pinned and resolving.
+- **140 unit tests across 18 files passing**, including Meteora's own
+  `validateConfigParameters` over all four presets.
 
 ---
+
+### Itemized Remaining Gaps
+
+#### Block 3: Swap-event indexer, price chart, 24h volume, activity detail — NOT STARTED
+Owner: juno-4. (Previously juno-1, which was killed after stalling.)
+- [ ] `lib/juno/indexer.ts` — swap history for a pool via `getSignaturesForAddress`
+      plus `getParsedTransaction`, parsed into direction, base amount, quote amount,
+      execution price, trader and block time.
+- [ ] Real 24h volume on `/coin/[address]` and `/explore`, replacing the `—`.
+- [ ] Trade direction and size in `/activity` and the coin Activity tab. This is the
+      unfinished remainder of task 3.9, which is marked DONE for signatures only.
+- [ ] A real price chart in `CoinMedia.tsx`, replacing `PriceChartPlaceholder`.
+
+**Constraint:** the public devnet RPC rate-limits hard. Batch and cache aggressively,
+and **degrade to the honest empty state on failure**. The current em-dash is better
+than a fabricated line; a fake chart is worse than no chart.
+
+#### Block 4: Social — comments DONE, likes and follows NOT STARTED
+
+> **Do not build this in Postgres.** The previous version of this block called for
+> `juno_comments` / `juno_likes` / `juno_follows` Drizzle tables. That is wrong.
+
+| Item | Status | Evidence |
+|---|---|---|
+| **Comments** | **DONE** — MongoDB | `lib/juno/social.ts` exports `listComments`, `addComment`, `countComments`, `MAX_COMMENT`; wired to `app/api/juno/comments/route.ts`. Code-reviewed, **not runtime-verified** — no live round trip has been run against the database. |
+| **Likes** | **NOT STARTED** | No like function exists in `social.ts`. `components/juno/reels/ReelCard.tsx:44` holds `liked` in local `useState`, and nothing in `lib/juno/chain.ts`, `lib/juno/registry.ts` or `app/api/juno` populates `coin.likes`. A like does not survive a reload. |
+| **Follows** | **NOT STARTED** | `followers: 0` is hardcoded at `lib/juno/chain.ts:38` and `app/(juno)/creator/[handle]/page.tsx:43`. |
+
+**Why comments are in MongoDB, and why that must not be "fixed".**
+`lib/juno/social.ts` documents the decision: the pool registry is relational and small,
+so it belongs in Postgres; comments are append-heavy, per-coin and schema-loose, so they
+do not. Keeping the two in separate stores means **a comment outage can never take the
+market data down with it**. Nothing in the social store is authoritative about money —
+trades live on chain. Likes and follows, when built, belong in MongoDB beside comments.
+
+**Trap for the next reader:** `social.ts`'s header comment reads *"Social state:
+comments and likes."* Only comments exist. That line is aspirational and is exactly
+what caused likes to be reported as implemented. Fix the comment or build the likes.
+
+#### Block 5: Purge dead non-Solana code (Norr / Algorand / x402 / Privy / Clerk / Stripe) — IN PROGRESS
+Owner: juno-3, on branch `ao/juno-3/root`. **Uncommitted and blocked on a permission
+prompt** — as of 2026-09-18 that branch is still at `758e62f` with no commits of its
+own, so none of this work is in git yet.
+- [ ] `lib/algorand.ts`, `lib/x402.ts`, `lib/custodial*`, `lib/avm*`
+- [ ] `app/api/x402`, `app/api/account`, `app/add-funds`, `app/withdraw`
+- [ ] `components/WalletProviders.tsx` — partially done in `758e62f`; keep pure
+      `@solana/wallet-adapter`
+- [ ] Verify unit tests and the production build still pass
+- [ ] Also in scope there: `package.json` still reads `"name": "norr.fun"`, and
+      `.env.local.example` is missing because `.gitignore`'s `.env*` rule hides it
+      (needs a negation rule)
+
+#### Block 6: Submission readiness — README DONE, everything else open
+- [x] Root `README.md` rewritten as Juno: DBC presets as the centrepiece, both
+      engineering findings, honest real/not-real split, 7-pool table, dependency
+      disclosure (`38cb298`, `834e6ef`).
+- [x] `JUNO.md` reconciled against it — pool count 4 → 7, the sell added, social rows
+      corrected, stale `.env.local.example` instruction fixed.
+- [ ] `npm run build` verified green end-to-end.
+- [ ] 8.2 deploy, 8.4 pitch video, 8.5 technical video, 8.6 mainnet pool, 8.7 submit.
+
+#### Legitimate blockers (do NOT fake or bypass)
+- `PYTH_API_KEY` — Hermes needs auth. The UI shows no NAV rather than a fabricated one.
+- `NEXT_PUBLIC_SOLANA_RPC` — running on the public devnet endpoint, which rate-limits.
+- Mainnet SOL (8.6) — real funds, needs explicit authorization.
+- 8.4, 8.5, 8.7 and 2.6 need a human.
 
 ---
 
@@ -257,9 +320,15 @@ have gutted the exact thing Meteora is judging.
 
 ## 5. Execution order
 
-1. Phase 3 (persistence) — unlocks every page showing real data
-2. Phase 4 (trading) — the demo's core loop
-3. Phase 5 (Pyth) — second sponsor track, cheap
-4. Phase 6.2–6.3 (issuance mode + seeded equity pools) — the stock wedge
-5. Phase 7 (graduation) — Meteora's "life after" story
-6. Phase 8 (README, deploy) — submission artifacts
+Phases 0–7 are done bar the blocked and human items, so what follows is what is
+actually left, ordered by judge impact per hour.
+
+1. **8.2 deploy to a public URL** — the submission requires a live demo. Nothing else
+   on this list matters if a judge cannot open the app.
+2. **Block 3, the swap indexer** — turns three honest em-dashes into real 24h volume,
+   real trade direction and a real price chart. The largest visible gap left.
+3. **Block 5, the legacy purge** (juno-3) — the repo should read as Solana-only.
+4. **8.4 / 8.5 videos**, **8.7 submit** — human, and hard-deadlined 25 Sep 16:00 ET.
+5. **8.6 mainnet pool** — Meteora's stated bar is "working mainnet code beats slides".
+   Blocked on funds and authorization; the highest-value unblock available.
+6. **Block 4 likes and follows** — last. Least judge impact of anything here.
