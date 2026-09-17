@@ -5,27 +5,64 @@ import { PublicKey } from "@solana/web3.js";
 import { getConnection } from "./dbc";
 import { identicon } from "./identicon";
 import { shortAddress } from "./format";
+import { listSwaps } from "./indexer";
 import type { Activity, Holder } from "./types";
 
 /**
  * Trade history and holders, read from chain.
  *
- * There is no indexer behind Juno, so this is deliberately what the RPC can
- * answer directly rather than a richer feed that would have to be invented:
- * real signatures against the pool, and real token accounts for the mint.
+ * Two tiers, and which one you get depends on what the RPC will answer:
+ *
+ *  1. `lib/juno/indexer.ts` reconstructs each swap — direction, size, price,
+ *     trader — from token-balance deltas. This is the real feed.
+ *  2. When that read is refused, the signature list alone, which is one cheap
+ *     call. Rows then show the transaction and its timestamp and nothing else,
+ *     because a direction we did not read is a direction we must not print.
+ *
+ * Tier 2 is not a placeholder to be removed later. The public devnet endpoint
+ * enforces a per-method quota that a dozen transaction fetches can exhaust, so
+ * the degraded path is a normal operating state until `NEXT_PUBLIC_SOLANA_RPC`
+ * points somewhere dedicated.
  */
 
 /**
- * Recent transactions touching the pool.
+ * Recent trades against the pool, newest first.
  *
- * Direction and size need the swap event decoded out of the transaction logs,
- * which is indexer work. Until that exists every row reports its signature and
- * timestamp truthfully and leaves amounts null rather than guessing.
+ * `rate` converts quote units to USD. Pass null when there is no price feed —
+ * rows are then labelled in the quote token rather than converted at a rate
+ * nobody published, which is the same rule `hydratePool` follows.
  */
 export async function listPoolActivity(
   poolAddress: string,
-  limit = 20,
-): Promise<Activity[]> {
+  baseMint: string,
+  options: { limit?: number; rate?: number | null; quoteSymbol?: string } = {},
+): Promise<Array<Activity & { valueLabel?: string }>> {
+  const { limit = 20, rate = null, quoteSymbol } = options;
+
+  const history = await listSwaps(poolAddress, baseMint);
+
+  if (history && history.swaps.length > 0) {
+    return history.swaps.slice(0, limit).map((swap) => ({
+      id: swap.signature,
+      side: swap.side,
+      actor: {
+        handle: shortAddress(swap.trader, 4, 4),
+        avatarUrl: identicon(swap.trader),
+      },
+      amount: swap.baseAmount,
+      valueUsd: swap.quoteAmount * (rate ?? 1),
+      // Without a feed the number is quote units, so say which token it is
+      // rather than letting it render behind a dollar sign.
+      valueLabel:
+        rate === null
+          ? `${swap.quoteAmount.toPrecision(3)} ${quoteSymbol ?? ""}`.trim()
+          : undefined,
+      timestamp: new Date((swap.blockTime ?? 0) * 1000).toISOString(),
+      signature: swap.signature,
+    }));
+  }
+
+  // Degraded tier: signatures only.
   try {
     const signatures = await getConnection().getSignaturesForAddress(
       new PublicKey(poolAddress),
@@ -37,6 +74,9 @@ export async function listPoolActivity(
       .filter((entry) => !entry.err)
       .map((entry) => ({
         id: entry.signature,
+        // Never rendered — `amount` and `valueUsd` are both zero, which is how
+        // ActivityList knows this row was not decoded and shows the tx link
+        // instead of a side.
         side: "buy" as const,
         actor: {
           handle: shortAddress(entry.signature, 4, 4),

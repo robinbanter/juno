@@ -5,7 +5,9 @@ import { ChartLine, Image as ImageIcon, Volume2, VolumeX } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import type { Coin } from "@/lib/juno/types";
+import { useSwapHistory } from "../useSwapHistory";
 import { CurveProgressBar } from "./CurveProgress";
+import { PriceChart } from "./PriceChart";
 
 /**
  * The coin's media, with the view toggle underneath that swaps between the
@@ -15,6 +17,7 @@ export function CoinMedia({ coin }: { coin: Coin }) {
   const [view, setView] = useState<"media" | "chart">("media");
   const [muted, setMuted] = useState(true);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const { data, loading } = useSwapHistory(coin.pool, coin.address);
 
   return (
     <div className="flex flex-col items-center gap-4">
@@ -59,8 +62,20 @@ export function CoinMedia({ coin }: { coin: Coin }) {
 
             {!coin.curve.graduated && <CurveProgressBar curve={coin.curve} />}
           </>
+        ) : loading ? (
+          <ChartMessage>Reading swap history…</ChartMessage>
+        ) : data === null ? (
+          <ChartMessage>
+            Price history is unavailable — the RPC refused the read.
+          </ChartMessage>
+        ) : data.points.length >= 2 ? (
+          <PriceChart points={data.points} />
         ) : (
-          <PriceChartPlaceholder />
+          <ChartMessage>
+            {data.points.length === 1
+              ? "One trade so far — not enough for a price history."
+              : "No trades yet."}
+          </ChartMessage>
         )}
       </div>
 
@@ -97,13 +112,17 @@ export function CoinMedia({ coin }: { coin: Coin }) {
 }
 
 /**
- * Placeholder until the pool's swap history is indexed. Kept visually honest —
- * it says there is no data rather than drawing a fake line.
+ * Everything the chart shows when it is not showing a chart.
+ *
+ * There are three distinct reasons the line can be absent — still reading, the
+ * RPC refused, or the pool has fewer than two trades — and they are worth
+ * saying apart. "Still indexing" for a pool that has genuinely never traded is
+ * a small lie that never resolves.
  */
-function PriceChartPlaceholder() {
+function ChartMessage({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex aspect-[16/10] w-full items-center justify-center">
-      <p className="text-[14px] text-j-faint">Price history is still indexing.</p>
+    <div className="flex aspect-[16/10] w-full items-center justify-center px-6">
+      <p className="text-center text-[14px] text-j-faint">{children}</p>
     </div>
   );
 }

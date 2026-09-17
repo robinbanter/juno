@@ -12,6 +12,7 @@ import { IconButton } from "../ui/Button";
 import { Delta } from "../ui/Delta";
 import { Pill } from "../ui/Pill";
 import { StatCards } from "../ui/StatCards";
+import { Volume24h } from "../Volume24h";
 import { CurveChart } from "./CurveChart";
 import { CurveProgress } from "./CurveProgress";
 
@@ -65,7 +66,7 @@ export function CoinSummary({ coin }: { coin: Coin }) {
           },
           {
             label: "24H Volume",
-            value: usd(coin.volume24h),
+            value: <Volume24h pool={coin.pool} mint={coin.address} quoteSymbol={coin.quote.symbol} />,
             icon: <Flame size={13} className="text-j-muted" aria-hidden="true" />,
           },
           {

@@ -9,6 +9,7 @@ import { cluster, explorer, meteoraPoolUrl } from "@/lib/juno/cluster";
 import { GraduatedNotice } from "@/components/juno/coin/GraduatedNotice";
 import { QUOTE_TOKENS } from "@/lib/juno/dbc";
 import { listPoolActivity, listPoolHolders } from "@/lib/juno/activity";
+import { quoteTokenUsdPrice } from "@/lib/juno/pyth";
 import { getPool } from "@/lib/juno/registry";
 import { listComments } from "@/lib/juno/social";
 import { CoinMedia } from "@/components/juno/coin/CoinMedia";
@@ -43,7 +44,13 @@ export default async function CoinPage({
   if (!coin) notFound();
 
   const [activity, holders, comments] = await Promise.all([
-    listPoolActivity(row.poolAddress),
+    listPoolActivity(row.poolAddress, row.baseMint, {
+      quoteSymbol: coin.quote.symbol,
+      // Null without a Pyth key, which is the normal case in this repo. Trade
+      // values then stay in quote units instead of being converted at a rate
+      // nobody published — the same rule `hydratePool` applies to market caps.
+      rate: await quoteTokenUsdPrice(row.quoteMint).catch(() => null),
+    }),
     listPoolHolders(row.baseMint),
     listComments(row.baseMint, cluster()).catch(() => []),
   ]);

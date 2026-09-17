@@ -7,9 +7,19 @@ import { cluster } from "@/lib/juno/cluster";
 import { usd } from "@/lib/juno/format";
 import { listPools } from "@/lib/juno/registry";
 import type { Coin } from "@/lib/juno/types";
+import { listSwaps, volume24h } from "@/lib/juno/indexer";
 import { CurveProgressBar } from "@/components/juno/coin/CurveProgress";
+import { Volume24h } from "@/components/juno/Volume24h";
 import { Avatar } from "@/components/juno/ui/Avatar";
 import { Delta } from "@/components/juno/ui/Delta";
+
+/**
+ * How many pools the trending sort will read swap history for.
+ *
+ * Each one is a sequential walk of that pool's transactions, so this is a
+ * latency and rate-limit budget, not a display limit.
+ */
+const TRENDING_LIMIT = 12;
 
 export const metadata = { title: "Explore" };
 // Every figure is read live from the DBC program on each request.
@@ -34,7 +44,18 @@ export default async function ExplorePage({
     );
   }
   if (sort === "trending") {
-    // Coins with unknown volume sort last rather than being treated as zero.
+    // Ranking by volume needs the volume, and that is a per-transaction walk
+    // per pool — far too expensive to do on every page view. So it happens
+    // only when the user actually asks to rank by it, sequentially (the RPC
+    // quota does not survive a burst), and capped.
+    //
+    // `listSwaps` caches per pool, so a visitor who came from a coin page gets
+    // some of these for free. Any pool whose read is refused keeps a null
+    // volume and sorts last — unknown is not zero.
+    const ranked = coins.slice(0, TRENDING_LIMIT);
+    for (const coin of ranked) {
+      coin.volume24h = volume24h(await listSwaps(coin.pool, coin.address));
+    }
     coins = [...coins].sort((a, b) => (b.volume24h ?? -1) - (a.volume24h ?? -1));
   } else if (sort === "graduating") {
     // Closest to migration first. A pool that has already graduated is done,
@@ -166,6 +187,10 @@ function CoinTile({ coin }: { coin: Coin }) {
             ? "graduated"
             : `${Math.round(coin.curve.progress * 100)}% to graduation`}
         </span>
+      </div>
+      <div className="mt-0.5 flex items-center gap-1 text-[12px] text-j-faint">
+        <span>24h</span>
+        <Volume24h pool={coin.pool} mint={coin.address} quoteSymbol={coin.quote.symbol} />
       </div>
     </Link>
   );

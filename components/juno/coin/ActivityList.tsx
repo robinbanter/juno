@@ -19,7 +19,9 @@ export function ActivityList({
   showCoin = false,
   empty = "No trades yet.",
 }: {
-  items: Array<Activity & { coinName?: string; coinAddress?: string }>;
+  items: Array<
+    Activity & { coinName?: string; coinAddress?: string; valueLabel?: string }
+  >;
   showCoin?: boolean;
   empty?: string;
 }) {
@@ -30,8 +32,9 @@ export function ActivityList({
   return (
     <ul className="divide-y divide-j-line">
       {items.map((item) => {
-        // Decoding size and direction out of the swap log is indexer work.
-        // Until that exists a row shows what the RPC actually returned.
+        // `lib/juno/indexer.ts` fills these in from token-balance deltas.
+        // Both zero means that read was refused, so the row falls back to the
+        // transaction link rather than printing a direction nobody read.
         const decoded = item.amount > 0 || item.valueUsd > 0;
         return (
         <li key={item.id} className="flex items-center gap-3 py-3 text-[13px]">
@@ -63,7 +66,7 @@ export function ActivityList({
                 {tokenAmount(item.amount)}
               </span>
               <span className="w-16 shrink-0 text-right tabular-nums text-j-muted">
-                {usd(item.valueUsd)}
+                {item.valueLabel ?? usd(item.valueUsd)}
               </span>
             </>
           ) : (
