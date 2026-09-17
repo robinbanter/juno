@@ -2,7 +2,7 @@ import { Pool, type PoolConfig } from "pg";
 
 declare global {
   // eslint-disable-next-line no-var
-  var __veilPgPool: Pool | undefined;
+  var __junoPgPool: Pool | undefined;
 }
 
 function databaseUrl() {
@@ -48,13 +48,13 @@ export function getPgPool() {
   const rawUrl = databaseUrl();
   const connectionString = stripSslMode(rawUrl);
 
-  if (!globalThis.__veilPgPool) {
-    globalThis.__veilPgPool = new Pool({
+  if (!globalThis.__junoPgPool) {
+    globalThis.__junoPgPool = new Pool({
       connectionString,
       max: Number(process.env.DATABASE_POOL_MAX ?? 5),
       ssl: sslConfig(rawUrl),
     });
   }
 
-  return globalThis.__veilPgPool;
+  return globalThis.__junoPgPool;
 }

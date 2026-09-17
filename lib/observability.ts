@@ -25,7 +25,7 @@ export type ErrorCategory =
   | "money"
   /** Content safety: scanning, moderation, records. */
   | "safety"
-  /** An external dependency (algod, facilitator, Replicate, storage). */
+  /** An external dependency (RPC, Postgres, MongoDB, IPFS pinning). */
   | "dependency"
   | "other";
 

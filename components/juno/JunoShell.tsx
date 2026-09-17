@@ -12,7 +12,8 @@ import { TopBar } from "./TopBar";
  * The app frame every Juno route renders inside.
  *
  * `.juno` switches the subtree into the token scope defined in
- * `app/globals.css`; the surrounding Norr app owns `:root`.
+ * `app/globals.css`. The scope is kept now that Juno owns the app outright,
+ * because it still stops the palette leaking into the root layout's styles.
  *
  * The header spans the full width and the rail sits beneath it, so the brand
  * lockup lands in the true top-left corner rather than indented past the rail.

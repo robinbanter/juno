@@ -12,9 +12,9 @@ import "@solana/wallet-adapter-react-ui/styles.css";
 /**
  * Solana wallet context for the Juno routes.
  *
- * Scoped here rather than in the root layout because the surrounding Norr app
- * has its own unrelated wallet stack (Privy, Algorand); loading both globally
- * would put two competing providers on every page in the repo.
+ * Scoped to the `(juno)` route group rather than the root layout. The adapter
+ * pulls in a wallet bundle per connector, so mounting it globally would load
+ * all of that on routes that never ask for a signature.
  */
 export function JunoWalletProvider({ children }: { children: React.ReactNode }) {
   const endpoint = useMemo(() => rpcEndpoint(), []);
