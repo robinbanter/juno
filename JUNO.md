@@ -10,6 +10,9 @@ pool and becomes a normal AMM market that outlives the app.
 
 Built for the Solana **STOCKLANA** hackathon.
 
+This is the short version. [README.md](./README.md) is the full one — the same
+claims with every pool, every signature and the dependency disclosure.
+
 ---
 
 ## What is real, and what is not
@@ -21,8 +24,8 @@ explorer or by running a script in this repo.
 
 | | |
 |---|---|
-| **DBC pools created by this code** | 4 on devnet, links below |
-| **A real swap through the app's own path** | link below; the curve moved |
+| **DBC pools created by this code** | **7 on devnet**, all four presets exercised — highlights below, full table in [README.md](./README.md) |
+| **Real swaps through the app's own path** | a buy *and* a sell, links below; the curve moved both ways |
 | **A full lifecycle** | launch → trade → curve to 100% → **migrated to DAMM v2** |
 | **Creator fees claimed** | 0.009653 SOL, on-chain |
 | **Token metadata** | pinned to IPFS, URI written to the mint |
@@ -42,7 +45,7 @@ explorer or by running a script in this repo.
 | **Price chart** | Needs a swap-event indexer. The tab says so instead of drawing a fake line. |
 | **24h volume** | Same reason. Shown as `—`, never as `$0`. |
 | **Trade direction/size in Activity** | Needs log decoding. Rows link to the real transaction instead. |
-| **Comments, follows, likes** | Not persisted. |
+| **Follows** | Not built. Comments and likes have a MongoDB path (`lib/juno/social.ts`, `app/api/juno/comments`), but the round trip has not been verified — treat it as unproven. |
 
 There is **no mock data layer**. `lib/juno/mock.ts` was deleted; if a pool is
 not on-chain and in the registry, it does not appear in the app.
@@ -62,6 +65,9 @@ not on-chain and in the registry, it does not appear in the app.
 - Mint: [`6driivZmcZ4pgfCNkVERbbNcQiyzEpKvaJJ19AXQYj69`](https://solscan.io/token/6driivZmcZ4pgfCNkVERbbNcQiyzEpKvaJJ19AXQYj69?cluster=devnet)
 - **Buy of 0.5 SOL**: [`59DBxUgP…wdGzV`](https://solscan.io/tx/59DBxUgPPjANJhKEmuxp5FMXL4sSR77Uxs8kefRhMuKQkptnVMgSbPvN6YZfUCQ2KfUJWXWZjmSyEzuZzQJwdGzV?cluster=devnet)
   — curve progress 0.0000% → 0.0117%, price 0.000002 → 0.0000020004
+- **Sell of 5,000 NVDAx**: [`xWxpJFtZ…RYQJg9`](https://solscan.io/tx/xWxpJFtZB8ZzpHLVPZshHgYvuEHSJ9vKertf9yrovrfu1rup1oGLzaVs8W5BEx1mB8XD8QkkBks47JL4CRYQJg9?cluster=devnet)
+  — slot 499958074, `err: null`. `juno:inspect` on this mint now reports curve
+  progress **0.0114%**, down from 0.0117%: the sell moved the curve back.
 
 **Juno Graduation Demo** — `content` preset, SOL-quoted, **fully graduated**
 - Mint: [`HYgG9w3DrsiNn7tPHFeACGnCdtnioyC9DeiukausmZQ9`](https://solscan.io/token/HYgG9w3DrsiNn7tPHFeACGnCdtnioyC9DeiukausmZQ9?cluster=devnet)
@@ -71,8 +77,14 @@ not on-chain and in the registry, it does not appear in the app.
 - **Resulting DAMM v2 pool**: [`EhvtVimkraeSqtNZGqBj3zMxHMUVHdwMDUwZF8MMYy7L`](https://solscan.io/account/EhvtVimkraeSqtNZGqBj3zMxHMUVHdwMDUwZF8MMYy7L?cluster=devnet) — 1112 bytes, owned by `cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG`
 
 **TSLAx Issuance** — `tight-nav` preset, USDC-quoted, IPFS metadata
+- Pool: [`C2CxpSxXLkfuJcytAY75mJYwP6T7nmi8qg5WpUGiqbrL`](https://solscan.io/account/C2CxpSxXLkfuJcytAY75mJYwP6T7nmi8qg5WpUGiqbrL?cluster=devnet)
 - Mint: [`D7PDa2u1Qm6dVq2D4B2ieq9gyPVr7avNJrF9PyBRBf2F`](https://solscan.io/token/D7PDa2u1Qm6dVq2D4B2ieq9gyPVr7avNJrF9PyBRBf2F?cluster=devnet)
-- On-chain metadata URI: `ipfs://QmejDQjPhsuUVNPa7tmk5AvKZXwHLjevuXM5UBjfBSKYaD`
+- On-chain metadata URI: `ipfs://QmejDQjPhsuUVNPa7tmk5AvKZXwHLjevuXM5UBjfBSKYaD` —
+  resolves to real Metaplex JSON, tagged with the `Equity.US.TSLA/USD` feed
+
+**Three reel coins**, launched with real video pinned to IPFS — `Night Market,
+District Nine` and `Foundry, 4am` on `content`, `Transit Spine` on `thin-name`.
+Pools, mints and creation signatures are in [README.md](./README.md).
 
 **Creator fee claim** (NVDAx): [`3X4g3aDg…9HdAN`](https://solscan.io/tx/3X4g3aDgpW8QKAF8WB3JD18L7S73SqUjen8MYFunqWLBdGxykWYVGT2t1DiwUMgANBpU9zx3d2c2zWGyZnA9HdAN?cluster=devnet) — 0.009653 SOL claimed, balance to zero
 
@@ -128,7 +140,7 @@ rejects it, since an all-zeroes receiver would burn the remainder at migration.
 
 ```bash
 npm install
-cp .env.local.example .env.local   # set DATABASE_URL, NEXT_PUBLIC_SOLANA_CLUSTER
+# there is no .env.local.example — create .env.local yourself (table below)
 npm run db:push
 npm run dev
 ```
@@ -141,14 +153,16 @@ Routes: `/explore` · `/reels` · `/coin/[mint]` · `/creator/[wallet]` ·
 ```bash
 npm run juno:launch   -- --preset ipo-book --name "AAPLx Issuance" --symbol AAPLXI --quote usdc --yes
 npm run juno:inspect  -- --mint <baseMint>
-npm run juno:trade    -- --mint <baseMint> --side buy --amount 0.5 --yes
+npm run juno:trade    -- --mint <baseMint> --side buy  --amount 0.5  --yes
+npm run juno:trade    -- --mint <baseMint> --side sell --amount 5000 --yes
 npm run juno:trade    -- --mint <baseMint> --side buy --amount 0.01 --partial --yes
 npm run juno:claim    -- --mint <baseMint> --yes
 npm run juno:graduate -- --mint <baseMint> --preset content --yes
 ```
 
-Each runs the same code path the UI uses, signed by a local key instead of a
-browser wallet.
+Each runs the same code path the UI uses, signed by a local key at
+`.juno/launcher.json` instead of a browser wallet. `juno:launch` generates that
+key on first run; fund it from the devnet faucet before launching.
 
 ### Environment
 
@@ -157,6 +171,7 @@ browser wallet.
 | `DATABASE_URL` | Postgres for the pool registry |
 | `NEXT_PUBLIC_SOLANA_CLUSTER` | `devnet` or `mainnet-beta` |
 | `NEXT_PUBLIC_SOLANA_RPC` | Dedicated RPC. The public endpoints rate-limit hard enough to break a demo. |
+| `PINATA_JWT` | Pins media and token metadata to IPFS. Without it a mint launches with `uri: ""` and wallets render it blank. |
 | `PYTH_API_KEY` | Optional. Without it, no NAV band is shown. |
 
 ---

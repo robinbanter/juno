@@ -1,331 +1,344 @@
-# Norr
+# Juno
 
-Pay-per-tap premium content, settled on **Algorand** in **real USDC**. Fans
-connect a wallet, deposit their own USDC, and unlock creators' posts, tips, and
-calls — every payment moves USDC on-chain, with the media served from private
-storage behind short-lived signed URLs.
+**A social app on Solana where publishing a post launches a market for it.** Every
+post and reel creates a [Meteora Dynamic Bonding Curve][dbc] pool, so people buy into
+the content itself as they scroll and the creator earns the trading fees instead of an
+ad cut — and when a pool raises its `migrationQuoteThreshold` it graduates into a
+**Meteora DAMM v2** pool with permanently locked liquidity, a normal AMM market that
+outlives the app.
 
-> Formerly "Unveil"/"Zorr". Migrated end-to-end from an EVM (Tempo) payment
-> stack to Algorand.
+Built for the Solana **STOCKLANA** hackathon, targeting the Meteora *Best Use of
+Dynamic Bonding Curve* track. Everything below is devnet. [JUNO.md](./JUNO.md) is the
+short version of this document; [PLAN.md](./PLAN.md) is the task-by-task build log.
 
-**Demoing this?** [DEMO.md](./DEMO.md) is the 60-second walkthrough — runs on
-TestNet, no setup beyond `npm run dev && npm run seed`.
+> **Devnet only. No mainnet pool exists.** Every explorer link on this page was
+> re-verified against `api.devnet.solana.com` on 2026-09-18 before being written down.
 
-## Stack
+---
 
-| Concern | Choice |
-| --- | --- |
-| Framework | Next.js 16 (App Router, React 19, Turbopack) |
-| Auth | [Privy](https://privy.io) wallet login → signed session cookie (`lib/privy-session.ts`) |
-| Wallets | `@txnlab/use-wallet` — Pera, Defly, Exodus, Kibisis, Lute, + Privy embedded |
-| Payments | **Real USDC** on Algorand (MainNet `31566704` / TestNet `10458941`), custodial ed25519 wallets (`lib/algorand.ts`, `lib/custodial-wallets.ts`) |
-| Machine payments | **x402** on Algorand — `@x402/core` + `@x402/avm` + `@x402/next` (`lib/x402.ts`, `app/api/x402/`) |
-| Database | PostgreSQL + Drizzle ORM (`lib/db/`) |
-| Media | Supabase Storage (private bucket, signed URLs) — `lib/blob.ts` |
+## The DBC work
 
-### How payments work
+This is the part that is not a memecoin launchpad, and it is the part the Meteora
+track is judged on.
 
-Each user gets a **custodial Algorand wallet** (an ed25519 keypair, secret key
-AES-encrypted at rest). Its USDC balance *is* their balance — read live from the
-chain, mirrored by the SQL ledger.
+DBC lets you place **sixteen curve segments and weight the liquidity in each**
+(`buildCurveWithLiquidityWeights`). The weights are the whole design surface:
 
-**There is no treasury and nothing is minted.** Users fund themselves:
+> more liquidity in a segment → more supply absorbed per unit of price → a flatter
+> stretch of curve
 
-- **Add funds** (`/add-funds`) → the user sends their own USDC to their wallet
-  address. The balance moves on its own; no card, no processor, no float.
-- **Unlock** → a purchase, recorded once. Reopening a post you own costs nothing
-  and it appears in your Collection. (`PERSIST_UNLOCK_OWNERSHIP=false` reverts to
-  charge-per-view for a throwaway demo — never set it anywhere real.)
-- **Tip / call** → the user's wallet transfers USDC to the creator's custodial
-  wallet. Recipients are auto-provisioned (opt-in) since the platform holds
-  their key.
-- **Withdraw** (`/withdraw`) → the user sends their USDC back out to any wallet
-  they control. This is what makes the platform a two-way door: creators earn
-  into a custodial wallet, so without it their money could never leave.
+A memecoin launch back-loads its weights: nearly free at the start, near vertical at
+the end, graduate as fast as possible. That is one shape, and it is the only shape
+most launchpads ship. **Three of Juno's four presets are deliberately not it**, because
+an equity issuance and a meme have opposite failure modes. A meme fails by not moving;
+a newly tokenized low-float name fails when a single $500 order gaps the print 40%.
 
-Withdrawal is the only endpoint that moves funds to an address supplied in the
-request, so it validates hard: real address (checksum included), never the
-wallet's own address, recipient must be opted in to USDC (or the network bounces
-the transfer), and the amount is capped by *spendable* balance — on-chain minus
-escrow — so money reserved for an in-flight call can't be pulled out from under
-the settlement about to claim it.
+| Preset | Sixteen weights | Fee decay | Supply on curve | For |
+|---|---|---|---|---|
+| `content` | back-loaded, `1.2^i` | 9% → 1% over 600s | 20% | a post or reel — cheap entry, steepens as it finds an audience |
+| `thin-name` | **front-loaded, `0.82^i`** | 5% → 0.6% over 900s | 35% | a newly tokenized low-float stock — deep book *at the issue price*, so early size fills instead of gapping the print. Price only moves once real demand clears the opening depth. |
+| `ipo-book` | deep at both ends, thin in the middle (parabolic, `0.25 + 0.75t²`) | 4% → 0.5% over 900s | 30% | book-building — depth to absorb the open, a thin middle where price is genuinely *discovered*, depth again near the target cap so the pool does not moon into nonsense before it graduates |
+| `tight-nav` | uniform | 2% → 0.25% over 300s | 50% | an asset meant to track an underlying. A curve that runs away from NAV is a bug, not a feature; uniform weighting keeps it near-flat, so it behaves like a **spread**, not a launch |
 
-The platform account's only job is **gas**: it holds ALGO and seeds each new
-wallet ~0.3 ALGO so it can meet Algorand's min-balance and pay fees. It never
-funds anyone's USDC balance.
+`0.25%` is `MIN_FEE_BPS` — `tight-nav` sits on the floor of what the program allows.
 
-> **Why provisioning exists.** Algorand rejects an asset transfer to an account
-> that hasn't opted in to that asset. So a wallet must be seeded with ALGO and
-> opted in *before* its address is shown — otherwise the user's deposit would
-> bounce. That's what `POST /api/account/deposit-address` does.
+Every preset also:
 
-> **Card top-ups are not implemented.** Selling USDC for a card payment needs a
-> real processor *and* a funded treasury to sell out of; the mock card that used
-> to do this has been removed, since on MainNet it would have handed out real
-> money to anyone with a fake card number.
+- decays fees from an anti-snipe opening to an equity-like spread via
+  **`FeeSchedulerExponential`** (60 periods), and avoids `BaseFeeMode.RateLimiter`,
+  which is deprecated for new configs;
+- migrates to **DAMM v2** (`MigrationOption.MET_DAMM_V2`) — v1 is deprecated for new
+  configs — into a fee tier chosen per preset (`FixedBps100` / `FixedBps30` /
+  `FixedBps25`) that matches the spread the curve ended at;
+- sets `creatorPermanentLockedLiquidityPercentage: 100`, so **migrated liquidity is
+  permanently locked** and a graduated pool keeps a floor rather than letting the
+  creator pull it on day one;
+- routes 50% of trading fees to the creator (`creatorTradingFeePercentage`);
+- renounces mint authority (`TokenAuthorityOption.Immutable`).
 
-### x402: the same content, machine-payable
+`tests/unit/juno-curves.test.ts` runs all four presets through the SDK's own
+`validateConfigParameters`, so if Meteora tightens a constraint it fails in CI rather
+than on mainnet. The presets live in [`lib/juno/curves.ts`](./lib/juno/curves.ts).
 
-Norr's premium posts are also served as real [x402](https://x402.org) resources —
-HTTP-native payments, so an agent can buy content with no account, no session and
-no card. Same posts, same prices, same USDC, paid straight to the creator.
+### Two findings from building this
+
+Both cost real time, both are reproducible, and neither is in Meteora's docs.
+
+**1. `createConfigAndPool` cannot carry a sixteen-segment curve.**
+
+The bundled message serialises to **~1488 bytes against Solana's 1232-byte limit** and
+fails at send. The obvious workaround — build the config, then call
+`creator.createPool` — does not work either: `createPool` *reads the config account
+from chain*, and at build time that account does not exist yet.
+
+The working path is **`createConfigAndPoolWithFirstBuy` with no first buy**. It returns
+the two transactions *separately* (**config 1109 B, pool 673 B**, both comfortably
+under the limit) and takes `tokenType` from params instead of fetching it. Reducing the
+curve to fewer points to fit one transaction would have gutted the exact thing being
+judged, so the split is the answer.
+
+**2. `token.leftover` is not optional.**
+
+It reads like a nicety. The builder derives the supply the curve actually consumes
+*from the curve*, and when that lands above `totalTokenSupply` the excess has to fit
+inside `leftover` or the build throws `leftOverDelta must be less than totalLeftover`.
+Juno reserves **1% of supply**, which absorbs the rounding across all sixteen segments
+with room to spare.
+
+Relatedly, **`leftoverReceiver` must not be `PublicKey.default`** — the validator
+rejects an all-zeroes receiver, since that would burn the remainder at migration.
+
+---
+
+## What is real, and what is not
+
+Verified by running things, not by reading imports.
+
+### Real, and verifiable on an explorer
+
+| | |
+|---|---|
+| **DBC pools created by this code** | **7**, all devnet, all seven creation signatures confirmed `err: null` — listed below |
+| **Presets exercised on chain** | all four (`content`, `thin-name`, `ipo-book`, `tight-nav`) |
+| **A real buy** | 0.5 SOL into NVDAx; curve progress 0.0000% → 0.0117% |
+| **A real sell** | 5,000 NVDAx back to the pool; curve progress now reads **0.0114%** |
+| **A full lifecycle** | launch → 8 buys → curve at **100.0000%** → **migrated to DAMM v2** |
+| **Creator fees claimed** | 0.009653 SOL, `claimCreatorTradingFee`, balance to zero |
+| **Token metadata** | pinned to IPFS via Pinata, URI written to the mint at creation |
+| **Reel media** | real video pinned to IPFS, served through `/api/ipfs/<cid>` with server-side gateway failover |
+| **Registry** | Neon Postgres (`juno_pools`) — identity and provenance only |
+| **Every number that moves** | price, curve progress, migration threshold, holders, transactions — read from the DBC program per request, never cached into the registry |
+| **Wallet** | Phantom / Solflare via `@solana/wallet-adapter` |
+| **Quotes** | priced by `pool.swapQuote` against live account state |
+| **Tests** | **140 unit tests across 18 files**, passing — including every preset asserted against Meteora's `validateConfigParameters` |
+
+There is **no mock data layer**. `lib/juno/mock.ts` was deleted; if a pool is not
+on-chain *and* in the registry, it does not appear in the app.
+
+### Not built, or not proven
+
+| | Why |
+|---|---|
+| **Mainnet pool** | Devnet only. Needs real SOL and explicit sign-off. |
+| **Pyth NAV band** | The code exists (`lib/juno/pyth.ts`) and feed ids are stored per pool, but Hermes moved its price endpoints behind an API key and none exists in this repo. **The UI shows no NAV rather than a fabricated one.** |
+| **Price chart** | Needs a swap-event indexer. The tab says so instead of drawing a fake line. |
+| **24h volume** | Same reason. Rendered as `—`, never as `$0`. |
+| **Trade direction and size in Activity** | Needs log decoding. Rows link to the real transaction instead. |
+| **Comments and likes** | `lib/juno/social.ts` + `app/api/juno/comments` exist and write to MongoDB, but this pass did not verify the round trip, so treat it as unproven. **Follows are not built.** |
+| **Browser-wallet launch** | The create flow signs and sends through the same code path the CLI does, and that path is verified on devnet — but the Phantom-in-a-browser run has not been done by a human. |
+| **Dedicated RPC** | Running on the public devnet endpoint, which rate-limits hard. `NEXT_PUBLIC_SOLANA_RPC` is wired and unset. |
+
+---
+
+## On-chain proof (devnet)
+
+Program, identical on mainnet and devnet:
+[`dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN`](https://solscan.io/account/dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN?cluster=devnet)
+
+Deployer: [`9CHr5g24EdzUKg9GZFUvEuAvHAjZGCsF1Z3zVPudWYoE`](https://solscan.io/account/9CHr5g24EdzUKg9GZFUvEuAvHAjZGCsF1Z3zVPudWYoE?cluster=devnet)
+
+### The seven pools
+
+| Coin | Preset | Format | Quote | Pool | Creation tx |
+|---|---|---|---|---|---|
+| **AAPLx Issuance** | `ipo-book` | post | devnet USDC | [`9DnKw5r5…ZSxFa`](https://solscan.io/account/9DnKw5r5rYx1JoGmwLU2yCXFhKDkypaycuebrwrZSxFa?cluster=devnet) | [`4NiD7oZB…dxRAh3`](https://solscan.io/tx/4NiD7oZBfbGc7gNtVSyDgtTFohUSMYHMBEpxGQN6qsDbmYBTncLSpjuQXQovS39FvGZeCedmsAqT7msqX5dxRAh3?cluster=devnet) |
+| **NVDAx Issuance** | `thin-name` | post | SOL | [`FGcLWvDc…RBHpK`](https://solscan.io/account/FGcLWvDcKibyFnm1VRbWvX3CGwNDt6nCmWnPjT7RBHpK?cluster=devnet) | [`e9DMG7ZN…z4HjA6`](https://solscan.io/tx/e9DMG7ZNEwbMrY5JFpaVPiWwBab5hiA3GkX5wXz5mmtRjbRqNbTk362gr4AJKnTc3kzBipPNZXmpi9nz6z4HjA6?cluster=devnet) |
+| **TSLAx Issuance** | `tight-nav` | post | devnet USDC | [`C2CxpSxX…iqbrL`](https://solscan.io/account/C2CxpSxXLkfuJcytAY75mJYwP6T7nmi8qg5WpUGiqbrL?cluster=devnet) | [`2dft7yAS…5ykrns`](https://solscan.io/tx/2dft7yASHTy4doWeHRxCd4N93SBNTeB45VTLLuRXWcFUrJPAkMo1qanAF6bgaiD1wMfAoeMS2Y38KMvJqD5ykrns?cluster=devnet) |
+| **Juno Graduation Demo** | `content` | post | SOL | [`F6A77CbT…8ZowZ`](https://solscan.io/account/F6A77CbTHKFTc1d89KR2VReJRBiis5HuKpqvipg8ZowZ?cluster=devnet) | [`RZscb41j…imGoBQ`](https://solscan.io/tx/RZscb41j5tfknzKSmGvFKG4TuRNLSxs3k5pez9xeQTT8TNsZ3qEhsS4tTXVJ3yx1zJtkSiV6ZVHQXM4x5imGoBQ?cluster=devnet) |
+| **Night Market, District Nine** | `content` | reel | SOL | [`3kXH227N…rGM44`](https://solscan.io/account/3kXH227Niyztfd89asv1eprC9f6Y5p8YgaVvHmLrGM44?cluster=devnet) | [`5gNCvd5v…buugCi`](https://solscan.io/tx/5gNCvd5vULwcw6HQtx5Fe4hkGSKGkJMgfGkRhBBNQN5TmJkFWX2obmqgG44uyQSqEax5kZ9zsMLzqzz5vQbuugCi?cluster=devnet) |
+| **Foundry, 4am** | `content` | reel | SOL | [`FiLgdmSn…CSsX3Z`](https://solscan.io/account/FiLgdmSnVaC8ynuhFhDi9x5QxNnggkfY4FwsQyCSsX3Z?cluster=devnet) | [`5evn1DtK…K56H24`](https://solscan.io/tx/5evn1DtKV4AYfeGLMs6Vp9rdoNWBVH7wyNB5xdjzVDeaMo1DKTGV5HBM1DV4QYXUqRrH5ZgHF4WTrvcJTaK56H24?cluster=devnet) |
+| **Transit Spine** | `thin-name` | reel | SOL | [`ACFyGPsL…qkJWAz`](https://solscan.io/account/ACFyGPsLKmhTBQ6XhoSfytzJr1tkSqkU1UdM97qkJWAz?cluster=devnet) | [`2k5iabQY…bEaxne`](https://solscan.io/tx/2k5iabQYVQeBbKFfCC5bGBGnMpXCze5xJKPCrzjriHiixoxtEzFv7YS1TTuBYWTGKv7fjzXU2LbXiNpjscbEaxne?cluster=devnet) |
+
+### AAPLx — the first pool, `ipo-book`
+
+- Mint: [`CMjWQU2B…tBcbp`](https://solscan.io/token/CMjWQU2Bzd1NWwy1GB2qFNcpgRtW6xm9dhcjnevtBcbp?cluster=devnet)
+- Config: [`7cu21Neo…nFmsS`](https://solscan.io/account/7cu21NeoDjZ74VckNXhAnfo7Ahq5r5T1xTBAKnpnFmsS?cluster=devnet) (1048 bytes, owned by the DBC program)
+- Config tx: [`2X1zcRbE…a7Shtz`](https://solscan.io/tx/2X1zcRbEQoT527dvtRMnxAihmu4t91ZfeKxDvMSmTP7CFnXBK8zaHuYjQ86mvyizfnWrY6LdpzqrrZ61QNa7Shtz?cluster=devnet) — the two-transaction split, on chain
+
+### NVDAx — a buy and a sell, `thin-name`
+
+- Mint: [`6driivZm…QYj69`](https://solscan.io/token/6driivZmcZ4pgfCNkVERbbNcQiyzEpKvaJJ19AXQYj69?cluster=devnet)
+- **Buy, 0.5 SOL**: [`59DBxUgP…QJwdGzV`](https://solscan.io/tx/59DBxUgPPjANJhKEmuxp5FMXL4sSR77Uxs8kefRhMuKQkptnVMgSbPvN6YZfUCQ2KfUJWXWZjmSyEzuZzQJwdGzV?cluster=devnet)
+  — curve progress 0.0000% → 0.0117%, price 0.000002 → 0.0000020004
+- **Sell, 5,000 NVDAx**: [`xWxpJFtZ…CRYQJg9`](https://solscan.io/tx/xWxpJFtZB8ZzpHLVPZshHgYvuEHSJ9vKertf9yrovrfu1rup1oGLzaVs8W5BEx1mB8XD8QkkBks47JL4CRYQJg9?cluster=devnet)
+  — slot 499958074, confirmed `err: null`. `npm run juno:inspect` on this mint now
+  reports curve progress **0.0114%**, down from 0.0117%: the sell moved the curve back.
+- **Creator fee claim**: [`3X4g3aDg…zWGyZnA9HdAN`](https://solscan.io/tx/3X4g3aDgpW8QKAF8WB3JD18L7S73SqUjen8MYFunqWLBdGxykWYVGT2t1DiwUMgANBpU9zx3d2c2zWGyZnA9HdAN?cluster=devnet)
+  — 0.009653 SOL claimed, accrued balance to zero
+
+### The graduation — `content`, driven to 100% and migrated
+
+- Mint: [`HYgG9w3D…smZQ9`](https://solscan.io/token/HYgG9w3DrsiNn7tPHFeACGnCdtnioyC9DeiukausmZQ9?cluster=devnet)
+- Curve driven 0% → **100.0000%** across 8 real buys. The last one had to use
+  `pool.swap2` with **`SwapMode.PartialFill`**: exact-in reverts with
+  `Insufficient Liquidity` once the input exceeds remaining curve capacity, which
+  turned the final 0.000004 SOL into a binary search until `PartialFill` solved it.
+- **Migration tx**: [`4HatkGNZ…bMVTZtc`](https://solscan.io/tx/4HatkGNZKu5d9S79ZtjyAng9tRFshjhJRFbhqJQczqbgyAEonhm7cF5fmUy52CFbGgzdtRvHmWPmNo4uKbMVTZtc?cluster=devnet)
+- **Resulting DAMM v2 pool**: [`EhvtVimk…MYy7L`](https://solscan.io/account/EhvtVimkraeSqtNZGqBj3zMxHMUVHdwMDUwZF8MMYy7L?cluster=devnet)
+  — 1112 bytes, owned by `cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG`, liquidity permanently locked
+
+A live read of the DBC pool confirms the end state:
 
 ```
-GET /api/x402/posts            -> free: the catalog (id, title, price, network, asset)
-GET /api/x402/posts/{id}       -> 402 + signed payment requirements
-GET /api/x402/posts/{id}       -> 200 + a short-lived signed media URL
-    with PAYMENT-SIGNATURE
+$ npm run juno:inspect -- --mint HYgG9w3DrsiNn7tPHFeACGnCdtnioyC9DeiukausmZQ9
+cluster            devnet
+pool               F6A77CbTHKFTc1d89KR2VReJRBiis5HuKpqvipg8ZowZ
+curve progress     100.0000%
+raised             1.59040715
+threshold          1.59040715
+graduated          true
 ```
 
-Try it — this is a real client that pays real USDC:
+### Token metadata on IPFS
+
+TSLAx's mint ([`D7PDa2u1…RBf2F`](https://solscan.io/token/D7PDa2u1Qm6dVq2D4B2ieq9gyPVr7avNJrF9PyBRBf2F?cluster=devnet))
+carries `ipfs://QmejDQjPhsuUVNPa7tmk5AvKZXwHLjevuXM5UBjfBSKYaD`, which
+resolves to real Metaplex JSON — name, symbol, the curve it launched on, and the Pyth
+feed id it was tagged with. The three reel coins carry pinned `video/mp4`.
+
+---
+
+## Running it
+
+Node 20+. There is no `.env.local.example` in the repo — create `.env.local` yourself
+with the variables below.
 
 ```bash
-npm run x402:buy -- --list     # what's for sale
-npm run x402:buy               # buy the cheapest post
-npm run x402:buy -- <postId>   # buy a specific one
+npm install
+# create .env.local (see the table), then:
+npm run db:push          # push the juno_pools schema to Postgres
+npm run dev              # next dev --webpack
 ```
-
-It needs `X402_BUYER_MNEMONIC` — a wallet holding USDC. It does **not** need ALGO:
-the facilitator sponsors the transaction fee (`extra.feePayer` in the 402), so a
-payer only ever needs the token it's paying with.
-
-| Piece | Where |
-| --- | --- |
-| Resource server (prices routes, verifies + settles) | `lib/x402.ts`, `app/api/x402/` |
-| Facilitator (verifies the signature, submits on-chain) | external — `X402_FACILITATOR_URL` |
-| Client (signs the payment) | `scripts/x402-buy.ts` |
-
-Routes use `withX402`, not the proxy, so settlement happens only when the handler
-succeeds — nobody is charged for a post whose media then fails to serve. Pricing
-and `payTo` are resolved per request, which is what lets each post carry its own
-price and pay its own creator.
-
-> **The default facilitator is not x402.org's.** That one is EVM-only and cannot
-> settle Algorand; `X402_FACILITATOR_URL` defaults to an AVM-capable facilitator
-> instead. Check `GET /supported` before pointing it elsewhere.
-
-### Network: TestNet vs MainNet
-
-`NEXT_PUBLIC_ALGO_NETWORK` is the single switch — it selects the algod/indexer
-endpoints, the explorer, the USDC asset id, and the wallet connector's network.
-It **defaults to `testnet`**; MainNet (real money) must be opted into explicitly.
-
-Before going live, run the gate:
-
-```bash
-npm run mainnet:preflight   # read-only; never sends a transaction
-```
-
-It verifies against the live chain that asset `31566704` really is USDC, that the
-facilitator settles MainNet Algorand, that no sandbox override is redirecting the
-payment asset, that the platform holds gas and is opted in — and that the
-platform key isn't one whose mnemonic has leaked. "It worked on TestNet" proves
-almost none of that: different asset, different accounts, real gas, and secrets
-that were fine on a throwaway wallet are suddenly guarding real funds.
-
-Going live costs ~0.3 ALGO per existing custodial wallet (one-off, to seed and
-opt each in) plus ~0.3 per new signup. That gas is the platform's only cost —
-it never funds anyone's USDC.
-
-Everything the gate still blocks on is money, legal identity, or a vendor
-account — none of it is code. **[LAUNCH.md](./LAUNCH.md)** walks each one in the
-order that unblocks the most, starting with replacing the platform key (the
-TestNet mnemonic has been pasted in plaintext, so preflight blocks it by
-address).
-
-## Setup
-
-1. **Install**
-   ```bash
-   npm install
-   ```
-
-2. **Env** — copy and fill:
-   ```bash
-   cp .env.local.example .env.local
-   ```
-   You'll need: a Privy app id, a Postgres URL, Supabase Storage creds, a
-   session secret, a custodial-key encryption secret, and an Algorand deployer.
-
-3. **Database** — apply the schema:
-   ```bash
-   npm run db:migrate    # production; `db:push` is fine for local iteration
-   ```
-
-4. **Algorand** — fund the platform account with ALGO for gas
-   (TestNet: <https://bank.testnet.algorand.network>), then opt it in to USDC so
-   it can receive revenue:
-   ```bash
-   npm run wallet:setup   # opts the platform in + reports its gas budget
-   ```
-   To try payments on TestNet, get free test USDC from
-   [Circle's faucet](https://faucet.circle.com) (choose "Algorand Testnet") and
-   send it to the address shown on `/add-funds`.
-
-5. **Media** — create a private Supabase Storage bucket named `media` (or set
-   `SUPABASE_STORAGE_BUCKET`).
-
-6. **Seed** (optional) demo creator + posts + unlocks:
-   ```bash
-   npm run seed
-   ```
-
-## Run
-
-```bash
-npm run dev        # dev server (Turbopack) → http://localhost:3000
-npm run build      # production build (webpack) + serwist service worker
-npm run build:turbo # faster Turbopack build (skips the service worker)
-npm start          # serve the production build
-```
-
-> The default build uses webpack because serwist generates the PWA service
-> worker (`public/sw.js`) there. `@txnlab/use-wallet-ui-react` inlines its font
-> as a `new URL("data:font/woff2;…", import.meta.url)`, which webpack's asset
-> rules mistype — `next.config.ts` disables `new URL()` parsing for just that
-> package to fix it.
-
-## Tests
 
 ```bash
 npm test                 # everything
-npm run test:unit        # pure logic — no network, no DB
-npm run test:integration # live reads against Algorand TestNet
-npm run test:e2e         # API flows (needs `npm run dev` running)
+npm run test:unit        # 140 tests, ~3s — the curve presets live here
+npm run build            # production build
 ```
 
-| Layer | Covers |
-| --- | --- |
-| **Unit** | Session cookie signing/verification (incl. tamper rejection), Solana→Algorand address conversion, money normalisation, explorer URLs, USDC asset ids + the testnet-by-default guard, that our USDC constants match the x402 SDK's (two sources of truth for "which token is money" would silently misprice content), rate limits (incl. that the dev relaxation can't leak into production), and that a broken/misconfigured content scanner never resolves to "publish anyway" |
-| **Integration** | Live reads: that the shipped asset id really *is* USDC on-chain with 6dp, platform gas + USDC opt-in, fresh accounts reading 0 (never throwing), network/asset/mnemonic validation |
-| **E2E** | Auth gating (protected pages redirect, protected APIs 401), the Privy session endpoint, the wallet balance endpoint, `available == on-chain − escrow`, **deposit provisioning** (address is really opted in, idempotent, mock-card routes gone), **x402** (a real 402 with signed requirements, per-post price in atomic units, creator's real address, sponsored fees, forged signatures rejected, media never leaked unpaid), **withdrawal guards** (bad checksum, own wallet, non-opted-in recipient, escrow-aware cap) + a real on-chain send, **moderation** (anonymous reporting, operator-only queue, and that a takedown or a scanner quarantine actually stops the content being served from feed, unlock AND x402), **the paywall** (a paid post never serves its original as a preview), and the **full creator→fan loop** (upload → publish → unlock → signed media URL) |
+Routes: `/explore` · `/reels` · `/coin/[address]` · `/creator/[wallet]` · `/create` ·
+`/activity`
 
-> **Tests that move money need a funded wallet** (withdrawal transfer, call
-> escrow); they skip on an empty one. Fund the custodial wallet shown on
-> `/add-funds` with TestNet USDC from [Circle's faucet](https://faucet.circle.com)
-> ("Algorand Testnet") and the full 86 run.
->
-> E2E files run **sequentially** (`fileParallelism: false`): they all drive the
-> same dev user, so they share one on-chain wallet — withdrawals move its balance
-> and calls hold part of it in escrow. In parallel those shift under each other
-> mid-assertion.
+### Environment
 
-> **Auto-blur is optional.** `POST /api/posts` with `autoBlur=false` publishes an
-> upload directly — Replicate is only needed for the auto-blur pipeline, not to
-> create posts.
+| Variable | Required | Purpose |
+|---|---|---|
+| `DATABASE_URL` | yes | Postgres (Neon) for the `juno_pools` registry |
+| `NEXT_PUBLIC_SOLANA_CLUSTER` | yes | `devnet` or `mainnet-beta` |
+| `NEXT_PUBLIC_SOLANA_RPC` | recommended | A dedicated RPC. The public endpoints rate-limit hard enough to break a demo. |
+| `PINATA_JWT` | for launching | Pins media and token metadata to IPFS. Without it a mint launches with `uri: ""` and every wallet renders it blank. |
+| `NEXT_PUBLIC_IPFS_GATEWAY` | no | Gateway baked into pinned metadata for wallets and explorers |
+| `MONGODB_URI` / `MONGODB_DB` | no | Comments and likes |
+| `PYTH_API_KEY` | no | Without it, **no NAV band is shown** — see the honesty table above |
 
-E2E suites **skip themselves** when their prerequisites are missing (no dev
-server running), so `npm test` stays green anywhere.
+The CLI scripts read the same `.env.local` via `dotenv-cli` and sign with a local key
+instead of a browser wallet.
 
-## Scripts
+### CLI
 
-| Script | Purpose |
-| --- | --- |
-| `npm run wallet:setup` | Opt the platform account in to USDC + report its ALGO gas budget |
-| `npm run x402:buy` | An x402 client that buys a post with real USDC (`--list` to browse) |
-| `npm run mainnet:preflight` | Read-only gate: everything that must be true before real money |
-| `npm run keys:rotate` | Re-encrypt custodial wallet keys onto a new key version |
-| `npm run db:generate` / `db:migrate` | Versioned migrations — the production path |
-| `npm run db:baseline` | One-off: adopt migrations on a DB built with `db:push` |
-| `npm run db:push` / `db:studio` | Schema push (**dev only**) / studio |
-| `npm run seed` | Seed demo creator, posts, unlocks, DMs |
-
-### Moderation
-
-Anyone can report a post — no account required, because demanding a login to
-report abuse suppresses exactly the reports that matter most. Operators read the
-queue and act on it with a bearer token (`MODERATION_SECRET`, which fails closed).
-
-```
-POST /api/reports                     { postId, reason, detail }   public
-GET  /api/moderation/reports          Authorization: Bearer …      operator
-PATCH /api/moderation/reports/{id}    { action: takedown|dismiss|reviewing }
-```
-
-A takedown stamps `posts.taken_down_at`, which **every** post read path filters
-on, so the content stops being served from the feed, the in-app unlock and the
-x402 API at once. The row is kept rather than deleted: the decision stays
-auditable and the creator can't undo it by toggling `isPublished`.
-
-#### Automated scanning
-
-Uploads are scanned before they can be served. `lib/moderation/scan.ts` is the
-seam — implement `ScanProvider`, set `CONTENT_SCAN_PROVIDER`, done. A Hive
-integration is included but has never been run against the live service (no
-account), so verify its response shape before trusting it.
-
-The safety property is the default: **flagged AND scanner-error both quarantine**.
-A scanner that is down, rate-limited or misconfigured withholds content — it can
-never mean "publish anyway". Quarantined posts are excluded by every read path
-and auto-file a report, so a human sees them.
-
-`CONTENT_SCAN_PROVIDER=none` (the default) publishes everything unexamined. It
-exists so local dev needs no vendor account; `mainnet:preflight` blocks on it.
-
-> **Still not policy.** §2257 age/consent records and a registered DMCA agent are
-> legal processes, and real age verification (UK OSA, several US states) needs an
-> ID/estimation vendor — the 18+ gate here is a self-attestation and says so. The
-> code seams exist; the contracts and the process do not come from a repo.
-
-### Rotating the custodial encryption key
-
-`CUSTODIAL_KEY_ENCRYPTION_SECRET` encrypts every user's wallet key — it *is* the
-money. Each wallet records which key version sealed it, so the secret can be
-rotated without a flag-day re-encrypt:
+Every one of these runs the exact code path the UI uses. They sign with a local keypair
+at `.juno/launcher.json` — `juno:launch` generates one on first run if it is missing, so
+fund it from the devnet faucet before launching. `.juno/` is gitignored; the key never
+leaves your machine. Add `--mainnet` to `juno:launch` only once devnet has worked.
 
 ```bash
-# 1. new key -> CUSTODIAL_KEY_ENCRYPTION_SECRET_V2 (keep the old one readable!)
-# 2. CUSTODIAL_KEY_VERSION=2
-npm run keys:rotate -- --dry-run
-npm run keys:rotate
-# 3. once every wallet reports v2, retire the old secret
+# launch a pool: config tx + pool tx, curve preset of your choice
+# --quote defaults to SOL (the only mint guaranteed to exist on devnet); --nav tags
+# the pool with a Pyth feed id, recorded in the registry and in the pinned metadata
+npm run juno:launch   -- --preset ipo-book --name "AAPLx Issuance" --symbol AAPLXI \
+                         --quote usdc --nav "Equity.US.AAPL/USD" --yes
+
+# read a pool straight off the program: price, curve progress, threshold, a live quote
+npm run juno:inspect  -- --mint <baseMint>
+
+# trade against the curve
+npm run juno:trade    -- --mint <baseMint> --side buy  --amount 0.5  --yes
+npm run juno:trade    -- --mint <baseMint> --side sell --amount 5000 --yes
+
+# partial fill — the only way to finish a curve; exact-in reverts on the last sliver
+npm run juno:trade    -- --mint <baseMint> --side buy --amount 0.01 --partial --yes
+
+# claim accrued creator trading fees
+npm run juno:claim    -- --mint <baseMint> --yes
+
+# migrate a completed curve into DAMM v2
+npm run juno:graduate -- --mint <baseMint> --preset content --yes
 ```
 
-Each row is re-sealed and immediately verified — the re-encrypted key must still
-derive to the same Algorand address — and any wallet that fails is reported and
-left untouched rather than overwritten. Getting this wrong loses a user's funds,
-so the bias is always toward not writing.
+---
 
-### Database migrations
+## Architecture
 
-The schema was originally built with `db:push`, which diffs against the live
-database and **will drop columns to match** — one of those tables holds the
-encrypted keys to users' custodial wallets, so pointing it at production is a way
-to destroy real money. The project is now baselined onto versioned migrations:
+| Layer | Choice |
+|---|---|
+| Framework | **Next.js 16** App Router, React 19, TypeScript, Tailwind v4 |
+| Juno surface | the **`(juno)` route group** — `app/(juno)/`, `components/juno/`, `lib/juno/` |
+| Market | **Meteora DBC** (`@meteora-ag/dynamic-bonding-curve-sdk` v1.5.12) → **DAMM v2** on graduation |
+| Wallets | **`@solana/wallet-adapter`** — Phantom, Solflare |
+| Chain client | `@solana/web3.js` v1 |
+| Registry | **Neon Postgres via Drizzle ORM** — `juno_pools`, identity and provenance only |
+| Media & metadata | **Pinata / IPFS**, proxied through `/api/ipfs/<cid>` with gateway failover |
+| Social | MongoDB (comments, likes) — deliberately not in the same store as the market data |
 
-```bash
-npm run db:generate    # write a migration from schema.ts
-npm run db:migrate     # apply it — the production path
-npm run db:push        # dev only
-```
+`lib/juno/dbc.ts` is the only module that touches the DBC program. Components receive
+plain numbers in UI units; that module owns the BN arithmetic, the decimals and the
+account decoding. Two things the Anchor-derived types get wrong are handled at that
+boundary: `VirtualPool` resolves to its outer wrapper (the real fields are under
+`.poolState`), and `SwapResult` collapses to `any`.
 
-`drizzle/_archive/` holds the pre-baseline history: it was never actually applied
-(the `__drizzle_migrations` table didn't exist), its journal was missing two
-entries, two files collided on `0007`, and three snapshots were absent.
+Curve progress comes from `state.getPoolQuoteTokenCurveProgress` — the program's own
+quote-side ratio, which is what actually gates migration. A price-derived approximation
+would be a different number wearing the same label. Quote decimals come from the quote
+**mint**, not the config: `PoolConfig` carries only `tokenDecimal`, which is the base side.
 
-## Safety and compliance at a glance
+The DAMM v2 pool address is *derived*, not stored — `deriveDammV2PoolAddress` over the
+migration fee config, base mint and quote mint, and the fee config follows from the
+curve preset.
 
-| Concern | State |
-| --- | --- |
-| Reporting | Built — a report control on every post, no account needed |
-| Moderation console | Built — `/moderation` (operator secret), reports + record review |
-| Takedown | Built — removes content from every read path, verified |
-| §2257 submission | Built — `/records`; publishing unblocks only on operator verification |
-| Automated scanning | **Seam built**, off by default. `CONTENT_SCAN_PROVIDER=hive` + key to enable |
-| §2257 records | **Modelled + enforced**, off by default (`REQUIRE_2257_RECORDS`) |
-| DMCA agent / records custodian | **Published from config** — unset shows "not configured" |
-| Age gate | Self-attestation only — **not** age verification |
-| Real age verification | Not built — needs an ID/estimation vendor |
+### Repo note
 
-`npm run mainnet:preflight` blocks on the ones that matter. What no repo can
-supply: the vendor contracts, a named custodian, a registered DMCA agent, and a
-Terms/Privacy reviewed by a lawyer for your jurisdiction.
+This repo grew out of an unrelated prior app and still contains its code. Juno is
+namespaced under `app/(juno)/`, `components/juno/`, `lib/juno/` and `scripts/juno-*.ts`.
+`lib/juno/routes.ts` declares the route prefixes Juno owns, and
+`tests/unit/juno-routes.test.ts` asserts that list covers every directory under
+`app/(juno)/` — a missing entry renders correctly and then gets the old app's chrome
+painted over it, which is a silent failure. Removal of the legacy surface is in progress.
 
-## Notes
+---
 
-- Runs on Algorand **TestNet** by default; set `NEXT_PUBLIC_ALGO_NETWORK=mainnet`
-  for real USDC (and leave `ALGOD_SERVER` unset so the network switch applies).
-- `users.wallet_address` is a synthetic internal id (`0x…`), not an on-chain
-  address; the real payment wallet is `custodial_wallets.address`.
-- Keep `DEPLOYER_MNEMONIC`, `SUPABASE_SERVICE_ROLE_KEY`, and
-  `CUSTODIAL_KEY_ENCRYPTION_SECRET` secret (they live only in `.env.local`).
+## Open-source dependencies
+
+Disclosed as the submission rules require.
+
+| Package | Role | Licence |
+|---|---|---|
+| [`@meteora-ag/dynamic-bonding-curve-sdk`](https://github.com/MeteoraAg/dynamic-bonding-curve-sdk) | DBC client — curve builders, swaps, migration | MIT |
+| [`@solana/web3.js`](https://github.com/solana-labs/solana-web3.js) | Solana RPC and transaction client | Apache-2.0 |
+| [`@solana/wallet-adapter`](https://github.com/anza-xyz/wallet-adapter) | Phantom / Solflare connection | Apache-2.0 |
+| [Next.js](https://nextjs.org) 16 | App framework | MIT |
+| [React](https://react.dev) 19 | UI | MIT |
+| [Tailwind CSS](https://tailwindcss.com) 4 | Styling | MIT |
+| [Drizzle ORM](https://orm.drizzle.team) + `drizzle-kit` | Postgres schema and queries | Apache-2.0 |
+| [`pg`](https://github.com/brianc/node-postgres) | Postgres driver | MIT |
+| [`mongodb`](https://github.com/mongodb/node-mongodb-native) | Comments and likes | Apache-2.0 |
+| [`bn.js`](https://github.com/indutny/bn.js) / [`decimal.js`](https://github.com/MikeMcl/decimal.js) | Curve and price arithmetic | MIT |
+| [`bs58`](https://github.com/cryptocoinjs/bs58) | Base58 keys and signatures | MIT |
+| [lucide-react](https://lucide.dev) | Icons | ISC |
+| [`qrcode`](https://github.com/soldair/node-qrcode) | Get-the-app QR | MIT |
+| [Vitest](https://vitest.dev) | Test runner | MIT |
+| [`tsx`](https://github.com/privatenumber/tsx) / [`dotenv-cli`](https://github.com/entropitor/dotenv-cli) | CLI scripts | MIT |
+
+Infrastructure used but not bundled: Solana devnet RPC, Neon Postgres, Pinata (IPFS),
+Solscan, and the Meteora DBC program — which is on chain, not vendored.
+
+---
+
+## Further reading
+
+- [JUNO.md](./JUNO.md) — the condensed version of this page
+- [PLAN.md](./PLAN.md) — every task, with its verification status
+- [docs/juno-design.md](./docs/juno-design.md) — design tokens, component map, and why each curve is shaped the way it is
+- [docs/meteora-audit.md](./docs/meteora-audit.md) — which of the SDK's 60 service methods are actually called, and the 50 features ranked by how load-bearing Meteora is
+- [docs/juno-brief.md](./docs/juno-brief.md) — the pre-implementation brief written for external review. **It is a snapshot from before the on-chain work landed and its "current state" section is out of date;** this page supersedes it.
+
+[dbc]: https://docs.meteora.ag/developer-guides/dbc
