@@ -55,7 +55,7 @@ Legend: `DONE` · `IN PROGRESS` · `NOT STARTED` · `BLOCKED`
 | 0.6 | `/creator/[handle]` profile with posts/reels tabs | DONE (mock data) |
 | 0.7 | `/create` launch form with curve preset picker | DONE |
 | 0.8 | `/activity` global trade feed | DONE (mock data) |
-| 0.9 | Unit tests (140) + production build green | DONE |
+| 0.9 | Unit tests + production build green | DONE — 66 tests, 7 files; was 140 before the Norr purge deleted the tests covering deleted code |
 
 ### Phase 1 — On-chain core
 | # | Task | Status |
@@ -215,7 +215,7 @@ Verified on chain, in Postgres, and by running the test suite:
   `EhvtVimk…MYy7L` (`4HatkGNZ…bMVTZtc`). `juno:inspect` reports `graduated true`.
 - **Creator fees claimed**: 0.009653 SOL (`3X4g3aDg…9HdAN`).
 - **IPFS**: token metadata and three reel videos pinned and resolving.
-- **140 unit tests across 18 files passing**, including Meteora's own
+- **66 unit tests across 7 files passing**, including Meteora's own
   `validateConfigParameters` over all four presets.
 
 ---
@@ -232,7 +232,7 @@ Owner: juno-4. (Previously juno-1, which was killed after stalling.) Commit `726
 - [x] Trade direction and size in `/activity` and the coin Activity tab — the
       unfinished remainder of 3.9, which was DONE for signatures only.
 - [x] Real SVG price chart in `CoinMedia.tsx`, replacing `PriceChartPlaceholder`.
-- [x] 17 unit tests (140 → **157**).
+- [x] 17 unit tests for the indexer, all of which survive the purge below.
 
 **How it parses.** Not by decoding the program's Anchor event — by differencing
 pre/post token balances, which are consensus data present in a response we already

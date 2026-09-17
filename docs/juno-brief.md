@@ -1,5 +1,15 @@
 # Juno — project brief for external review
 
+> **Historical document — do not read as current state.** This was written
+> *before* any on-chain work landed, to be pasted into an external reviewer
+> along with the questions at the end. Its §2 "current state" is wrong now in
+> both directions: it says no pool has ever been created and no wallet is
+> connected (both since done — there are 7 devnet pools, a full graduation and
+> a creator fee claim), and its test count of 140 predates the Norr purge,
+> which took the suite to 66 by deleting the tests that covered deleted code.
+> It is kept because the strategic questions at the end are still live.
+> **[README.md](../README.md) is the current state.**
+
 Paste this whole file into Grok (or any reviewer) along with the questions at
 the end.
 
