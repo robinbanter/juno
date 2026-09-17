@@ -103,7 +103,7 @@ Legend: `DONE` · `IN PROGRESS` · `NOT STARTED` · `BLOCKED`
 |---|---|---|
 | 4.1 | Trade panel calls real `quoteTrade` | DONE |
 | 4.2 | Buy sends a real signed swap | DONE — verified on devnet |
-| 4.3 | Sell sends a real signed swap | DONE (code, same path) — sell not yet executed |
+| 4.3 | Sell sends a real signed swap | DONE — verified on devnet (tx xWxpJFtZ…, 5000 NVDAx) |
 | 4.7 | Partial-fill swaps (`swap2` + `SwapMode.PartialFill`) | DONE — verified completing a curve |
 | 4.8 | Creator fee claiming (`claimCreatorTradingFee`) | DONE — verified, 0.009653 SOL |
 | 4.9 | Graduation (`migrateToDammV2`) | DONE — verified, DAMM v2 pool exists |
@@ -167,10 +167,12 @@ The user's initial estimate was "20% done, only the UI". That estimate is **disp
 
 ### Itemized Remaining Gaps & Granular Todo List
 
-#### Block 1: Real On-Chain Sell Execution (Task 4.3)
-- [ ] Execute a real signed sell transaction on devnet from launcher key (`9CHr5g24EdzUKg9GZFUvEuAvHAjZGCsF1Z3zVPudWYoE`), which holds 237,911.47 NVDAx tokens.
-- [ ] Confirm signature lands on Solscan and verify the curve moves down.
-- [ ] Record the transaction signature and update on-chain tables.
+#### Block 1: Real On-Chain Sell Execution (Task 4.3) — COMPLETED
+- [x] Execute a real signed sell transaction on devnet from launcher key (`9CHr5g24EdzUKg9GZFUvEuAvHAjZGCsF1Z3zVPudWYoE`), which holds NVDAx tokens.
+  - Landed signature: [`xWxpJFtZB8ZzpHLVPZshHgYvuEHSJ9vKertf9yrovrfu1rup1oGLzaVs8W5BEx1mB8XD8QkkBks47JL4CRYQJg9`](https://solscan.io/tx/xWxpJFtZB8ZzpHLVPZshHgYvuEHSJ9vKertf9yrovrfu1rup1oGLzaVs8W5BEx1mB8XD8QkkBks47JL4CRYQJg9?cluster=devnet)
+  - Sold 5,000 NVDAx tokens back to pool `FGcLWvDcKibyFnm1VRbWvX3CGwNDt6nCmWnPjT7RBHpK`.
+- [x] Confirm signature lands on Solscan and verify the curve moves down.
+- [x] Record the transaction signature and update on-chain tables.
 
 #### Block 2: Stock Wedge — Issuance Mode in `/create` (Task 6.2)
 - [ ] Add an "Issuance Mode" switch to `/create` (Post / Reel / Stock Token Issuance).
