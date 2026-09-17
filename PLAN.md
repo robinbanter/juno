@@ -186,11 +186,12 @@ itemised. A task counts as complete only if its status line starts with `DONE`.
 | Phase 7 — graduation | 3 | 3 | |
 | **Phases 0–7 subtotal** | **56** | **59** | **94.9%** |
 | Block 3 — swap indexer | 4 | 4 | built and verified on two devnet pools |
-| Block 4 — social | 1 | 3 | comments done; likes and follows not started |
+| Block 4 — social | 3 | 3 | comments, likes and follows all persisted |
 | Block 5 — legacy purge | 1 | 1 | done; build green |
-| **Engineering total** | **62** | **67** | **92.5%** |
+| **Engineering total** | **64** | **67** | **95.5%** |
 
-**Engineering: 62 / 67 = 92.5%.**
+**Engineering: 64 / 67 = 95.5%.** The three open items are 2.6 (browser wallet,
+needs a human), 5.3 and 5.4 (Pyth NAV band, needs a Hermes key).
 
 **Submission readiness is much lower, and is the real risk.** Phase 8 is **1 / 7 =
 14%**. The one done item is the README. Still open: deploy to a public URL (8.2), a
@@ -276,27 +277,40 @@ rows and chart points show what is real, while `volume24h` and `totalVolume` ret
 null whenever the window has holes or does not reach back far enough. Null renders as
 an em-dash; only a complete read of a pool that has not traded renders `$0`.
 
-#### Block 4: Social — comments DONE, likes and follows NOT STARTED
+#### Block 4: Social — DONE
+Commit `6f7d352`. All three live in MongoDB beside each other.
 
-> **Do not build this in Postgres.** The previous version of this block called for
-> `juno_comments` / `juno_likes` / `juno_follows` Drizzle tables. That is wrong.
+> **Still do not build this in Postgres.** An earlier version of this block called
+> for `juno_comments` / `juno_likes` / `juno_follows` Drizzle tables. That was wrong
+> then and is wrong now.
 
 | Item | Status | Evidence |
 |---|---|---|
-| **Comments** | **DONE** — MongoDB | `lib/juno/social.ts` exports `listComments`, `addComment`, `countComments`, `MAX_COMMENT`; wired to `app/api/juno/comments/route.ts`. Code-reviewed, **not runtime-verified** — no live round trip has been run against the database. |
-| **Likes** | **NOT STARTED** | No like function exists in `social.ts`. `components/juno/reels/ReelCard.tsx:44` holds `liked` in local `useState`, and nothing in `lib/juno/chain.ts`, `lib/juno/registry.ts` or `app/api/juno` populates `coin.likes`. A like does not survive a reload. |
-| **Follows** | **NOT STARTED** | `followers: 0` is hardcoded at `lib/juno/chain.ts:38` and `app/(juno)/creator/[handle]/page.tsx:43`. |
+| **Comments** | **DONE** | `listComments`/`addComment`/`countComments`, wired to `app/api/juno/comments`. |
+| **Likes** | **DONE** | `likeState`/`toggleLike`/`likeCounts` + `app/api/juno/likes`. Keyed `(coinMint, cluster, wallet)` with a **unique index**, so the idempotency lives in the database rather than in application code that could race. |
+| **Follows** | **DONE** | `followState`/`toggleFollow` + `app/api/juno/follows`. Keyed `(followerWallet, creatorWallet)`, unique. Self-follow rejected. |
 
-**Why comments are in MongoDB, and why that must not be "fixed".**
-`lib/juno/social.ts` documents the decision: the pool registry is relational and small,
-so it belongs in Postgres; comments are append-heavy, per-coin and schema-loose, so they
-do not. Keeping the two in separate stores means **a comment outage can never take the
-market data down with it**. Nothing in the social store is authoritative about money —
-trades live on chain. Likes and follows, when built, belong in MongoDB beside comments.
+**Verified by running it, against real MongoDB — not mocked.**
+- Like toggles: `{count:0,liked:false}` → `{count:1,liked:true}` → `{count:0,liked:false}`.
+- **Concurrency:** six simultaneous toggles from one wallet, with a second wallet
+  also holding a like. The count never exceeded the number of distinct wallets,
+  which is the guarantee the unique index exists to provide.
+- Follow: 0 → 1 → 0 → 1; self-follow returns 400 `A wallet cannot follow itself`;
+  a malformed address returns 400.
+- **Rendered output:** `/reels` server HTML carries real seeded counts (`0`, `0`, `2`)
+  with all three like buttons `disabled` and labelled *Connect a wallet to like*.
+  `/creator/<wallet>` rendered `1 Followers` from the database, replacing the
+  hardcoded `0`.
 
-**Trap for the next reader:** `social.ts`'s header comment reads *"Social state:
-comments and likes."* Only comments exist. That line is aspirational and is exactly
-what caused likes to be reported as implemented. Fix the comment or build the likes.
+**No-wallet behaviour is honest by construction.** The count renders for everyone;
+only the action is gated. There is no optimistic increment anywhere — every toggle
+takes the new count back from the server response, because with two tabs open an
+optimistic count drifts and then quietly stays wrong. A like is one round trip; it
+can afford to be correct.
+
+Synthetic rows created while testing were deleted afterwards. What remains is one
+like per coin from the deployer wallet, which is a real wallet that really launched
+those pools.
 
 #### Block 5: Purge dead non-Solana code (Norr / Algorand / x402 / Privy / Clerk / Stripe) — DONE
 Taken over by juno-4 after juno-3 stalled in `needs_input` for 40 minutes without
@@ -389,8 +403,10 @@ Phases 0–7 are done bar the blocked and human items, so what follows is what i
 actually left, ordered by judge impact per hour.
 
 1. **8.2 deploy to a public URL** — the submission requires a live demo. Nothing else
-   on this list matters if a judge cannot open the app. **Now unblocked:** the build
-   is green as of `1e985f3`.
+   on this list matters if a judge cannot open the app. **Unblocked and prepared:**
+   the build is green, and [`DEPLOY.md`](./DEPLOY.md) has the exact steps and every
+   variable to set. Not executed — publishing is the owner's call and has not been
+   authorised.
 2. **8.3 a dedicated RPC** — promoted from nice-to-have. The swap indexer is built,
    but the public devnet endpoint's per-method quota means it degrades to em-dashes
    as often as not. One endpoint key turns a working feature into a visibly working
@@ -400,4 +416,4 @@ actually left, ordered by judge impact per hour.
 4. **8.4 / 8.5 videos**, **8.7 submit** — human, and hard-deadlined 25 Sep 16:00 ET.
 5. **8.6 mainnet pool** — Meteora's stated bar is "working mainnet code beats slides".
    Blocked on funds and authorization; the highest-value unblock available.
-6. **Block 4 likes and follows** — last. Least judge impact of anything here.
+6. ~~Block 4 likes and follows~~ — **done** (`6f7d352`).
