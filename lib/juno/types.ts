@@ -120,6 +120,9 @@ export type Coin = {
    * coin page — a grid of tiles has no room to show it.
    */
   shape?: CurveShape;
+  /** Fee decay and supply split, read from the config. Coin page only. */
+  fee?: FeeSchedule | null;
+  supply?: Tokenomics | null;
 };
 
 /**
@@ -140,6 +143,7 @@ export type CurveState = {
 };
 
 import type { CurveShape } from "./curve-shape";
+import type { FeeSchedule, Tokenomics } from "./economics";
 
 export type CurvePresetId =
   | "content"

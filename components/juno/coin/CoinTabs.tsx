@@ -10,6 +10,7 @@ import { Avatar } from "../ui/Avatar";
 import { Tabs } from "../ui/Tabs";
 import { ActivityList } from "./ActivityList";
 import { CommentComposer } from "./CommentComposer";
+import { EconomicsPanel } from "./EconomicsPanel";
 
 type TabId = "activity" | "holders" | "comments" | "details";
 
@@ -150,6 +151,9 @@ function DetailsPanel({ coin }: { coin: Coin }) {
       <p className="rounded-j bg-j-surface px-3 py-2.5 text-[13px] leading-relaxed text-j-muted">
         {preset.rationale}
       </p>
+
+      {/* What the config actually enforces, as opposed to what it promises. */}
+      <EconomicsPanel fee={coin.fee ?? null} supply={coin.supply ?? null} className="pt-1" />
     </div>
   );
 }

@@ -10,6 +10,23 @@ registry, 4 curve presets, partial-fill swaps.
 
 ---
 
+## Built and verified this run
+
+| # | Idea | Evidence |
+|---|---|---|
+| 1 | Curve shape visualiser | 16 segments plotted on every coin page; `ipo-book` reads as a U, `thin-name` decays |
+| 3 | Preset comparison | All four curves on the `/create` picker, side by side |
+| 4 | Animated curve fill | Draws on mount, honours `prefers-reduced-motion` |
+| 6 | Comments on MongoDB | Posted, persisted, read back; validation 400/404 |
+| 8 | Fee-decay meter | Live: "4.00% at launch → 0.50%", current 0.50%, from the program's own scheduler |
+| 9 | Tokenomics breakdown | 82.5% curve / 16.5% migration / 1.0% leftover, off-chain config |
+| 14 | Reel seeding | 3 reel-format pools launched, video pinned to IPFS, decoding at 480x854 |
+
+Production fixes forced by real-browser testing: lazy video mounting (three
+simultaneous loads were aborting), IntersectionObserver picking the most
+visible reel rather than the last to fire, and clamped easing (a negative
+eased value reaches SVG as a negative rect width and throws).
+
 ## Tier 1 — build first (1–14)
 
 | # | Idea | Why it wins |

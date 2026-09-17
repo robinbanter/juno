@@ -152,6 +152,31 @@ async function main() {
   console.log(`meteora   ${meteoraPoolUrl(plan.pool.toBase58())}`);
   console.log(`\napp       /coin/${plan.baseMint.toBase58()}`);
   if (uri) console.log(`metadata  ${uri}`);
+
+  // Record it so the app can find it. Same endpoint the browser flow uses.
+  const site = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const record = await fetch(`${site}/api/juno/pools`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      baseMint: plan.baseMint.toBase58(),
+      poolAddress: plan.pool.toBase58(),
+      configAddress: plan.config.toBase58(),
+      quoteMint: quote.mint,
+      creatorWallet: payer.publicKey.toBase58(),
+      name, symbol,
+      description: arg("description", "") ?? "",
+      format: arg("format", "post") ?? "post",
+      curvePreset: preset,
+      navFeedId: arg("nav", "") ?? "",
+      mediaUrl: arg("media", "") ?? "",
+      posterUrl: arg("poster", arg("media", "")) ?? "",
+      mediaWidth: Number(arg("width", "0")) || null,
+      mediaHeight: Number(arg("height", "0")) || null,
+      createSignature: signatures[signatures.length - 1],
+    }),
+  }).catch(() => null);
+  console.log(`indexed   ${record ? record.status : "failed (is the dev server running?)"}`);
 }
 
 main().catch((error) => {

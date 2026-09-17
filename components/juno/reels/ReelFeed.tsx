@@ -26,18 +26,31 @@ export function ReelFeed({ reels }: { reels: Coin[] }) {
     const root = containerRef.current;
     if (!root) return;
 
+    // Track every card's visible ratio and pick the largest, rather than
+    // taking whichever entry happened to fire last. During first layout
+    // several cards report as intersecting, and reacting to each in turn
+    // briefly makes a distant reel "active" — which mounts its video source
+    // and then immediately unmounts it, aborting the request.
+    const ratios = new Map<number, number>();
+
     const observer = new IntersectionObserver(
       (entries) => {
         for (const entry of entries) {
-          if (entry.isIntersecting) {
-            const index = Number((entry.target as HTMLElement).dataset.index);
-            if (!Number.isNaN(index)) setActiveIndex(index);
+          const index = Number((entry.target as HTMLElement).dataset.index);
+          if (!Number.isNaN(index)) ratios.set(index, entry.intersectionRatio);
+        }
+        let best = -1;
+        let bestRatio = 0;
+        for (const [index, ratio] of ratios) {
+          if (ratio > bestRatio) {
+            bestRatio = ratio;
+            best = index;
           }
         }
+        if (best >= 0 && bestRatio > 0.5) setActiveIndex(best);
       },
-      // A reel counts as active once most of it is on screen, which lines up
-      // with where snap settles.
-      { root, threshold: 0.6 },
+      // Several thresholds so the ratio is known, not just "crossed".
+      { root, threshold: [0.25, 0.5, 0.75, 0.95] },
     );
 
     for (const child of Array.from(root.children)) observer.observe(child);
@@ -95,6 +108,7 @@ export function ReelFeed({ reels }: { reels: Coin[] }) {
             <ReelCard
               coin={coin}
               active={i === activeIndex}
+              near={Math.abs(i - activeIndex) <= 1}
               muted={muted}
               onToggleMuted={() => setMuted((m) => !m)}
               onBuy={setBuying}

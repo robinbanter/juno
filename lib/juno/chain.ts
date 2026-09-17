@@ -6,6 +6,7 @@ import type BN from "bn.js";
 import { getConnection, getDbcClient, bnToUi, fetchPoolSnapshot } from "./dbc";
 import { quoteTokenUsdPrice } from "./pyth";
 import { curveShape } from "./curve-shape";
+import { feeSchedule, tokenomics } from "./economics";
 import { identicon } from "./identicon";
 import type { JunoPoolRow } from "./registry";
 import type { Coin, CoinFormat, CurvePresetId, Creator, QuoteToken } from "./types";
@@ -130,6 +131,17 @@ export async function hydratePool(
     curve: snapshot.curve,
     curvePreset: row.curvePreset as CurvePresetId,
     graduatedPool: snapshot.curve.graduated ? row.poolAddress : undefined,
+    fee: options.detailed
+      ? feeSchedule({
+          config: snapshot.config,
+          activationPoint: Number(
+            (snapshot.pool as { poolState: { activationPoint: BN } }).poolState.activationPoint.toString(),
+          ),
+        })
+      : undefined,
+    supply: options.detailed
+      ? tokenomics(snapshot.config, snapshot.baseDecimals)
+      : undefined,
     shape: options.detailed
       ? curveShape({
           config: snapshot.config,

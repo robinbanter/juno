@@ -21,12 +21,19 @@ import { Delta } from "../ui/Delta";
 export function ReelCard({
   coin,
   active,
+  near,
   muted,
   onToggleMuted,
   onBuy,
 }: {
   coin: Coin;
   active: boolean;
+  /**
+   * Within one card of the active reel. Only these mount a video source —
+   * loading every clip in the feed at once saturates the connection and the
+   * browser aborts the requests outright.
+   */
+  near: boolean;
   muted: boolean;
   onToggleMuted: () => void;
   onBuy: (coin: Coin) => void;
@@ -69,12 +76,14 @@ export function ReelCard({
     >
       <video
         ref={videoRef}
-        src={coin.media.url}
+        // Source is attached only near the active reel; distant cards show
+        // their poster until they come into range.
+        src={near ? coin.media.url : undefined}
         poster={coin.media.posterUrl}
         loop
         playsInline
         muted={muted}
-        preload={active ? "auto" : "metadata"}
+        preload={active ? "auto" : "none"}
         onTimeUpdate={(e) => {
           const el = e.currentTarget;
           if (el.duration) setProgress(el.currentTime / el.duration);
