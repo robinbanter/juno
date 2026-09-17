@@ -34,6 +34,7 @@ explorer or by running a script in this repo.
 | **Reads** | price, curve progress, migration threshold, holders, transactions — all from chain per request |
 | **Wallet** | Phantom / Solflare via `@solana/wallet-adapter` |
 | **Quotes** | priced by the DBC quoter against live account state |
+| **Comments** | MongoDB via `lib/juno/social.ts`, wired to `app/api/juno/comments` — kept out of Postgres so a comment outage cannot take the market data down. Code reviewed, not runtime-verified. |
 | **Tests** | 140 unit tests, incl. every preset validated by Meteora's own `validateConfigParameters` |
 
 ### Not built
@@ -45,7 +46,8 @@ explorer or by running a script in this repo.
 | **Price chart** | Needs a swap-event indexer. The tab says so instead of drawing a fake line. |
 | **24h volume** | Same reason. Shown as `—`, never as `$0`. |
 | **Trade direction/size in Activity** | Needs log decoding. Rows link to the real transaction instead. |
-| **Follows** | Not built. Comments and likes have a MongoDB path (`lib/juno/social.ts`, `app/api/juno/comments`), but the round trip has not been verified — treat it as unproven. |
+| **Likes** | Not persisted. `ReelCard` holds `liked` in local state; nothing populates `coin.likes`, so it does not survive a reload. |
+| **Follows** | Not built. `followers` is hardcoded to `0`. |
 
 There is **no mock data layer**. `lib/juno/mock.ts` was deleted; if a pool is
 not on-chain and in the registry, it does not appear in the app.
@@ -140,7 +142,7 @@ rejects it, since an all-zeroes receiver would burn the remainder at migration.
 
 ```bash
 npm install
-# there is no .env.local.example — create .env.local yourself (table below)
+cp .env.local.example .env.local   # or write it yourself — table below
 npm run db:push
 npm run dev
 ```

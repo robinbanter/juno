@@ -124,7 +124,9 @@ on-chain *and* in the registry, it does not appear in the app.
 | **Price chart** | Needs a swap-event indexer. The tab says so instead of drawing a fake line. |
 | **24h volume** | Same reason. Rendered as `—`, never as `$0`. |
 | **Trade direction and size in Activity** | Needs log decoding. Rows link to the real transaction instead. |
-| **Comments and likes** | `lib/juno/social.ts` + `app/api/juno/comments` exist and write to MongoDB, but this pass did not verify the round trip, so treat it as unproven. **Follows are not built.** |
+| **Comments** | Genuinely implemented — `lib/juno/social.ts` is a MongoDB-backed layer wired to `app/api/juno/comments`. Code-present and reviewed, **not runtime-verified here**: no live round trip was run against the database. |
+| **Likes** | **Not persisted.** `ReelCard` keeps `liked` in local component state and nothing populates `coin.likes`, so a like does not survive a reload. |
+| **Follows** | Not built. `followers` is hardcoded to `0`. |
 | **Browser-wallet launch** | The create flow signs and sends through the same code path the CLI does, and that path is verified on devnet — but the Phantom-in-a-browser run has not been done by a human. |
 | **Dedicated RPC** | Running on the public devnet endpoint, which rate-limits hard. `NEXT_PUBLIC_SOLANA_RPC` is wired and unset. |
 
@@ -200,14 +202,13 @@ feed id it was tagged with. The three reel coins carry pinned `video/mp4`.
 
 ## Running it
 
-Node 20+. There is no `.env.local.example` in the repo — create `.env.local` yourself
-with the variables below.
+Node 20+.
 
 ```bash
 npm install
-# create .env.local (see the table), then:
-npm run db:push          # push the juno_pools schema to Postgres
-npm run dev              # next dev --webpack
+cp .env.local.example .env.local   # or write it yourself — variables in the table below
+npm run db:push                    # push the juno_pools schema to Postgres
+npm run dev                        # next dev --webpack
 ```
 
 ```bash
@@ -228,7 +229,7 @@ Routes: `/explore` · `/reels` · `/coin/[address]` · `/creator/[wallet]` · `/
 | `NEXT_PUBLIC_SOLANA_RPC` | recommended | A dedicated RPC. The public endpoints rate-limit hard enough to break a demo. |
 | `PINATA_JWT` | for launching | Pins media and token metadata to IPFS. Without it a mint launches with `uri: ""` and every wallet renders it blank. |
 | `NEXT_PUBLIC_IPFS_GATEWAY` | no | Gateway baked into pinned metadata for wallets and explorers |
-| `MONGODB_URI` / `MONGODB_DB` | no | Comments and likes |
+| `MONGODB_URI` / `MONGODB_DB` | no | Comments. Unset, the comments route throws; nothing else is affected. |
 | `PYTH_API_KEY` | no | Without it, **no NAV band is shown** — see the honesty table above |
 
 The CLI scripts read the same `.env.local` via `dotenv-cli` and sign with a local key
@@ -278,7 +279,7 @@ npm run juno:graduate -- --mint <baseMint> --preset content --yes
 | Chain client | `@solana/web3.js` v1 |
 | Registry | **Neon Postgres via Drizzle ORM** — `juno_pools`, identity and provenance only |
 | Media & metadata | **Pinata / IPFS**, proxied through `/api/ipfs/<cid>` with gateway failover |
-| Social | MongoDB (comments, likes) — deliberately not in the same store as the market data |
+| Comments | **MongoDB**, deliberately not the same store as the market data |
 
 `lib/juno/dbc.ts` is the only module that touches the DBC program. Components receive
 plain numbers in UI units; that module owns the BN arithmetic, the decimals and the
@@ -294,6 +295,12 @@ would be a different number wearing the same label. Quote decimals come from the
 The DAMM v2 pool address is *derived*, not stored — `deriveDammV2PoolAddress` over the
 migration fee config, base mint and quote mint, and the fee config follows from the
 curve preset.
+
+Comments live in MongoDB rather than alongside the registry on purpose: the pool
+registry is relational and small, while comments are append-heavy, per-coin and
+schema-loose, and keeping the two apart means a comment outage can never take the
+market data down with it. Nothing in that store is authoritative about money — trades
+live on chain.
 
 ### Repo note
 
