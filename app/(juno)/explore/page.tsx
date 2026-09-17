@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Clapperboard } from "lucide-react";
 
 import { hydratePools } from "@/lib/juno/chain";
+import { CURVE_PRESETS } from "@/lib/juno/curves";
 import { cluster } from "@/lib/juno/cluster";
 import { usd } from "@/lib/juno/format";
 import { listPools } from "@/lib/juno/registry";
@@ -32,17 +33,25 @@ export default async function ExplorePage({
         c.creator.handle.toLowerCase().includes(query),
     );
   }
-  // Coins with unknown volume sort last rather than being treated as zero.
-  coins =
-    sort === "trending"
-      ? [...coins].sort((a, b) => (b.volume24h ?? -1) - (a.volume24h ?? -1))
-      : coins;
+  if (sort === "trending") {
+    // Coins with unknown volume sort last rather than being treated as zero.
+    coins = [...coins].sort((a, b) => (b.volume24h ?? -1) - (a.volume24h ?? -1));
+  } else if (sort === "graduating") {
+    // Closest to migration first. A pool that has already graduated is done,
+    // so it drops to the bottom rather than topping a list about what is next.
+    coins = [...coins].sort((a, b) => {
+      const rank = (c: Coin) => (c.curve.graduated ? -1 : c.curve.progress);
+      return rank(b) - rank(a);
+    });
+  }
 
   const heading = query
     ? `${coins.length} result${coins.length === 1 ? "" : "s"} for “${q}”`
     : sort === "trending"
       ? "Trending"
-      : "Latest";
+      : sort === "graduating"
+        ? "Closest to graduating"
+        : "Latest";
 
   return (
     <div className="mx-auto w-full max-w-[1100px] px-4 pt-4 lg:px-8">
@@ -52,6 +61,11 @@ export default async function ExplorePage({
           <nav className="flex gap-3 text-[14px]">
             <SortLink href="/explore" label="Latest" active={sort !== "trending"} />
             <SortLink href="/explore?sort=trending" label="Trending" active={sort === "trending"} />
+            <SortLink
+              href="/explore?sort=graduating"
+              label="Graduating"
+              active={sort === "graduating"}
+            />
           </nav>
         )}
       </div>
@@ -134,6 +148,11 @@ function CoinTile({ coin }: { coin: Coin }) {
           </span>
         )}
         <CurveProgressBar curve={coin.curve} />
+
+        {/* Which curve this launched on — the choice that shapes the market. */}
+        <span className="absolute bottom-2 left-2 rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-medium text-white backdrop-blur-sm">
+          {CURVE_PRESETS[coin.curvePreset]?.label ?? coin.curvePreset}
+        </span>
       </div>
 
       <div className="mt-2 flex items-center gap-1.5">
@@ -142,9 +161,11 @@ function CoinTile({ coin }: { coin: Coin }) {
       </div>
       <div className="mt-0.5 flex items-center gap-2 text-[12px]">
         <Delta value={coin.marketCap} direction={coin.marketCapChangePct} currency={coin.marketCapCurrency} />
-        {coin.volume24h !== null && (
-          <span className="text-j-faint">{usd(coin.volume24h)} vol</span>
-        )}
+        <span className="text-j-faint tabular-nums">
+          {coin.curve.graduated
+            ? "graduated"
+            : `${Math.round(coin.curve.progress * 100)}% to graduation`}
+        </span>
       </div>
     </Link>
   );

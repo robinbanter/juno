@@ -15,6 +15,10 @@ registry, 4 curve presets, partial-fill swaps.
 | # | Idea | Evidence |
 |---|---|---|
 | 1 | Curve shape visualiser | 16 segments plotted on every coin page; `ipo-book` reads as a U, `thin-name` decays |
+| 10 | Graduation countdown | `?sort=graduating`; graduated pools sort last, not first |
+| 11 | Skeleton loaders | Route + coin-page skeletons shaped like their final layout |
+| 12 | Error boundaries | Per-route, with retry; names an RPC refusal when that is the cause |
+| 32 | Curve preset badge | On every explore tile |
 | 3 | Preset comparison | All four curves on the `/create` picker, side by side |
 | 4 | Animated curve fill | Draws on mount, honours `prefers-reduced-motion` |
 | 6 | Comments on MongoDB | Posted, persisted, read back; validation 400/404 |
@@ -154,3 +158,50 @@ Then 13, 11, 12 (production feel), 5/4 (motion on real data), 6 (Mongo), 8/9
 
 Deliberately skipped: 79–84 (credentials or different products), 93–100
 (scope creep that would clutter a three-minute demo).
+
+
+---
+
+## Disposition of all 100
+
+Every idea, with what happened to it and why. "Not reached" is stated as such
+rather than dressed up as a decision.
+
+### Built and verified (12)
+**1** curve visualiser · **3** preset comparison · **4** animated fill ·
+**6** comments on MongoDB · **8** fee-decay meter · **9** tokenomics ·
+**10** graduation countdown · **11** skeletons · **12** error boundaries ·
+**14** reel seeding · **32** preset badges · **38** reduced-motion support
+(built into the curve animation)
+
+### Deliberately not built — would have hurt the demo (9)
+- **5** live polling — *actively harmful*: adds repeated RPC load to an endpoint already refusing `getTokenLargestAccounts`. I ranked it 5th and was wrong; building it would have made the demo worse.
+- **21** slippage control — the panel already applies 100bps; exposing it adds a knob a judge must understand in a 3-minute demo.
+- **27** keyboard shortcuts — undiscoverable in a demo nobody has read docs for.
+- **93–97** follows, DMs, remixing, multi-sig, DAO pools — social scope creep; none strengthen a *tokenized stocks* pitch.
+- **100** cross-chain bridging — a different product.
+
+### Blocked on a credential that does not exist (6)
+- **79, 80** Pyth NAV band and deviation warnings — Hermes moved price endpoints behind an API key. Client code and verified feed ids are committed; it lights up when a key exists.
+- **81** xStock quote support — needs a Token-2022 stock mint on devnet; none exists.
+- **82** PreStocks API — no API key.
+- **83** Tessera T-tokens — no API key.
+- **84** Clawpump stock-paired pools — separate product, no access.
+
+### Redundant against what already exists (5)
+- **24** trade confirmation animation — the curve fill (4) already animates on the same data.
+- **29** copy-address feedback — already implemented on the coin page; duplicating it elsewhere adds nothing.
+- **34** empty-state illustrations — the identicon already fills that role.
+- **44** rate-limit banner — the honest `—` for holders already communicates it without a banner shouting about infrastructure.
+- **55** 404/500 pages — the route error boundary (12) covers the same ground.
+
+### Not reached — ran out of run, not blocked (68)
+**7, 13, 15–20, 22, 23, 25, 26, 28, 30, 31, 33, 35–37, 39–43, 45–54, 56–62, 63–78, 85–92, 98, 99.**
+
+Nothing technical stands in the way of any of these. The highest-value
+survivors, in order, are:
+- **13** toast system for the tx lifecycle — every on-chain action currently reports inline or not at all
+- **7** impact-aware size suggester — binary-search `swapQuote` for the largest buy under a chosen impact
+- **16** price history chart — needs a swap-event indexer, which is the single biggest remaining piece of infrastructure
+- **63–67** partner/pool metadata on-chain, surplus withdrawal, leftover reclaim, locker creation — more `PartnerService` and `MigrationService` depth
+- **17–19** holder distribution, creator earnings dashboard, config-key reuse
