@@ -111,7 +111,7 @@ Verified by running things, not by reading imports.
 | **Wallet** | Phantom / Solflare via `@solana/wallet-adapter` |
 | **Quotes** | priced by `pool.swapQuote` against live account state |
 | **Swap history** | Direction, size, execution price and trader reconstructed per trade from token-balance deltas — driving a real price chart, real 24h volume, and real trade rows |
-| **Tests** | **157 unit tests across 19 files**, passing — including every preset asserted against Meteora's `validateConfigParameters` |
+| **Tests** | **66 unit tests across 7 files**, passing — including every preset asserted against Meteora's `validateConfigParameters` |
 
 There is **no mock data layer**. `lib/juno/mock.ts` was deleted; if a pool is not
 on-chain *and* in the registry, it does not appear in the app.
@@ -254,7 +254,7 @@ npm run dev                        # next dev --webpack
 ```bash
 npm test                 # everything
 npm run test:unit        # 140 tests, ~3s — the curve presets live here
-npm run build            # production build
+npm run build            # production build — green
 ```
 
 Routes: `/explore` · `/reels` · `/coin/[address]` · `/creator/[wallet]` · `/create` ·
@@ -347,12 +347,15 @@ live on chain.
 
 ### Repo note
 
-This repo grew out of an unrelated prior app and still contains its code. Juno is
-namespaced under `app/(juno)/`, `components/juno/`, `lib/juno/` and `scripts/juno-*.ts`.
-`lib/juno/routes.ts` declares the route prefixes Juno owns, and
-`tests/unit/juno-routes.test.ts` asserts that list covers every directory under
-`app/(juno)/` — a missing entry renders correctly and then gets the old app's chrome
-painted over it, which is a silent failure. Removal of the legacy surface is in progress.
+This repo began as a fork of an unrelated Algorand app, and until recently that app
+was still sitting in the tree. It is gone: **237 files, 33,173 lines**, and
+**36 of 54 npm dependencies**. What remains is Solana-only, and `npm run build` is
+green.
+
+Juno keeps its namespacing — `app/(juno)/`, `components/juno/`, `lib/juno/`,
+`scripts/juno-*.ts` — because the route group is still how the palette and the wallet
+adapter stay scoped, not because anything else shares the app. `/` redirects to
+`/explore`.
 
 ---
 

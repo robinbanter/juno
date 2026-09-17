@@ -187,10 +187,10 @@ itemised. A task counts as complete only if its status line starts with `DONE`.
 | **Phases 0–7 subtotal** | **56** | **59** | **94.9%** |
 | Block 3 — swap indexer | 4 | 4 | built and verified on two devnet pools |
 | Block 4 — social | 1 | 3 | comments done; likes and follows not started |
-| Block 5 — legacy purge | 0 | 1 | in progress, uncommitted |
-| **Engineering total** | **61** | **67** | **91.0%** |
+| Block 5 — legacy purge | 1 | 1 | done; build green |
+| **Engineering total** | **62** | **67** | **92.5%** |
 
-**Engineering: 61 / 67 = 91.0%.**
+**Engineering: 62 / 67 = 92.5%.**
 
 **Submission readiness is much lower, and is the real risk.** Phase 8 is **1 / 7 =
 14%**. The one done item is the README. Still open: deploy to a public URL (8.2), a
@@ -298,28 +298,39 @@ trades live on chain. Likes and follows, when built, belong in MongoDB beside co
 comments and likes."* Only comments exist. That line is aspirational and is exactly
 what caused likes to be reported as implemented. Fix the comment or build the likes.
 
-#### Block 5: Purge dead non-Solana code (Norr / Algorand / x402 / Privy / Clerk / Stripe) — IN PROGRESS
-Owner: juno-3, on branch `ao/juno-3/root`. **Uncommitted and blocked on a permission
-prompt** — as of 2026-09-18 that branch is still at `758e62f` with no commits of its
-own, so none of this work is in git yet. Its index holds **204 staged deletions**
-(verified directly against that worktree), plus 9 unstaged modifications.
+#### Block 5: Purge dead non-Solana code (Norr / Algorand / x402 / Privy / Clerk / Stripe) — DONE
+Taken over by juno-4 after juno-3 stalled in `needs_input` for 40 minutes without
+committing. Commits `efce235`, `24e646b`, `1e985f3`.
 
-**That pending work already contains the fix for the broken build**, which raises its
-priority above tidiness. It stages deletion of `components/ConnectWalletButton.tsx`
-and `components/WalletProviders.tsx` and modifies `app/page.tsx` — exactly the three
-files behind the `useWallet must be used within the WalletProvider` prerender failure
-recorded under Block 6. So the build is not broken *and* awaiting a separate fix: the
-fix exists, unstaged in a sibling worktree, waiting on one permission prompt. Nothing
-deploys until it lands.
-- [ ] `lib/algorand.ts`, `lib/x402.ts`, `lib/custodial*`, `lib/avm*`
-- [ ] `app/api/x402`, `app/api/account`, `app/add-funds`, `app/withdraw`
-- [ ] `components/WalletProviders.tsx` and `components/ConnectWalletButton.tsx` —
-      gutting the former in `758e62f` without removing the latter is what broke the
-      build; both are staged for deletion in juno-3's worktree
-- [ ] Verify unit tests and the production build still pass
-- [ ] Also in scope there: `package.json` still reads `"name": "norr.fun"`, and
-      `.env.local.example` is missing because `.gitignore`'s `.env*` rule hides it
-      (needs a negation rule)
+**237 files and 33,173 lines deleted; dependencies 54 -> 18.**
+
+- [x] `lib/algorand.ts`, `lib/x402.ts`, `lib/custodial*`, `lib/avm*`, `lib/constants.ts`
+      and 16 more dead libs
+- [x] `app/api/x402`, `app/api/account`, `app/add-funds`, `app/withdraw` — 16 page
+      routes and 24 API route trees in total
+- [x] `components/WalletProviders.tsx` and `components/ConnectWalletButton.tsx`, plus
+      39 other components, chosen by computing reachability from the real entry points
+      rather than by eye
+- [x] Root layout de-Norred: AgeGate gone, metadata/manifest/OG card say Juno, `/`
+      redirects to `/explore`, icons redrawn as the Juno mark
+- [x] `package.json` renamed to `juno`; 36 dependencies and 12 dead scripts removed
+- [x] `.env.local.example` now tracked, with the `!.env.local.example` negation the
+      `.env*` rule required
+- [x] **`npm run build` green, `npm test` green (7 files, 66 tests)**
+
+**This also fixed the red build.** The failure was `useWallet must be used within the
+WalletProvider`: `758e62f` gutted `WalletProviders` while `ConnectWalletButton` still
+called `useWallet`. Both are deleted, along with the page that rendered them.
+
+Two deletions beyond the original spec, forced by evidence rather than preference:
+`lib/db/{calls,feed-policy,messages,queries,social,user-profile}.ts` were dead *and*
+imported deleted modules, so keeping `lib/db` wholesale failed the typecheck; and
+`lib/blob.ts` was the only thing keeping `@vercel/blob` alive.
+
+Left deliberately, for the orchestrator to rule on rather than for me to decide:
+`components/ui/{Avatar,Button,discussion}.tsx` are unreachable, but the purge spec's
+KEEP list named `components/ui/**` explicitly. `lib/juno/media.ts` is also orphaned,
+but it is Juno code rather than Norr surface.
 
 #### Block 6: Submission readiness — README DONE, everything else open
 - [x] Root `README.md` rewritten as Juno: DBC presets as the centrepiece, both
@@ -327,13 +338,10 @@ deploys until it lands.
       disclosure (`38cb298`, `834e6ef`).
 - [x] `JUNO.md` reconciled against it — pool count 4 → 7, the sell added, social rows
       corrected, stale `.env.local.example` instruction fixed.
-- [ ] `npm run build` verified green end-to-end. **Currently failing**, pre-existing:
-      prerendering `/` throws `useWallet must be used within the WalletProvider`.
-      Confirmed by building at HEAD with all other work stashed — same failure. Cause
-      is `758e62f` removing the Algorand/Privy providers while
-      `components/ConnectWalletButton.tsx` still calls `useWallet`. Blocks 8.2 deploy.
-      **The fix is already staged in juno-3's worktree** (see Block 5) — it needs
-      committing, not writing.
+- [x] `npm run build` verified green end-to-end, and `npm test` with it (7 files,
+      66 tests). The `useWallet must be used within the WalletProvider` prerender
+      failure is fixed — `WalletProviders` and `ConnectWalletButton` are both deleted
+      in Block 5, along with the page that rendered them. **8.2 deploy is unblocked.**
 - [ ] 8.2 deploy, 8.4 pitch video, 8.5 technical video, 8.6 mainnet pool, 8.7 submit.
 
 #### Legitimate blockers (do NOT fake or bypass)
@@ -381,15 +389,14 @@ Phases 0–7 are done bar the blocked and human items, so what follows is what i
 actually left, ordered by judge impact per hour.
 
 1. **8.2 deploy to a public URL** — the submission requires a live demo. Nothing else
-   on this list matters if a judge cannot open the app.
+   on this list matters if a judge cannot open the app. **Now unblocked:** the build
+   is green as of `1e985f3`.
 2. **8.3 a dedicated RPC** — promoted from nice-to-have. The swap indexer is built,
    but the public devnet endpoint's per-method quota means it degrades to em-dashes
    as often as not. One endpoint key turns a working feature into a visibly working
    one. (Block 3 itself: **done**, `72683ae`.)
-3. **Block 5, the legacy purge** (juno-3) — the repo should read as Solana-only, and
-   `npm run build` currently fails prerendering `/` because `ConnectWalletButton`
-   still calls `useWallet` after `758e62f` gutted its provider. That is a broken
-   build, which outranks tidiness.
+3. ~~Block 5, the legacy purge~~ — **done** (`efce235`, `24e646b`, `1e985f3`). The
+   repo is Solana-only and the build is green.
 4. **8.4 / 8.5 videos**, **8.7 submit** — human, and hard-deadlined 25 Sep 16:00 ET.
 5. **8.6 mainnet pool** — Meteora's stated bar is "working mainnet code beats slides".
    Blocked on funds and authorization; the highest-value unblock available.
