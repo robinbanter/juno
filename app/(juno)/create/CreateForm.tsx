@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { Clapperboard, ExternalLink, ImageIcon, LoaderCircle, Upload, X } from "lucide-react";
 
@@ -10,7 +10,9 @@ import { QUOTE_TOKENS } from "@/lib/juno/dbc";
 import { usd } from "@/lib/juno/format";
 import type { CoinFormat, CurvePresetId } from "@/lib/juno/types";
 import { cluster, explorer, meteoraPoolUrl } from "@/lib/juno/cluster";
+import { presetShape } from "@/lib/juno/curve-shape";
 import { Button } from "@/components/juno/ui/Button";
+import { CurveChart } from "@/components/juno/coin/CurveChart";
 import { useLaunch } from "@/components/juno/wallet/useLaunch";
 
 const FORMATS: Array<{ id: CoinFormat; label: string; hint: string; Icon: typeof ImageIcon }> = [
@@ -79,6 +81,19 @@ export function CreateForm() {
   }
 
   const active = CURVE_PRESETS[preset];
+
+  // Computed locally from `buildCurveWithLiquidityWeights` — pure maths, no
+  // pool required — so the curve is visible before it is paid for.
+  const shape = useMemo(
+    () =>
+      presetShape({
+        preset,
+        initialMarketCap: initialMc,
+        migrationMarketCap: migrationMc,
+        quoteDecimals: quote.decimals,
+      }),
+    [preset, initialMc, migrationMc, quote.decimals],
+  );
   const valid =
     name.trim().length > 0 && symbol.trim().length > 0 && migrationMc > initialMc;
   const busy = state.status === "building" || state.status === "signing";
@@ -252,9 +267,29 @@ export function CreateForm() {
               <span className="mt-0.5 block text-[12px] leading-snug text-j-muted">
                 {option.tagline}
               </span>
+              <PresetSparkline
+                preset={option.id}
+                initialMc={initialMc}
+                migrationMc={migrationMc}
+                quoteDecimals={quote.decimals}
+              />
             </button>
           ))}
         </div>
+        {/* The curve this preset will actually create, at the valuations set
+            below. Wide flat stretches are heavily weighted liquidity. */}
+        {shape && shape.points.length > 0 && (
+          <div className="mt-2 rounded-j border border-j-line p-3">
+            <div className="mb-1 flex items-baseline justify-between">
+              <span className="text-[12px] font-semibold">{active.label}</span>
+              <span className="text-[11px] text-j-faint">
+                {shape.points.length} segments · {usd(initialMc)} → {usd(migrationMc)}
+              </span>
+            </div>
+            <CurveChart shape={shape} progress={0} height={110} />
+          </div>
+        )}
+
         <p className="mt-2 rounded-j bg-j-surface px-3 py-2.5 text-[12px] leading-relaxed text-j-muted">
           {active.rationale}
         </p>
@@ -406,6 +441,35 @@ function ProofRow({ label, value, href }: { label: string; value: string; href: 
         </a>
       </dd>
     </div>
+  );
+}
+
+/**
+ * A miniature of each preset's curve, on its own selector button.
+ *
+ * Reading four taglines tells you less than seeing four shapes side by side —
+ * and the shapes are the actual difference between the presets.
+ */
+function PresetSparkline({
+  preset,
+  initialMc,
+  migrationMc,
+  quoteDecimals,
+}: {
+  preset: CurvePresetId;
+  initialMc: number;
+  migrationMc: number;
+  quoteDecimals: number;
+}) {
+  const shape = useMemo(
+    () => presetShape({ preset, initialMarketCap: initialMc, migrationMarketCap: migrationMc, quoteDecimals }),
+    [preset, initialMc, migrationMc, quoteDecimals],
+  );
+  if (!shape || shape.points.length === 0) return null;
+  return (
+    <span className="mt-2 block opacity-70">
+      <CurveChart shape={shape} progress={0} height={38} />
+    </span>
   );
 }
 

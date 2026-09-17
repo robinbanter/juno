@@ -115,6 +115,11 @@ export type Coin = {
   commentCount?: number;
   /** Present once the pool has graduated into DAMM v2. */
   graduatedPool?: string;
+  /**
+   * The pool's actual sixteen-segment curve, for plotting. Only loaded on the
+   * coin page — a grid of tiles has no room to show it.
+   */
+  shape?: CurveShape;
 };
 
 /**
@@ -133,6 +138,8 @@ export type CurveState = {
   thresholdUsd: number;
   graduated: boolean;
 };
+
+import type { CurveShape } from "./curve-shape";
 
 export type CurvePresetId =
   | "content"

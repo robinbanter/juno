@@ -1,9 +1,11 @@
 import "server-only";
 
 import { PublicKey } from "@solana/web3.js";
+import type BN from "bn.js";
 
 import { getConnection, getDbcClient, bnToUi, fetchPoolSnapshot } from "./dbc";
 import { quoteTokenUsdPrice } from "./pyth";
+import { curveShape } from "./curve-shape";
 import { identicon } from "./identicon";
 import type { JunoPoolRow } from "./registry";
 import type { Coin, CoinFormat, CurvePresetId, Creator, QuoteToken } from "./types";
@@ -16,6 +18,11 @@ import { shortAddress } from "./format";
  * they called it, which preset), the chain supplies every number. Nothing
  * numeric is stored or cached.
  */
+
+/** The live sqrt price, reached through the pool account's inner state. */
+function poolSqrtPrice(snapshot: { pool: unknown }): BN {
+  return (snapshot.pool as { poolState: { sqrtPrice: BN } }).poolState.sqrtPrice;
+}
 
 /** Total supply every Juno preset mints. Mirrors `DEFAULT_TOTAL_SUPPLY`. */
 const TOTAL_SUPPLY = 1_000_000_000;
@@ -123,6 +130,14 @@ export async function hydratePool(
     curve: snapshot.curve,
     curvePreset: row.curvePreset as CurvePresetId,
     graduatedPool: snapshot.curve.graduated ? row.poolAddress : undefined,
+    shape: options.detailed
+      ? curveShape({
+          config: snapshot.config,
+          baseDecimals: snapshot.baseDecimals,
+          quoteDecimals: snapshot.quoteDecimals,
+          currentSqrtPrice: poolSqrtPrice(snapshot),
+        })
+      : undefined,
   };
 }
 

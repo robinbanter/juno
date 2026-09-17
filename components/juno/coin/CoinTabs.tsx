@@ -9,6 +9,7 @@ import type { Activity, Coin, Comment, Holder } from "@/lib/juno/types";
 import { Avatar } from "../ui/Avatar";
 import { Tabs } from "../ui/Tabs";
 import { ActivityList } from "./ActivityList";
+import { CommentComposer } from "./CommentComposer";
 
 type TabId = "activity" | "holders" | "comments" | "details";
 
@@ -24,6 +25,10 @@ export function CoinTabs({
   comments: Comment[];
 }) {
   const [tab, setTab] = useState<TabId>("activity");
+  // Seeded from the server render, then extended optimistically as the
+  // visitor posts — so their own comment never waits on a refetch.
+  const [posted, setPosted] = useState<Comment[]>([]);
+  const allComments = [...posted, ...comments];
 
   return (
     <section className="mt-8">
@@ -33,7 +38,7 @@ export function CoinTabs({
         items={[
           { id: "activity", label: "Activity" },
           { id: "holders", label: "Holders" },
-          { id: "comments", label: "Comments", count: comments.length },
+          { id: "comments", label: "Comments", count: allComments.length },
           { id: "details", label: "Details" },
         ]}
       />
@@ -41,7 +46,15 @@ export function CoinTabs({
       <div className="pt-2">
         {tab === "activity" && <ActivityList items={activity} />}
         {tab === "holders" && <HoldersList items={holders} />}
-        {tab === "comments" && <CommentsList items={comments} />}
+        {tab === "comments" && (
+          <>
+            <CommentComposer
+              coinMint={coin.address}
+              onPosted={(c) => setPosted((prev) => [c, ...prev])}
+            />
+            <CommentsList items={allComments} />
+          </>
+        )}
         {tab === "details" && <DetailsPanel coin={coin} />}
       </div>
     </section>

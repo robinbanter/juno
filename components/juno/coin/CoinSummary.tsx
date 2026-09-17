@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { Check, Coins, Copy, DollarSign, Flame, MoreHorizontal, Share } from "lucide-react";
 
+import { CURVE_PRESETS } from "@/lib/juno/curves";
 import { compact, usd } from "@/lib/juno/format";
 import type { Coin } from "@/lib/juno/types";
 import { Avatar } from "../ui/Avatar";
@@ -11,6 +12,7 @@ import { IconButton } from "../ui/Button";
 import { Delta } from "../ui/Delta";
 import { Pill } from "../ui/Pill";
 import { StatCards } from "../ui/StatCards";
+import { CurveChart } from "./CurveChart";
 import { CurveProgress } from "./CurveProgress";
 
 /** Everything above the trade panel: who made it, what it is, how it's doing. */
@@ -80,6 +82,25 @@ export function CoinSummary({ coin }: { coin: Coin }) {
         </p>
       ) : (
         <CurveProgress curve={coin.curve} />
+      )}
+
+      {/* The sixteen segments the issuer actually chose. Wide, flat stretches
+          are heavily weighted liquidity; narrow, steep ones are thin. */}
+      {coin.shape && coin.shape.points.length > 0 && (
+        <div className="rounded-j border border-j-line p-3">
+          <div className="mb-1 flex items-baseline justify-between">
+            <span className="text-[12px] font-semibold">
+              {CURVE_PRESETS[coin.curvePreset]?.label ?? "Curve"}
+            </span>
+            <span className="text-[11px] text-j-faint">
+              {coin.shape.points.length} segments
+            </span>
+          </div>
+          <CurveChart shape={coin.shape} progress={coin.curve.progress} height={120} />
+          <p className="mt-1 text-[11px] leading-snug text-j-faint">
+            {CURVE_PRESETS[coin.curvePreset]?.tagline}
+          </p>
+        </div>
       )}
     </div>
   );

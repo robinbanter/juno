@@ -1,12 +1,16 @@
 import { notFound } from "next/navigation";
 import { ExternalLink } from "lucide-react";
 
+import { shortAddress } from "@/lib/juno/format";
+import { identicon } from "@/lib/juno/identicon";
+
 import { hydratePool } from "@/lib/juno/chain";
-import { explorer, meteoraPoolUrl } from "@/lib/juno/cluster";
+import { cluster, explorer, meteoraPoolUrl } from "@/lib/juno/cluster";
 import { GraduatedNotice } from "@/components/juno/coin/GraduatedNotice";
 import { QUOTE_TOKENS } from "@/lib/juno/dbc";
 import { listPoolActivity, listPoolHolders } from "@/lib/juno/activity";
 import { getPool } from "@/lib/juno/registry";
+import { listComments } from "@/lib/juno/social";
 import { CoinMedia } from "@/components/juno/coin/CoinMedia";
 import { CoinSummary } from "@/components/juno/coin/CoinSummary";
 import { CoinTabs } from "@/components/juno/coin/CoinTabs";
@@ -38,9 +42,10 @@ export default async function CoinPage({
   const coin = await hydratePool(row, { detailed: true });
   if (!coin) notFound();
 
-  const [activity, holders] = await Promise.all([
+  const [activity, holders, comments] = await Promise.all([
     listPoolActivity(row.poolAddress),
     listPoolHolders(row.baseMint),
+    listComments(row.baseMint, cluster()).catch(() => []),
   ]);
 
   return (
@@ -69,7 +74,18 @@ export default async function CoinPage({
             <Proof href={meteoraPoolUrl(coin.pool)}>Meteora</Proof>
           </div>
 
-          <CoinTabs coin={coin} activity={activity} holders={holders} comments={[]} />
+          <CoinTabs
+            coin={coin}
+            activity={activity}
+            holders={holders}
+            comments={comments.map((c) => ({
+              id: c.id,
+              actor: { handle: shortAddress(c.wallet, 4, 4), avatarUrl: identicon(c.wallet) },
+              body: c.body,
+              timestamp: c.createdAt,
+              side: c.side,
+            }))}
+          />
         </aside>
       </div>
     </div>
