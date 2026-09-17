@@ -15,12 +15,19 @@ import { Delta } from "../ui/Delta";
 export function ProfileHeader({
   creator,
   following = false,
+  canFollow = false,
+  isSelf = false,
+  followPending = false,
   onBuy,
   onFollow,
   onMessage,
 }: {
   creator: Creator;
   following?: boolean;
+  /** False with no wallet connected, or when this is your own profile. */
+  canFollow?: boolean;
+  isSelf?: boolean;
+  followPending?: boolean;
   onBuy?: () => void;
   onFollow?: () => void;
   onMessage?: () => void;
@@ -91,8 +98,19 @@ export function ProfileHeader({
           size="lg"
           className="flex-1"
           onClick={onFollow}
+          disabled={!canFollow || followPending}
+          // The counts beside this button are real for everyone. Only the
+          // action is gated, and the label says which gate you are behind
+          // rather than sitting there inert.
+          title={
+            isSelf
+              ? "This is your own profile"
+              : canFollow
+                ? undefined
+                : "Connect a wallet to follow"
+          }
         >
-          {following ? "Following" : "Follow"}
+          {isSelf ? "Your profile" : following ? "Following" : "Follow"}
         </Button>
         <IconButton label="Message" className="size-[52px]" onClick={onMessage}>
           <Mail size={19} strokeWidth={1.75} />

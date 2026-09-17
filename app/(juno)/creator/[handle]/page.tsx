@@ -4,6 +4,7 @@ import { hydratePools } from "@/lib/juno/chain";
 import { identicon } from "@/lib/juno/identicon";
 import { shortAddress } from "@/lib/juno/format";
 import { listPoolsByCreator } from "@/lib/juno/registry";
+import { followState } from "@/lib/juno/social";
 import type { Creator } from "@/lib/juno/types";
 import { ProfileView } from "./ProfileView";
 
@@ -33,6 +34,14 @@ export default async function CreatorPage({
   const rows = await listPoolsByCreator(handle);
   const coins = await hydratePools(rows);
 
+  // Real counts in the initial HTML. A Mongo outage degrades to zeros rather
+  // than failing the page — the profile's substance is the pools, not this.
+  const follows = await followState(handle).catch(() => ({
+    followers: 0,
+    following: 0,
+    following_them: false,
+  }));
+
   const creator: Creator = {
     handle,
     displayName: shortAddress(handle, 4, 4),
@@ -40,8 +49,8 @@ export default async function CreatorPage({
     ticker: shortAddress(handle, 4, 4),
     wallet: handle,
     bio: undefined,
-    followers: 0,
-    following: 0,
+    followers: follows.followers,
+    following: follows.following,
     posts: coins.length,
     // Sum of what this creator has issued — a real figure, not a creator coin.
     marketCap: coins.reduce((sum, coin) => sum + coin.marketCap, 0),

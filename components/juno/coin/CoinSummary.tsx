@@ -14,6 +14,7 @@ import { Pill } from "../ui/Pill";
 import { StatCards } from "../ui/StatCards";
 import { Volume24h } from "../Volume24h";
 import { CurveChart } from "./CurveChart";
+import { LikeButton } from "./LikeButton";
 import { CurveProgress } from "./CurveProgress";
 
 /** Everything above the trade panel: who made it, what it is, how it's doing. */
@@ -35,6 +36,7 @@ export function CoinSummary({ coin }: { coin: Coin }) {
               {compact(coin.holders, 1)} holders
             </span>
           )}
+          <LikeButton coinMint={coin.address} initialCount={coin.likes ?? 0} />
           <IconButton label="Share" className="size-9 border-0">
             <Share size={17} strokeWidth={1.75} />
           </IconButton>

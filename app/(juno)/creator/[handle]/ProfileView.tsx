@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 
 import type { Coin, Creator } from "@/lib/juno/types";
+import { useFollow } from "@/components/juno/useFollow";
 import { MediaGrid } from "@/components/juno/profile/MediaGrid";
 import { ProfileHeader } from "@/components/juno/profile/ProfileHeader";
 import { ProfileTabs, type ProfileTabId } from "@/components/juno/profile/ProfileTabs";
@@ -14,7 +15,11 @@ import { ProfileTabs, type ProfileTabId } from "@/components/juno/profile/Profil
  */
 export function ProfileView({ creator, coins }: { creator: Creator; coins: Coin[] }) {
   const [tab, setTab] = useState<ProfileTabId>("posts");
-  const [following, setFollowing] = useState(false);
+  const follow = useFollow(creator.wallet, {
+    followers: creator.followers,
+    following: creator.following,
+    following_them: false,
+  });
 
   const { posts, reels } = useMemo(
     () => ({
@@ -27,9 +32,14 @@ export function ProfileView({ creator, coins }: { creator: Creator; coins: Coin[
   return (
     <>
       <ProfileHeader
-        creator={creator}
-        following={following}
-        onFollow={() => setFollowing((v) => !v)}
+        // Counts come from the hook, not the server snapshot, so the header
+        // updates the moment a follow lands instead of waiting for a reload.
+        creator={{ ...creator, followers: follow.followers, following: follow.following }}
+        following={follow.following_them}
+        canFollow={follow.canFollow}
+        isSelf={follow.isSelf}
+        followPending={follow.pending}
+        onFollow={follow.toggle}
       />
       <ProfileTabs value={tab} onChange={setTab} />
 

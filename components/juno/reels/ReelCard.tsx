@@ -7,6 +7,7 @@ import { Heart, MessageCircle, Play, Share2, Volume2, VolumeX } from "lucide-rea
 import { cn } from "@/lib/utils";
 import { compact, usd } from "@/lib/juno/format";
 import type { Coin } from "@/lib/juno/types";
+import { useLikes } from "../useLikes";
 import { Avatar } from "../ui/Avatar";
 import { Button } from "../ui/Button";
 import { Delta } from "../ui/Delta";
@@ -41,7 +42,6 @@ export function ReelCard({
   const videoRef = useRef<HTMLVideoElement>(null);
   const [paused, setPaused] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [liked, setLiked] = useState(false);
 
   // Drive play/pause from `active`. `play()` rejects if the browser blocks
   // autoplay; swallow that rather than throwing an unhandled rejection.
@@ -111,13 +111,7 @@ export function ReelCard({
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-black/85 via-black/45 to-transparent" />
       <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-black/50 to-transparent" />
 
-      <ReelSideRail
-        coin={coin}
-        liked={liked}
-        muted={muted}
-        onLike={() => setLiked((v) => !v)}
-        onToggleMuted={onToggleMuted}
-      />
+      <ReelSideRail coin={coin} muted={muted} onToggleMuted={onToggleMuted} />
 
       <ReelFooter coin={coin} onBuy={() => onBuy(coin)} />
 
@@ -133,23 +127,25 @@ export function ReelCard({
 
 function ReelSideRail({
   coin,
-  liked,
   muted,
-  onLike,
   onToggleMuted,
 }: {
   coin: Coin;
-  liked: boolean;
   muted: boolean;
-  onLike: () => void;
   onToggleMuted: () => void;
 }) {
+  const { count, liked, pending, toggle, canLike } = useLikes(coin.address, coin.likes ?? 0);
+
   return (
     <div className="absolute right-3 bottom-32 z-10 flex flex-col items-center gap-5 sm:right-5">
       <ReelAction
-        label={liked ? "Unlike" : "Like"}
-        count={(coin.likes ?? 0) + (liked ? 1 : 0)}
-        onClick={onLike}
+        // The count is real whether or not a wallet is connected. Only the
+        // action is gated — a visitor should still see how many others liked
+        // it, and should not get an optimistic like that vanishes on reload.
+        label={!canLike ? "Connect a wallet to like" : liked ? "Unlike" : "Like"}
+        count={count}
+        onClick={toggle}
+        disabled={!canLike || pending}
       >
         <Heart
           size={26}
@@ -181,20 +177,23 @@ function ReelAction({
   label,
   count,
   onClick,
+  disabled,
   children,
 }: {
   label: string;
   count?: number;
   onClick?: () => void;
+  disabled?: boolean;
   children: React.ReactNode;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
       aria-label={label}
       title={label}
-      className="flex flex-col items-center gap-1 rounded-full transition-transform active:scale-90 focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none"
+      className="flex flex-col items-center gap-1 rounded-full transition-transform active:scale-90 focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-60"
     >
       {children}
       {count !== undefined && (

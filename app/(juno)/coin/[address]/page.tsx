@@ -11,7 +11,7 @@ import { QUOTE_TOKENS } from "@/lib/juno/dbc";
 import { listPoolActivity, listPoolHolders } from "@/lib/juno/activity";
 import { quoteTokenUsdPrice } from "@/lib/juno/pyth";
 import { getPool } from "@/lib/juno/registry";
-import { listComments } from "@/lib/juno/social";
+import { likeState, listComments } from "@/lib/juno/social";
 import { CoinMedia } from "@/components/juno/coin/CoinMedia";
 import { CoinSummary } from "@/components/juno/coin/CoinSummary";
 import { CoinTabs } from "@/components/juno/coin/CoinTabs";
@@ -43,7 +43,7 @@ export default async function CoinPage({
   const coin = await hydratePool(row, { detailed: true });
   if (!coin) notFound();
 
-  const [activity, holders, comments] = await Promise.all([
+  const [activity, holders, comments, likes] = await Promise.all([
     listPoolActivity(row.poolAddress, row.baseMint, {
       quoteSymbol: coin.quote.symbol,
       // Null without a Pyth key, which is the normal case in this repo. Trade
@@ -53,6 +53,10 @@ export default async function CoinPage({
     }),
     listPoolHolders(row.baseMint),
     listComments(row.baseMint, cluster()).catch(() => []),
+    // Seeded here so the heart paints its real number instead of a 0 that
+    // jumps once the client fetch lands. No viewer wallet server-side, so
+    // `liked` is resolved on the client.
+    likeState(row.baseMint, cluster()).catch(() => ({ count: 0, liked: false })),
   ]);
 
   return (
@@ -63,7 +67,7 @@ export default async function CoinPage({
         </div>
 
         <aside className="w-full shrink-0 lg:max-w-[420px]">
-          <CoinSummary coin={coin} />
+          <CoinSummary coin={{ ...coin, likes: likes.count }} />
           {/* A migrated curve cannot be swapped — the program rejects it.
               Trading continues in the DAMM v2 pool it graduated into. */}
           {coin.curve.graduated ? (
