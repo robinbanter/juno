@@ -3,6 +3,7 @@ import { ExternalLink } from "lucide-react";
 
 import { hydratePool } from "@/lib/juno/chain";
 import { explorer, meteoraPoolUrl } from "@/lib/juno/cluster";
+import { GraduatedNotice } from "@/components/juno/coin/GraduatedNotice";
 import { QUOTE_TOKENS } from "@/lib/juno/dbc";
 import { listPoolActivity, listPoolHolders } from "@/lib/juno/activity";
 import { getPool } from "@/lib/juno/registry";
@@ -34,7 +35,7 @@ export default async function CoinPage({
   const row = await getPool(address);
   if (!row) notFound();
 
-  const coin = await hydratePool(row);
+  const coin = await hydratePool(row, { detailed: true });
   if (!coin) notFound();
 
   const [activity, holders] = await Promise.all([
@@ -51,7 +52,13 @@ export default async function CoinPage({
 
         <aside className="w-full shrink-0 lg:max-w-[420px]">
           <CoinSummary coin={coin} />
-          <TradePanelClient coin={coin} quoteTokens={QUOTE_TOKENS} className="mt-4" />
+          {/* A migrated curve cannot be swapped — the program rejects it.
+              Trading continues in the DAMM v2 pool it graduated into. */}
+          {coin.curve.graduated ? (
+            <GraduatedNotice coin={coin} className="mt-4" />
+          ) : (
+            <TradePanelClient coin={coin} quoteTokens={QUOTE_TOKENS} className="mt-4" />
+          )}
           <CreatorPanel coin={coin} />
 
           <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1.5 text-[12px]">

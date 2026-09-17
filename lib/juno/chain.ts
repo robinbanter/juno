@@ -46,7 +46,15 @@ function quoteFromRow(row: JunoPoolRow, decimals: number): QuoteToken {
  * Hydrate one pool. Returns null when the pool is not on-chain — which happens
  * if a row was recorded against a different cluster.
  */
-export async function hydratePool(row: JunoPoolRow): Promise<Coin | null> {
+export async function hydratePool(
+  row: JunoPoolRow,
+  /**
+   * Holder count and fee metrics cost two extra RPC calls per pool. A grid of
+   * tiles shows neither, so list views skip them rather than burning the rate
+   * limit on numbers nobody sees.
+   */
+  options: { detailed?: boolean } = {},
+): Promise<Coin | null> {
   // Null means no USD feed. The pool is then reported in its own quote token
   // rather than converted at a rate nobody published.
   const quoteUsd = await quoteTokenUsdPrice(row.quoteMint).catch(() => null);
@@ -61,12 +69,14 @@ export async function hydratePool(row: JunoPoolRow): Promise<Coin | null> {
   // Holders and creator fees are both real reads. `getTokenLargestAccounts`
   // returns the top 20, which is a floor on the holder count rather than an
   // exact figure — enough to render, and honest about small markets.
-  const [largest, fees] = await Promise.all([
-    getConnection()
-      .getTokenLargestAccounts(new PublicKey(row.baseMint))
-      .catch(() => null),
-    client.state.getPoolFeeMetrics(row.poolAddress).catch(() => null),
-  ]);
+  const [largest, fees] = options.detailed
+    ? await Promise.all([
+        getConnection()
+          .getTokenLargestAccounts(new PublicKey(row.baseMint))
+          .catch(() => null),
+        client.state.getPoolFeeMetrics(row.poolAddress).catch(() => null),
+      ])
+    : [null, null];
 
   // null, not 0: `largest` is null when the RPC refused, and "0 holders" is
   // a claim we would not have earned.
@@ -116,8 +126,24 @@ export async function hydratePool(row: JunoPoolRow): Promise<Coin | null> {
   };
 }
 
-/** Hydrate many, dropping any whose pool is missing on this cluster. */
-export async function hydratePools(rows: JunoPoolRow[]): Promise<Coin[]> {
-  const coins = await Promise.all(rows.map((row) => hydratePool(row).catch(() => null)));
-  return coins.filter((coin): coin is Coin => coin !== null);
+/**
+ * Hydrate many for a list view, dropping any whose pool is missing here.
+ *
+ * Bounded concurrency rather than `Promise.all`: firing every pool read
+ * simultaneously is the burst the public devnet RPC answers with 429s, and a
+ * grid of four pools does not need to be four times as rude as one.
+ */
+export async function hydratePools(rows: JunoPoolRow[], width = 2): Promise<Coin[]> {
+  const out: Array<Coin | null> = new Array(rows.length).fill(null);
+  let cursor = 0;
+
+  async function worker() {
+    while (cursor < rows.length) {
+      const index = cursor++;
+      out[index] = await hydratePool(rows[index]).catch(() => null);
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(width, rows.length) }, worker));
+  return out.filter((coin): coin is Coin => coin !== null);
 }

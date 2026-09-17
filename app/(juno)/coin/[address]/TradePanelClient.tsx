@@ -24,7 +24,7 @@ export function TradePanelClient({
   quoteTokens: QuoteToken[];
   className?: string;
 }) {
-  const { snapshot, balanceUsd, holding, state, swap, reset, connected } = useTrade(coin);
+  const { ensureSnapshot, balanceUsd, holding, state, swap, reset, connected } = useTrade(coin);
 
   const onQuote = useCallback(
     async ({
@@ -34,11 +34,13 @@ export function TradePanelClient({
       side: TradeSide;
       amountIn: number;
     }): Promise<TradeQuoteResult | null> => {
-      if (!snapshot || amountIn <= 0) return null;
+      if (amountIn <= 0) return null;
+      const snapshot = await ensureSnapshot();
+      if (!snapshot) return null;
       // Real curve math against the pool as it stands right now.
       return quoteTrade({ snapshot, side, amountIn, slippageBps: 100 });
     },
-    [snapshot],
+    [ensureSnapshot],
   );
 
   const busy = state.status === "signing" || state.status === "confirming";

@@ -100,7 +100,16 @@ export const QUOTE_TOKENS: QuoteToken[] = [USDC, WSOL];
 let cachedConnection: Connection | null = null;
 
 export function getConnection(): Connection {
-  cachedConnection ??= new Connection(rpcEndpoint(), COMMITMENT);
+  cachedConnection ??= new Connection(rpcEndpoint(), {
+    commitment: COMMITMENT,
+    // The public devnet endpoint refuses some calls outright —
+    // `getTokenLargestAccounts` among them. web3.js answers a 429 by retrying
+    // four times with backoff and logging each attempt, which turns one
+    // already-handled failure into a wall of console noise and eight seconds
+    // of latency. Every caller that can 429 already degrades honestly, so fail
+    // fast and let them.
+    disableRetryOnRateLimit: true,
+  });
   return cachedConnection;
 }
 
@@ -132,9 +141,67 @@ export type PoolSnapshot = {
  * Curve progress comes from the program's own quote-side ratio rather than a
  * price comparison, because that ratio is what actually gates migration.
  */
+/**
+ * Pool configs and mint decimals never change after creation, so re-reading
+ * them on every render is pure load on the RPC — and the public devnet
+ * endpoint answers that load with 429s. Cached for the process lifetime.
+ */
+const configCache = new Map<string, PoolConfig>();
+const decimalsCache = new Map<string, number>();
+
+async function cachedConfig(configAddress: PublicKey): Promise<PoolConfig | null> {
+  const key = configAddress.toBase58();
+  const hit = configCache.get(key);
+  if (hit) return hit;
+  const config = await getDbcClient().state.getPoolConfig(configAddress);
+  if (config) configCache.set(key, config);
+  return config;
+}
+
+async function cachedDecimals(mint: PublicKey): Promise<number> {
+  const key = mint.toBase58();
+  const hit = decimalsCache.get(key);
+  if (hit !== undefined) return hit;
+  const decimals = await getTokenDecimals(getConnection(), mint);
+  decimalsCache.set(key, decimals);
+  return decimals;
+}
+
+/**
+ * Snapshots are cached for a few seconds.
+ *
+ * A curve does not move between the moment a grid renders and the moment the
+ * page beneath it does, and the public devnet RPC rate-limits bursts hard
+ * enough to surface 429s in the console. Short enough that a trade's effect is
+ * visible on the next interaction, long enough that one navigation is one read.
+ */
+const SNAPSHOT_TTL_MS = 5_000;
+const snapshotCache = new Map<string, { at: number; value: PoolSnapshot | null }>();
+
 export async function fetchPoolSnapshot(
   poolAddress: string | PublicKey,
   quoteUsdPrice = 1,
+): Promise<PoolSnapshot | null> {
+  const cacheKey = `${poolAddress.toString()}:${quoteUsdPrice}`;
+  const cached = snapshotCache.get(cacheKey);
+  if (cached && Date.now() - cached.at < SNAPSHOT_TTL_MS) return cached.value;
+
+  const value = await readPoolSnapshot(poolAddress, quoteUsdPrice);
+  snapshotCache.set(cacheKey, { at: Date.now(), value });
+  return value;
+}
+
+/** Drop a pool's cached snapshot — call after a trade so the next read is live. */
+export function invalidatePoolSnapshot(poolAddress: string | PublicKey): void {
+  const prefix = `${poolAddress.toString()}:`;
+  for (const key of snapshotCache.keys()) {
+    if (key.startsWith(prefix)) snapshotCache.delete(key);
+  }
+}
+
+async function readPoolSnapshot(
+  poolAddress: string | PublicKey,
+  quoteUsdPrice: number,
 ): Promise<PoolSnapshot | null> {
   const client = getDbcClient();
   const address = new PublicKey(poolAddress);
@@ -143,18 +210,24 @@ export async function fetchPoolSnapshot(
   if (!pool) return null;
 
   const state = poolState(pool);
-  const config = await client.state.getPoolConfig(state.config);
+  const config = await cachedConfig(state.config);
   if (!config) return null;
 
   // The config only carries the *base* decimal; the quote side has to come
   // from the quote mint itself.
   const baseDecimals = config.tokenDecimal as number;
-  const quoteDecimals = await getTokenDecimals(getConnection(), config.quoteMint);
+  const quoteDecimals = await cachedDecimals(config.quoteMint);
 
-  const [progress, threshold] = await Promise.all([
-    client.state.getPoolQuoteTokenCurveProgress(address),
-    client.state.getPoolMigrationQuoteThreshold(address),
-  ]);
+  // `getPoolQuoteTokenCurveProgress` and `getPoolMigrationQuoteThreshold` each
+  // re-fetch the pool and config we already hold. The ratio is quote reserve
+  // over the config's threshold, so compute it from what is in hand.
+  const thresholdBn = config.migrationQuoteThreshold as BN;
+  const reserveBn = state.quoteReserve;
+  const threshold = thresholdBn;
+  const progress =
+    thresholdBn.isZero() === false
+      ? Math.min(1, Number(reserveBn.toString()) / Number(thresholdBn.toString()))
+      : 0;
 
   const price = getPriceFromSqrtPrice(
     state.sqrtPrice,

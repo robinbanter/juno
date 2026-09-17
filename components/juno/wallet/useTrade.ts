@@ -9,6 +9,7 @@ import {
   buildSwapTransaction,
   fetchPoolSnapshot,
   getConnection,
+  invalidatePoolSnapshot,
   sendTransaction,
   type PoolSnapshot,
 } from "@/lib/juno/dbc";
@@ -39,14 +40,28 @@ export function useTrade(coin: Coin) {
   const [holding, setHolding] = useState(0);
   const [state, setState] = useState<TradeState>({ status: "idle" });
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(
+    async (force = false) => {
+      // After a trade the cached snapshot is exactly the thing that is wrong.
+      if (force) invalidatePoolSnapshot(coin.pool);
+      const next = await fetchPoolSnapshot(coin.pool).catch(() => null);
+      if (next) setSnapshot(next);
+    },
+    [coin.pool],
+  );
+
+  /**
+   * Deliberately not fetched on mount. Most visitors to a coin page never type
+   * an amount, and reading the pool for all of them puts a round trip on every
+   * page load — enough to get 429d by the public RPC. `ensureSnapshot` pulls
+   * it the first time a quote is actually needed.
+   */
+  const ensureSnapshot = useCallback(async () => {
+    if (snapshot) return snapshot;
     const next = await fetchPoolSnapshot(coin.pool).catch(() => null);
     if (next) setSnapshot(next);
-  }, [coin.pool]);
-
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
+    return next;
+  }, [snapshot, coin.pool]);
 
   // Balances drive the "insufficient" state, so they must be real reads.
   const refreshBalances = useCallback(async () => {
@@ -91,7 +106,7 @@ export function useTrade(coin: Coin) {
         setVisible(true);
         return;
       }
-      const current = snapshot ?? (await fetchPoolSnapshot(coin.pool));
+      const current = await ensureSnapshot();
       if (!current) {
         setState({ status: "error", message: "Pool is not readable right now." });
         return;
@@ -115,17 +130,19 @@ export function useTrade(coin: Coin) {
         });
 
         setState({ status: "done", signature });
-        // The trade moved the curve and the wallet; re-read both.
-        await Promise.all([refresh(), refreshBalances()]);
+        // The trade moved the curve and the wallet; re-read both, bypassing
+        // the snapshot cache.
+        await Promise.all([refresh(true), refreshBalances()]);
       } catch (error) {
         setState({ status: "error", message: describeError(error) });
       }
     },
-    [publicKey, signTransaction, setVisible, snapshot, coin.pool, refresh, refreshBalances],
+    [publicKey, signTransaction, setVisible, ensureSnapshot, refresh, refreshBalances],
   );
 
   return {
     snapshot,
+    ensureSnapshot,
     balanceUsd,
     holding,
     state,

@@ -27,14 +27,32 @@ function sslConfig(url: string): PoolConfig["ssl"] {
   return undefined;
 }
 
+/**
+ * `sslmode` in the connection string is redundant once `ssl` is passed
+ * explicitly, and pg now warns that the aliases ('prefer', 'require',
+ * 'verify-ca') change meaning in v9. Dropping the parameter keeps this pool on
+ * the policy `sslConfig` decides rather than one libpq semantics will shift
+ * under us.
+ */
+function stripSslMode(url: string): string {
+  try {
+    const parsed = new URL(url);
+    parsed.searchParams.delete("sslmode");
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+}
+
 export function getPgPool() {
-  const connectionString = databaseUrl();
+  const rawUrl = databaseUrl();
+  const connectionString = stripSslMode(rawUrl);
 
   if (!globalThis.__veilPgPool) {
     globalThis.__veilPgPool = new Pool({
       connectionString,
       max: Number(process.env.DATABASE_POOL_MAX ?? 5),
-      ssl: sslConfig(connectionString),
+      ssl: sslConfig(rawUrl),
     });
   }
 
