@@ -301,11 +301,21 @@ what caused likes to be reported as implemented. Fix the comment or build the li
 #### Block 5: Purge dead non-Solana code (Norr / Algorand / x402 / Privy / Clerk / Stripe) — IN PROGRESS
 Owner: juno-3, on branch `ao/juno-3/root`. **Uncommitted and blocked on a permission
 prompt** — as of 2026-09-18 that branch is still at `758e62f` with no commits of its
-own, so none of this work is in git yet.
+own, so none of this work is in git yet. Its index holds **204 staged deletions**
+(verified directly against that worktree), plus 9 unstaged modifications.
+
+**That pending work already contains the fix for the broken build**, which raises its
+priority above tidiness. It stages deletion of `components/ConnectWalletButton.tsx`
+and `components/WalletProviders.tsx` and modifies `app/page.tsx` — exactly the three
+files behind the `useWallet must be used within the WalletProvider` prerender failure
+recorded under Block 6. So the build is not broken *and* awaiting a separate fix: the
+fix exists, unstaged in a sibling worktree, waiting on one permission prompt. Nothing
+deploys until it lands.
 - [ ] `lib/algorand.ts`, `lib/x402.ts`, `lib/custodial*`, `lib/avm*`
 - [ ] `app/api/x402`, `app/api/account`, `app/add-funds`, `app/withdraw`
-- [ ] `components/WalletProviders.tsx` — partially done in `758e62f`; keep pure
-      `@solana/wallet-adapter`
+- [ ] `components/WalletProviders.tsx` and `components/ConnectWalletButton.tsx` —
+      gutting the former in `758e62f` without removing the latter is what broke the
+      build; both are staged for deletion in juno-3's worktree
 - [ ] Verify unit tests and the production build still pass
 - [ ] Also in scope there: `package.json` still reads `"name": "norr.fun"`, and
       `.env.local.example` is missing because `.gitignore`'s `.env*` rule hides it
@@ -322,6 +332,8 @@ own, so none of this work is in git yet.
       Confirmed by building at HEAD with all other work stashed — same failure. Cause
       is `758e62f` removing the Algorand/Privy providers while
       `components/ConnectWalletButton.tsx` still calls `useWallet`. Blocks 8.2 deploy.
+      **The fix is already staged in juno-3's worktree** (see Block 5) — it needs
+      committing, not writing.
 - [ ] 8.2 deploy, 8.4 pitch video, 8.5 technical video, 8.6 mainnet pool, 8.7 submit.
 
 #### Legitimate blockers (do NOT fake or bypass)
