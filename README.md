@@ -110,7 +110,8 @@ Verified by running things, not by reading imports.
 | **Every number that moves** | price, curve progress, migration threshold, holders, transactions — read from the DBC program per request, never cached into the registry |
 | **Wallet** | Phantom / Solflare via `@solana/wallet-adapter` |
 | **Quotes** | priced by `pool.swapQuote` against live account state |
-| **Tests** | **140 unit tests across 18 files**, passing — including every preset asserted against Meteora's `validateConfigParameters` |
+| **Swap history** | Direction, size, execution price and trader reconstructed per trade from token-balance deltas — driving a real price chart, real 24h volume, and real trade rows |
+| **Tests** | **157 unit tests across 19 files**, passing — including every preset asserted against Meteora's `validateConfigParameters` |
 
 There is **no mock data layer**. `lib/juno/mock.ts` was deleted; if a pool is not
 on-chain *and* in the registry, it does not appear in the app.
@@ -121,9 +122,7 @@ on-chain *and* in the registry, it does not appear in the app.
 |---|---|
 | **Mainnet pool** | Devnet only. Needs real SOL and explicit sign-off. |
 | **Pyth NAV band** | The code exists (`lib/juno/pyth.ts`) and feed ids are stored per pool, but Hermes moved its price endpoints behind an API key and none exists in this repo. **The UI shows no NAV rather than a fabricated one.** |
-| **Price chart** | Needs a swap-event indexer. The tab says so instead of drawing a fake line. |
-| **24h volume** | Same reason. Rendered as `—`, never as `$0`. |
-| **Trade direction and size in Activity** | Needs log decoding. Rows link to the real transaction instead. |
+| **Consistent swap history** | The indexer is built and verified (see below), but the public devnet RPC enforces a per-method quota that a dozen transaction reads can exhaust. When it refuses, the chart, 24h volume and trade direction all fall back to the honest empty state. A dedicated `NEXT_PUBLIC_SOLANA_RPC` is what makes this consistent. |
 | **Comments** | Genuinely implemented — `lib/juno/social.ts` is a MongoDB-backed layer wired to `app/api/juno/comments`. Code-present and reviewed, **not runtime-verified here**: no live round trip was run against the database. |
 | **Likes** | **Not persisted.** `ReelCard` keeps `liked` in local component state and nothing populates `coin.likes`, so a like does not survive a reload. |
 | **Follows** | Not built. `followers` is hardcoded to `0`. |
@@ -190,6 +189,47 @@ raised             1.59040715
 threshold          1.59040715
 graduated          true
 ```
+
+### The swap indexer
+
+`lib/juno/indexer.ts` reconstructs a pool's trade history from the RPC. It differences
+pre/post token balances rather than decoding the program's Anchor event: balance deltas
+are consensus data already present in a response we have to fetch anyway, and they
+cannot drift when Meteora changes an event layout. The pool's two vaults share one
+authority PDA, so that authority is the only owner in a swap holding both mints —
+quote into the vault is a buy, quote out is a sell. Pool creation, fee claims and
+migration each move a single leg and are rejected rather than appearing as trades.
+
+```
+$ npm run juno:swaps -- --mint 6driivZmcZ4pgfCNkVERbbNcQiyzEpKvaJJ19AXQYj69
+2 swap(s) parsed in 0.9s
+
+2026-09-16 21:57:09  BUY   base   237,911.471147  quote    0.500000000  price 2.101622e-6
+2026-09-17 19:07:48  SELL  base            5,000  quote    0.009941764  price 1.988353e-6
+
+24h volume    0.509941764 (quote units)
+24h change    -5.39%
+```
+
+On the graduated pool it reads all 9 buys, price climbing 2.31e-9 → 4.16e-9 as the
+back-loaded `content` curve steepens, ending in the 0.000004224 SOL partial fill that
+completed the curve.
+
+**A finding worth recording.** `getParsedTransactions` — the batched form — is refused
+outright by the public devnet endpoint: a batch of 12 returns `Too many requests for a
+specific RPC call`. Sequential single calls get through, but spacing them out makes it
+*worse*, not better — over the same 12 signatures, a 200ms gap landed 10 of 12 while
+400ms and 700ms landed **zero**. That is a quota, not a rate window: the first pass
+spends it and no amount of politeness recovers it. There is therefore no configuration
+that makes this reliable on the public endpoint, which is why the honesty boundary
+below matters more than the parser does.
+
+**Trades and aggregates are held to different standards.** A transaction the RPC
+refuses is counted, not thrown — losing nine trades that were read because the tenth
+was rate-limited would discard truth to punish a partial failure. So individual rows
+and chart points render what is real, while 24h volume and total volume return null
+whenever the window has holes or does not reach back a full day. Null renders as an
+em-dash. Only a complete read of a pool that genuinely has not traded renders `$0`.
 
 ### Token metadata on IPFS
 
@@ -258,6 +298,9 @@ npm run juno:trade    -- --mint <baseMint> --side sell --amount 5000 --yes
 
 # partial fill — the only way to finish a curve; exact-in reverts on the last sliver
 npm run juno:trade    -- --mint <baseMint> --side buy --amount 0.01 --partial --yes
+
+# parsed swap history: direction, size, execution price, volume, chart points
+npm run juno:swaps    -- --mint <baseMint>
 
 # claim accrued creator trading fees
 npm run juno:claim    -- --mint <baseMint> --yes

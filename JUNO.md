@@ -35,7 +35,8 @@ explorer or by running a script in this repo.
 | **Wallet** | Phantom / Solflare via `@solana/wallet-adapter` |
 | **Quotes** | priced by the DBC quoter against live account state |
 | **Comments** | MongoDB via `lib/juno/social.ts`, wired to `app/api/juno/comments` — kept out of Postgres so a comment outage cannot take the market data down. Code reviewed, not runtime-verified. |
-| **Tests** | 140 unit tests, incl. every preset validated by Meteora's own `validateConfigParameters` |
+| **Swap history** | direction, size, execution price and trader per trade, from token-balance deltas — driving the price chart, 24h volume and trade rows |
+| **Tests** | 157 unit tests, incl. every preset validated by Meteora's own `validateConfigParameters` |
 
 ### Not built
 
@@ -43,9 +44,7 @@ explorer or by running a script in this repo.
 |---|---|
 | **Pyth NAV band** | Code is written (`lib/juno/pyth.ts`) but Hermes moved its price endpoints behind an API key, and none exists in this repo. The UI shows no NAV rather than a fabricated one. |
 | **Mainnet pool** | Devnet only so far. |
-| **Price chart** | Needs a swap-event indexer. The tab says so instead of drawing a fake line. |
-| **24h volume** | Same reason. Shown as `—`, never as `$0`. |
-| **Trade direction/size in Activity** | Needs log decoding. Rows link to the real transaction instead. |
+| **Consistent swap history** | The indexer is built (`lib/juno/indexer.ts`) and verified on two devnet pools, but the public devnet RPC enforces a per-method quota. When it refuses, the chart, 24h volume and trade rows fall back to the honest empty state. A dedicated `NEXT_PUBLIC_SOLANA_RPC` is what makes it consistent. See [README.md](./README.md). |
 | **Likes** | Not persisted. `ReelCard` holds `liked` in local state; nothing populates `coin.likes`, so it does not survive a reload. |
 | **Follows** | Not built. `followers` is hardcoded to `0`. |
 
@@ -158,6 +157,7 @@ npm run juno:inspect  -- --mint <baseMint>
 npm run juno:trade    -- --mint <baseMint> --side buy  --amount 0.5  --yes
 npm run juno:trade    -- --mint <baseMint> --side sell --amount 5000 --yes
 npm run juno:trade    -- --mint <baseMint> --side buy --amount 0.01 --partial --yes
+npm run juno:swaps    -- --mint <baseMint>
 npm run juno:claim    -- --mint <baseMint> --yes
 npm run juno:graduate -- --mint <baseMint> --preset content --yes
 ```

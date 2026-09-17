@@ -185,12 +185,12 @@ itemised. A task counts as complete only if its status line starts with `DONE`.
 | Phase 6 — stock wedge | 4 | 4 | |
 | Phase 7 — graduation | 3 | 3 | |
 | **Phases 0–7 subtotal** | **56** | **59** | **94.9%** |
-| Block 3 — swap indexer | 0 | 4 | indexer, 24h volume, activity detail, price chart |
+| Block 3 — swap indexer | 4 | 4 | built and verified on two devnet pools |
 | Block 4 — social | 1 | 3 | comments done; likes and follows not started |
 | Block 5 — legacy purge | 0 | 1 | in progress, uncommitted |
-| **Engineering total** | **57** | **67** | **85.1%** |
+| **Engineering total** | **61** | **67** | **91.0%** |
 
-**Engineering: 57 / 67 = 85.1%.**
+**Engineering: 61 / 67 = 91.0%.**
 
 **Submission readiness is much lower, and is the real risk.** Phase 8 is **1 / 7 =
 14%**. The one done item is the README. Still open: deploy to a public URL (8.2), a
@@ -221,19 +221,60 @@ Verified on chain, in Postgres, and by running the test suite:
 
 ### Itemized Remaining Gaps
 
-#### Block 3: Swap-event indexer, price chart, 24h volume, activity detail — NOT STARTED
-Owner: juno-4. (Previously juno-1, which was killed after stalling.)
-- [ ] `lib/juno/indexer.ts` — swap history for a pool via `getSignaturesForAddress`
-      plus `getParsedTransaction`, parsed into direction, base amount, quote amount,
+#### Block 3: Swap-event indexer, price chart, 24h volume, activity detail — DONE
+Owner: juno-4. (Previously juno-1, which was killed after stalling.) Commit `72683ae`.
+- [x] `lib/juno/indexer.ts` — swap history via `getSignaturesForAddress` plus
+      `getParsedTransaction`, parsed into direction, base amount, quote amount,
       execution price, trader and block time.
-- [ ] Real 24h volume on `/coin/[address]` and `/explore`, replacing the `—`.
-- [ ] Trade direction and size in `/activity` and the coin Activity tab. This is the
-      unfinished remainder of task 3.9, which is marked DONE for signatures only.
-- [ ] A real price chart in `CoinMedia.tsx`, replacing `PriceChartPlaceholder`.
+- [x] 24h volume on `/coin/[address]` and `/explore`. The trending sort now actually
+      reads volume, only when asked for, sequentially and capped.
+- [x] Trade direction and size in `/activity` and the coin Activity tab — the
+      unfinished remainder of 3.9, which was DONE for signatures only.
+- [x] Real SVG price chart in `CoinMedia.tsx`, replacing `PriceChartPlaceholder`.
+- [x] 17 unit tests (140 → **157**).
 
-**Constraint:** the public devnet RPC rate-limits hard. Batch and cache aggressively,
-and **degrade to the honest empty state on failure**. The current em-dash is better
-than a fabricated line; a fake chart is worse than no chart.
+**How it parses.** Not by decoding the program's Anchor event — by differencing
+pre/post token balances, which are consensus data present in a response we already
+have to fetch and cannot drift when Meteora changes an event layout. The pool's two
+vaults share one authority PDA, so that authority is the only owner in a swap holding
+both mints: quote into the vault is a buy, quote out is a sell. Pool creation, fee
+claims and migration each move only one leg and are rejected rather than showing up as
+phantom trades.
+
+**Verified on chain, not just compiled.**
+- NVDAx `FGcLWvDc…RBHpK` — both known trades, matching their signatures:
+  BUY 237,911.471147 base / 0.5 SOL at 2.101622e-6; SELL 5,000 base / 0.009941764 SOL
+  at 1.988353e-6. 24h volume 0.509941764 SOL, change −5.39%.
+- Graduated `F6A77CbT…8ZowZ` — 9 buys, price climbing 2.31e-9 → 4.16e-9 as the
+  back-loaded `content` curve steepens, ending in the 0.000004224 SOL partial fill that
+  completed it.
+- End to end through the running app: `GET /api/juno/swaps` returns both NVDAx swaps
+  with volume, change and chart points; `/activity` renders exactly one buy and one
+  sell.
+
+**The RPC finding, because it changes what is achievable here.** `getParsedTransactions`
+— the batched form — is refused outright by the public devnet endpoint: a batch of 12
+returns `Too many requests for a specific RPC call`, and smaller batches with backoff
+do not help, because the limit is on the batched method. Sequential singles get
+through, but spacing them out makes it *worse*. Measured over the same 12 signatures:
+
+| gap | ok | fail |
+|---|---|---|
+| 200ms | 10 | 2 |
+| 400ms | 0 | 12 |
+| 700ms | 0 | 12 |
+
+That is a **quota, not a rate window**. Once spent, politeness does not help. So there
+is no configuration that makes this reliable on the public endpoint, and **task 8.3
+(`NEXT_PUBLIC_SOLANA_RPC`) is now the thing standing between this feature and it
+working consistently.** It was a nice-to-have; it is now load-bearing.
+
+**Honesty boundary, deliberately drawn between trades and aggregates.** A transaction
+the RPC refuses is counted, not thrown — discarding nine trades that were read because
+the tenth was rate-limited would be throwing away truth to punish a partial failure. So
+rows and chart points show what is real, while `volume24h` and `totalVolume` return
+null whenever the window has holes or does not reach back far enough. Null renders as
+an em-dash; only a complete read of a pool that has not traded renders `$0`.
 
 #### Block 4: Social — comments DONE, likes and follows NOT STARTED
 
@@ -276,7 +317,11 @@ own, so none of this work is in git yet.
       disclosure (`38cb298`, `834e6ef`).
 - [x] `JUNO.md` reconciled against it — pool count 4 → 7, the sell added, social rows
       corrected, stale `.env.local.example` instruction fixed.
-- [ ] `npm run build` verified green end-to-end.
+- [ ] `npm run build` verified green end-to-end. **Currently failing**, pre-existing:
+      prerendering `/` throws `useWallet must be used within the WalletProvider`.
+      Confirmed by building at HEAD with all other work stashed — same failure. Cause
+      is `758e62f` removing the Algorand/Privy providers while
+      `components/ConnectWalletButton.tsx` still calls `useWallet`. Blocks 8.2 deploy.
 - [ ] 8.2 deploy, 8.4 pitch video, 8.5 technical video, 8.6 mainnet pool, 8.7 submit.
 
 #### Legitimate blockers (do NOT fake or bypass)
@@ -325,9 +370,14 @@ actually left, ordered by judge impact per hour.
 
 1. **8.2 deploy to a public URL** — the submission requires a live demo. Nothing else
    on this list matters if a judge cannot open the app.
-2. **Block 3, the swap indexer** — turns three honest em-dashes into real 24h volume,
-   real trade direction and a real price chart. The largest visible gap left.
-3. **Block 5, the legacy purge** (juno-3) — the repo should read as Solana-only.
+2. **8.3 a dedicated RPC** — promoted from nice-to-have. The swap indexer is built,
+   but the public devnet endpoint's per-method quota means it degrades to em-dashes
+   as often as not. One endpoint key turns a working feature into a visibly working
+   one. (Block 3 itself: **done**, `72683ae`.)
+3. **Block 5, the legacy purge** (juno-3) — the repo should read as Solana-only, and
+   `npm run build` currently fails prerendering `/` because `ConnectWalletButton`
+   still calls `useWallet` after `758e62f` gutted its provider. That is a broken
+   build, which outranks tidiness.
 4. **8.4 / 8.5 videos**, **8.7 submit** — human, and hard-deadlined 25 Sep 16:00 ET.
 5. **8.6 mainnet pool** — Meteora's stated bar is "working mainnet code beats slides".
    Blocked on funds and authorization; the highest-value unblock available.
