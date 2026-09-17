@@ -11,7 +11,10 @@
 
 import {
   ActivationType,
+  DAMM_V2_MIGRATION_FEE_ADDRESS,
   DynamicBondingCurveClient,
+  SwapMode,
+  U64_MAX,
   TokenDecimal,
   buildCurveWithLiquidityWeights,
   deriveDbcPoolAddress,
@@ -421,6 +424,39 @@ export async function sendLaunch(params: {
   return signatures;
 }
 
+/**
+ * Buy whatever is left of a curve without knowing exactly how much that is.
+ *
+ * An exact-in swap reverts with `Insufficient Liquidity` the moment the input
+ * exceeds the curve's remaining capacity, which makes finishing a nearly
+ * complete curve a guessing game measured in lamports. `SwapMode.PartialFill`
+ * fills what the pool can absorb and returns the rest, so "complete this
+ * curve" becomes one call instead of a binary search.
+ */
+export async function buildPartialFillSwapTransaction(params: {
+  snapshot: PoolSnapshot;
+  owner: PublicKey;
+  side: TradeSide;
+  /** Upper bound. The program fills up to the curve's capacity. */
+  amountIn: number;
+  minimumAmountOut?: number;
+}): Promise<Transaction> {
+  const swapBaseForQuote = params.side === "sell";
+  const { baseDecimals, quoteDecimals } = params.snapshot;
+  const inDecimals = swapBaseForQuote ? baseDecimals : quoteDecimals;
+  const outDecimals = swapBaseForQuote ? quoteDecimals : baseDecimals;
+
+  return getDbcClient().pool.swap2({
+    owner: params.owner,
+    pool: params.snapshot.poolAddress,
+    swapMode: SwapMode.PartialFill,
+    amountIn: uiToBn(params.amountIn, inDecimals),
+    minimumAmountOut: uiToBn(params.minimumAmountOut ?? 0, outDecimals),
+    swapBaseForQuote,
+    referralTokenAccount: null,
+  });
+}
+
 /** Build the unsigned buy/sell transaction for an existing pool. */
 export async function buildSwapTransaction(params: {
   snapshot: PoolSnapshot;
@@ -473,4 +509,116 @@ export function uiToBn(amount: number, decimals: number): BN {
 
 export function bnToUi(amount: BN, decimals: number): number {
   return Number(amount.toString()) / 10 ** decimals;
+}
+
+/* ------------------------------------------------------------------ */
+/* Creator economics                                                   */
+/* ------------------------------------------------------------------ */
+
+export type FeeBalance = {
+  /** Claimable now, in UI units. */
+  baseAmount: number;
+  quoteAmount: number;
+  /** Quote-side fees already taken, for a lifetime figure. */
+  claimedQuote: number;
+};
+
+/**
+ * What a creator can actually withdraw right now.
+ *
+ * `getPoolFeeMetrics` reports the *current* unclaimed split, which is the only
+ * figure worth putting next to a claim button — a lifetime total would invite
+ * someone to click expecting money that is already in their wallet.
+ */
+export async function fetchCreatorFees(
+  poolAddress: string | PublicKey,
+): Promise<FeeBalance | null> {
+  const snapshot = await fetchPoolSnapshot(poolAddress);
+  if (!snapshot) return null;
+
+  const metrics = await getDbcClient()
+    .state.getPoolFeeMetrics(poolAddress)
+    .catch(() => null);
+  if (!metrics) return null;
+
+  return {
+    baseAmount: bnToUi(metrics.current.creatorBaseFee, snapshot.baseDecimals),
+    quoteAmount: bnToUi(metrics.current.creatorQuoteFee, snapshot.quoteDecimals),
+    claimedQuote: bnToUi(metrics.total.totalTradingQuoteFee, snapshot.quoteDecimals),
+  };
+}
+
+/**
+ * Build the transaction that pays a creator their accrued trading fees.
+ *
+ * `maxBaseAmount` / `maxQuoteAmount` are ceilings, not amounts — the program
+ * transfers whatever has accrued up to them. Passing the full u64 means "all
+ * of it", which is what a claim button should mean.
+ */
+export async function buildClaimCreatorFeesTransaction(params: {
+  creator: PublicKey;
+  pool: string | PublicKey;
+  receiver?: PublicKey;
+}): Promise<Transaction> {
+  return getDbcClient().creator.claimCreatorTradingFee({
+    creator: params.creator,
+    payer: params.creator,
+    pool: new PublicKey(params.pool),
+    maxBaseAmount: U64_MAX,
+    maxQuoteAmount: U64_MAX,
+    receiver: params.receiver ?? params.creator,
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/* Graduation                                                          */
+/* ------------------------------------------------------------------ */
+
+export type MigrationPlan = {
+  transaction: Transaction;
+  /** Position NFTs minted for the migrated liquidity; both must co-sign. */
+  signers: Keypair[];
+};
+
+/**
+ * Build the transaction that migrates a completed curve into a DAMM v2 pool.
+ *
+ * Only valid once the curve has actually finished — the program rejects an
+ * early migration, which is the correct behaviour and why the UI gates the
+ * button on `curve.progress` rather than letting someone burn a fee finding
+ * out.
+ *
+ * Meteora runs keepers that migrate eligible pools on mainnet, so this is a
+ * manual path for devnet and for anyone who would rather not wait.
+ */
+export async function planMigration(params: {
+  payer: PublicKey;
+  pool: string | PublicKey;
+  /** DAMM v2 config for the fee tier the pool was configured to graduate into. */
+  dammConfig: PublicKey;
+}): Promise<MigrationPlan> {
+  const response = await getDbcClient().migration.migrateToDammV2({
+    payer: params.payer,
+    pool: new PublicKey(params.pool),
+    dammConfig: params.dammConfig,
+  });
+
+  return {
+    transaction: response.transaction,
+    signers: [response.firstPositionNftKeypair, response.secondPositionNftKeypair],
+  };
+}
+
+/**
+ * The DAMM v2 config address for a pool's configured migration fee tier.
+ *
+ * `DAMM_V2_MIGRATION_FEE_ADDRESS` is indexed by `MigrationFeeOption`, so the
+ * tier chosen at launch determines which config the pool graduates into.
+ */
+export function dammV2ConfigFor(migrationFeeOption: number): PublicKey {
+  const address = DAMM_V2_MIGRATION_FEE_ADDRESS[migrationFeeOption];
+  if (!address) {
+    throw new Error(`No DAMM v2 config for migration fee option ${migrationFeeOption}`);
+  }
+  return address;
 }

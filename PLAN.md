@@ -104,6 +104,9 @@ Legend: `DONE` · `IN PROGRESS` · `NOT STARTED` · `BLOCKED`
 | 4.1 | Trade panel calls real `quoteTrade` | DONE |
 | 4.2 | Buy sends a real signed swap | DONE — verified on devnet |
 | 4.3 | Sell sends a real signed swap | DONE (code, same path) — sell not yet executed |
+| 4.7 | Partial-fill swaps (`swap2` + `SwapMode.PartialFill`) | DONE — verified completing a curve |
+| 4.8 | Creator fee claiming (`claimCreatorTradingFee`) | DONE — verified, 0.009653 SOL |
+| 4.9 | Graduation (`migrateToDammV2`) | DONE — verified, DAMM v2 pool exists |
 | 4.4 | Show real wallet balances (quote + coin holding) | DONE |
 | 4.5 | Tx receipt + Solscan link after a trade | DONE |
 | 4.6 | Execute a real devnet buy, verify on explorer | DONE — 59DBxUgP…, curve moved |
@@ -122,14 +125,15 @@ Legend: `DONE` · `IN PROGRESS` · `NOT STARTED` · `BLOCKED`
 |---|---|---|
 | 6.1 | Launch an equity-preset pool named for a real ticker | DONE (AAPLx Issuance) |
 | 6.2 | Issuance mode in `/create`: pick ticker → preset → NAV feed | NOT STARTED — depends on 5.3 (Pyth key) to be worth building |
+| 6.4 | Media upload + IPFS token metadata | DONE — Pinata; URI verified on the mint's Metaplex account |
 | 6.3 | Seed 2–3 equity issuances across presets for the demo | DONE — AAPLx (ipo-book), NVDAx (thin-name) |
 
 ### Phase 7 — Graduation
 | # | Task | Status |
 |---|---|---|
 | 7.1 | Surface migration threshold + progress from chain | DONE (in snapshot) |
-| 7.2 | Graduation state on coin page when `isMigrated` | DONE — CoinSummary swaps to the graduated notice |
-| 7.3 | Link to DAMM v2 pool post-migration | NOT STARTED |
+| 7.2 | Graduation state on coin page when `isMigrated` | DONE — verified on a really-migrated pool |
+| 7.3 | Link to DAMM v2 pool post-migration | DONE — derived via deriveDammV2PoolAddress |
 
 ### Phase 8 — Submission
 | # | Task | Status |

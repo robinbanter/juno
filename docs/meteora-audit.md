@@ -8,9 +8,19 @@ Verified 2026-09-17 by running the flows, not by reading imports.
 dependency Juno imports — it is the thing Juno *is*. Remove it and there is no
 product: no market, no price, no graduation, nothing to buy.
 
-But the integration is **narrow**: 9 of 60 SDK service methods (15%). Two whole
-services — `CreatorService` and `MigrationService` — are untouched, and five of
-six curve builders are unused.
+**Updated after the audit.** The two gaps this document identified are now
+closed and verified on devnet:
+
+- `creator.claimCreatorTradingFee` — 0.009653 SOL claimed, balance to zero
+- `migration.migrateToDammV2` — a curve driven to 100.0000% and migrated into
+  DAMM v2 pool `EhvtVimkraeSqtNZGqBj3zMxHMUVHdwMDUwZF8MMYy7L`
+- `pool.swap2` with `SwapMode.PartialFill` — added because exact-in cannot
+  finish a curve: it reverts with `Insufficient Liquidity` once the input
+  exceeds remaining capacity, which made the last 0.000004 SOL a binary search
+
+Coverage is now 12 of 60 service methods, and neither `CreatorService` nor
+`MigrationService` is empty. The remaining unused surface is listed below and
+still worth mining.
 
 ---
 

@@ -28,7 +28,9 @@
     "keys:rotate": "dotenv -e .env.local -- tsx scripts/rotate-custodial-keys.ts",
     "juno:launch": "dotenv -e .env.local -- tsx scripts/juno-launch.ts",
     "juno:inspect": "dotenv -e .env.local -- tsx scripts/juno-inspect.ts",
-    "juno:trade": "dotenv -e .env.local -- tsx scripts/juno-trade.ts"
+    "juno:trade": "dotenv -e .env.local -- tsx scripts/juno-trade.ts",
+    "juno:claim": "dotenv -e .env.local -- tsx scripts/juno-claim.ts",
+    "juno:graduate": "dotenv -e .env.local -- tsx scripts/juno-graduate.ts"
   },
   "dependencies": {
     "@agoralabs-sh/avm-web-provider": "^1.7.0",

@@ -21,8 +21,11 @@ explorer or by running a script in this repo.
 
 | | |
 |---|---|
-| **DBC pools created by this code** | 2 on devnet, links below |
+| **DBC pools created by this code** | 4 on devnet, links below |
 | **A real swap through the app's own path** | link below; the curve moved |
+| **A full lifecycle** | launch → trade → curve to 100% → **migrated to DAMM v2** |
+| **Creator fees claimed** | 0.009653 SOL, on-chain |
+| **Token metadata** | pinned to IPFS, URI written to the mint |
 | **Curve configs** | 4 presets, 16 liquidity-weighted segments each |
 | **Persistence** | Neon Postgres (`juno_pools`), writes verified through the API |
 | **Reads** | price, curve progress, migration threshold, holders, transactions — all from chain per request |
@@ -36,7 +39,6 @@ explorer or by running a script in this repo.
 |---|---|
 | **Pyth NAV band** | Code is written (`lib/juno/pyth.ts`) but Hermes moved its price endpoints behind an API key, and none exists in this repo. The UI shows no NAV rather than a fabricated one. |
 | **Mainnet pool** | Devnet only so far. |
-| **Media upload** | The create form's file input is not wired; coins render artwork derived from their mint address. |
 | **Price chart** | Needs a swap-event indexer. The tab says so instead of drawing a fake line. |
 | **24h volume** | Same reason. Shown as `—`, never as `$0`. |
 | **Trade direction/size in Activity** | Needs log decoding. Rows link to the real transaction instead. |
@@ -60,6 +62,19 @@ not on-chain and in the registry, it does not appear in the app.
 - Mint: [`6driivZmcZ4pgfCNkVERbbNcQiyzEpKvaJJ19AXQYj69`](https://solscan.io/token/6driivZmcZ4pgfCNkVERbbNcQiyzEpKvaJJ19AXQYj69?cluster=devnet)
 - **Buy of 0.5 SOL**: [`59DBxUgP…wdGzV`](https://solscan.io/tx/59DBxUgPPjANJhKEmuxp5FMXL4sSR77Uxs8kefRhMuKQkptnVMgSbPvN6YZfUCQ2KfUJWXWZjmSyEzuZzQJwdGzV?cluster=devnet)
   — curve progress 0.0000% → 0.0117%, price 0.000002 → 0.0000020004
+
+**Juno Graduation Demo** — `content` preset, SOL-quoted, **fully graduated**
+- Mint: [`HYgG9w3DrsiNn7tPHFeACGnCdtnioyC9DeiukausmZQ9`](https://solscan.io/token/HYgG9w3DrsiNn7tPHFeACGnCdtnioyC9DeiukausmZQ9?cluster=devnet)
+- DBC pool: [`F6A77CbTHKFTc1d89KR2VReJRBiis5HuKpqvipg8ZowZ`](https://solscan.io/account/F6A77CbTHKFTc1d89KR2VReJRBiis5HuKpqvipg8ZowZ?cluster=devnet)
+- Curve driven 0% → **100.0000%** across 8 real buys, the last via `SwapMode.PartialFill`
+- **Migration tx**: [`4HatkGNZ…VTZtc`](https://solscan.io/tx/4HatkGNZKu5d9S79ZtjyAng9tRFshjhJRFbhqJQczqbgyAEonhm7cF5fmUy52CFbGgzdtRvHmWPmNo4uKbMVTZtc?cluster=devnet)
+- **Resulting DAMM v2 pool**: [`EhvtVimkraeSqtNZGqBj3zMxHMUVHdwMDUwZF8MMYy7L`](https://solscan.io/account/EhvtVimkraeSqtNZGqBj3zMxHMUVHdwMDUwZF8MMYy7L?cluster=devnet) — 1112 bytes, owned by `cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG`
+
+**TSLAx Issuance** — `tight-nav` preset, USDC-quoted, IPFS metadata
+- Mint: [`D7PDa2u1Qm6dVq2D4B2ieq9gyPVr7avNJrF9PyBRBf2F`](https://solscan.io/token/D7PDa2u1Qm6dVq2D4B2ieq9gyPVr7avNJrF9PyBRBf2F?cluster=devnet)
+- On-chain metadata URI: `ipfs://QmejDQjPhsuUVNPa7tmk5AvKZXwHLjevuXM5UBjfBSKYaD`
+
+**Creator fee claim** (NVDAx): [`3X4g3aDg…9HdAN`](https://solscan.io/tx/3X4g3aDgpW8QKAF8WB3JD18L7S73SqUjen8MYFunqWLBdGxykWYVGT2t1DiwUMgANBpU9zx3d2c2zWGyZnA9HdAN?cluster=devnet) — 0.009653 SOL claimed, balance to zero
 
 Program (identical on mainnet and devnet):
 [`dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN`](https://solscan.io/account/dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN?cluster=devnet)
@@ -124,9 +139,12 @@ Routes: `/explore` · `/reels` · `/coin/[mint]` · `/creator/[wallet]` ·
 ### Scripts
 
 ```bash
-npm run juno:launch  -- --preset ipo-book --name "AAPLx Issuance" --symbol AAPLXI --quote usdc --yes
-npm run juno:inspect -- --mint <baseMint>
-npm run juno:trade   -- --mint <baseMint> --side buy --amount 0.5 --yes
+npm run juno:launch   -- --preset ipo-book --name "AAPLx Issuance" --symbol AAPLXI --quote usdc --yes
+npm run juno:inspect  -- --mint <baseMint>
+npm run juno:trade    -- --mint <baseMint> --side buy --amount 0.5 --yes
+npm run juno:trade    -- --mint <baseMint> --side buy --amount 0.01 --partial --yes
+npm run juno:claim    -- --mint <baseMint> --yes
+npm run juno:graduate -- --mint <baseMint> --preset content --yes
 ```
 
 Each runs the same code path the UI uses, signed by a local key instead of a

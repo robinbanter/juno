@@ -37,10 +37,15 @@ export function useLaunch() {
 
   const launch = useCallback(
     async (
-      request: Omit<LaunchRequest, "payer" | "creator"> & {
+      request: Omit<LaunchRequest, "payer" | "creator" | "uri"> & {
         description?: string;
         format: CoinFormat;
         navFeedId?: string | null;
+        /** Gateway URL of already-pinned media, if any. */
+        mediaUrl?: string | null;
+        mimeType?: string | null;
+        mediaWidth?: number | null;
+        mediaHeight?: number | null;
       },
     ) => {
       if (!publicKey || !signTransaction) {
@@ -50,8 +55,34 @@ export function useLaunch() {
 
       try {
         setState({ status: "building" });
+
+        // Pin the metadata first. The URI is baked into the mint at creation
+        // and the presets renounce update authority, so there is no second
+        // chance to attach it — better to fail here than to mint a blank.
+        let uri = "";
+        try {
+          const pinned = await fetch("/api/juno/metadata", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              name: request.name,
+              symbol: request.symbol,
+              description: request.description ?? "",
+              imageUrl: request.mediaUrl ?? "",
+              mimeType: request.mimeType ?? "",
+              curvePreset: request.preset,
+              navFeedId: request.navFeedId ?? "",
+            }),
+          });
+          if (pinned.ok) uri = ((await pinned.json()) as { uri: string }).uri;
+        } catch {
+          // A pin failure must not strand a creator mid-launch; the coin is
+          // still tradeable, it just renders unnamed in third-party wallets.
+        }
+
         const plan = await planLaunch({
           ...request,
+          uri,
           payer: publicKey,
           creator: publicKey,
         });
@@ -86,6 +117,10 @@ export function useLaunch() {
               format: request.format,
               curvePreset: request.preset,
               navFeedId: request.navFeedId ?? null,
+              mediaUrl: request.mediaUrl ?? null,
+              posterUrl: request.mediaUrl ?? null,
+              mediaWidth: request.mediaWidth ?? null,
+              mediaHeight: request.mediaHeight ?? null,
               createSignature: signatures[signatures.length - 1],
             }),
           });

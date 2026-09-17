@@ -18,6 +18,7 @@ import path from "node:path";
 import { cluster, explorer, meteoraPoolUrl, rpcEndpoint } from "../lib/juno/cluster";
 import { getConnection, planLaunch, sendLaunch, USDC, WSOL } from "../lib/juno/dbc";
 import { CURVE_PRESETS } from "../lib/juno/curves";
+import { pinTokenMetadata } from "../lib/juno/pinata";
 import type { CurvePresetId } from "../lib/juno/types";
 
 const KEY_PATH = path.resolve(process.cwd(), ".juno/launcher.json");
@@ -97,6 +98,27 @@ async function main() {
     return;
   }
 
+  // Pin metadata before building. The URI is permanent once the mint exists.
+  let uri = "";
+  if (process.env.PINATA_JWT) {
+    const pinned = await pinTokenMetadata({
+      name,
+      symbol,
+      description: arg("description", "") ?? "",
+      imageUrl: arg("image", "") ?? "",
+      attributes: [
+        { trait_type: "Curve", value: CURVE_PRESETS[preset].label },
+        { trait_type: "Launchpad", value: "Juno" },
+        { trait_type: "Market", value: "Meteora Dynamic Bonding Curve" },
+        ...(arg("nav") ? [{ trait_type: "NAV feed", value: arg("nav")! }] : []),
+      ],
+    });
+    uri = pinned.uri;
+    console.log(`metadata  ${pinned.url}`);
+  } else {
+    console.log("metadata  skipped (no PINATA_JWT)");
+  }
+
   console.log("\nBuilding…");
   const plan = await planLaunch({
     payer: payer.publicKey,
@@ -104,7 +126,7 @@ async function main() {
     quote,
     name,
     symbol,
-    uri: "",
+    uri,
     preset,
     initialMarketCap,
     migrationMarketCap,
@@ -129,6 +151,7 @@ async function main() {
   console.log(`config    ${explorer.account(plan.config.toBase58())}`);
   console.log(`meteora   ${meteoraPoolUrl(plan.pool.toBase58())}`);
   console.log(`\napp       /coin/${plan.baseMint.toBase58()}`);
+  if (uri) console.log(`metadata  ${uri}`);
 }
 
 main().catch((error) => {

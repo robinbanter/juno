@@ -13,6 +13,7 @@ import { readFileSync } from "node:fs";
 
 import { cluster, explorer } from "../lib/juno/cluster";
 import {
+  buildPartialFillSwapTransaction,
   buildSwapTransaction,
   fetchPoolSnapshot,
   getDbcClient,
@@ -43,28 +44,45 @@ async function main() {
   const snapshot = await fetchPoolSnapshot(poolAddress);
   if (!snapshot) throw new Error("Pool not readable");
 
-  const quote = await quoteTrade({ snapshot, side, amountIn, slippageBps: 300 });
+  const partial = process.argv.includes("--partial");
+  // An exact-in quote throws once the input exceeds the curve's remaining
+  // capacity — which is precisely when a partial fill is the right tool, so
+  // the quote is skipped rather than allowed to block it.
+  const quote = partial
+    ? null
+    : await quoteTrade({ snapshot, side, amountIn, slippageBps: 300 });
   console.log(`cluster        ${cluster()}`);
   console.log(`pool           ${poolAddress}`);
   console.log(`side           ${side}`);
   console.log(`amount in      ${amountIn}`);
-  console.log(`expected out   ${quote.amountOut}`);
-  console.log(`minimum out    ${quote.minimumAmountOut}`);
-  console.log(`fee            ${quote.fee}`);
-  console.log(`price impact   ${(quote.priceImpact * 100).toFixed(4)}%`);
+  if (quote) {
+    console.log(`expected out   ${quote.amountOut}`);
+    console.log(`minimum out    ${quote.minimumAmountOut}`);
+    console.log(`fee            ${quote.fee}`);
+    console.log(`price impact   ${(quote.priceImpact * 100).toFixed(4)}%`);
+  } else {
+    console.log(`mode           partial fill (up to ${amountIn})`);
+  }
 
   if (!process.argv.includes("--yes")) {
     console.log("\nAdd --yes to send.");
     return;
   }
 
-  const transaction = await buildSwapTransaction({
-    snapshot,
-    owner: payer.publicKey,
-    side,
-    amountIn,
-    minimumAmountOut: quote.minimumAmountOut,
-  });
+  const transaction = partial
+    ? await buildPartialFillSwapTransaction({
+        snapshot,
+        owner: payer.publicKey,
+        side,
+        amountIn,
+      })
+    : await buildSwapTransaction({
+        snapshot,
+        owner: payer.publicKey,
+        side,
+        amountIn,
+        minimumAmountOut: quote!.minimumAmountOut,
+      });
 
   const signature = await sendTransaction({
     transaction,

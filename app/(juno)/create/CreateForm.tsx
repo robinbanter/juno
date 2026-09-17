@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
-import { Clapperboard, ExternalLink, ImageIcon, Upload } from "lucide-react";
+import { Clapperboard, ExternalLink, ImageIcon, LoaderCircle, Upload, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { CURVE_PRESET_LIST, CURVE_PRESETS } from "@/lib/juno/curves";
@@ -38,6 +38,45 @@ export function CreateForm() {
 
   const { connected } = useWallet();
   const { state, launch, reset } = useLaunch();
+  const [media, setMedia] = useState<{
+    url: string;
+    mimeType: string;
+    width: number;
+    height: number;
+  } | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  /**
+   * Upload as soon as a file is chosen rather than at submit. Pinning a 25MB
+   * video inside the launch flow would leave the wallet prompt waiting on IPFS.
+   */
+  async function onFile(file: File | undefined) {
+    if (!file) return;
+    setUploadError(null);
+    setUploading(true);
+    try {
+      // Intrinsic dimensions drive the grid's aspect ratio, so they are read
+      // from the file itself rather than assumed from the format.
+      const dimensions = await readDimensions(file).catch(() => ({ width: 0, height: 0 }));
+      const form = new FormData();
+      form.append("file", file);
+      const response = await fetch("/api/juno/upload", { method: "POST", body: form });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error ?? "Upload failed");
+      setMedia({
+        url: body.url,
+        mimeType: body.mimeType,
+        width: dimensions.width,
+        height: dimensions.height,
+      });
+    } catch (error) {
+      setUploadError(error instanceof Error ? error.message : "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  }
 
   const active = CURVE_PRESETS[preset];
   const valid =
@@ -57,12 +96,13 @@ export function CreateForm() {
         void launch({
           quote,
           format,
+          mediaUrl: media?.url ?? null,
+          mimeType: media?.mimeType ?? null,
+          mediaWidth: media?.width || null,
+          mediaHeight: media?.height || null,
           description: description.trim() || undefined,
           name: name.trim(),
           symbol: symbol.trim(),
-          // Metadata hosting is not built yet. The program accepts an empty
-          // URI, and shipping a dead link would be worse than none.
-          uri: "",
           preset,
           initialMarketCap: initialMc,
           migrationMarketCap: migrationMc,
@@ -96,22 +136,67 @@ export function CreateForm() {
         </div>
       </Field>
 
-      <Field label="Media">
-        <label
-          className={cn(
-            "flex cursor-pointer flex-col items-center justify-center gap-2 rounded-j border border-dashed border-j-line-strong bg-j-input text-center transition-colors hover:border-j-ink",
-            format === "reel" ? "aspect-[9/16] max-h-[280px]" : "aspect-[16/10]",
-          )}
-        >
-          <input type="file" accept="image/*,video/*" className="sr-only" />
-          <Upload size={20} className="text-j-muted" />
-          <span className="text-[13px] font-medium">
-            {format === "reel" ? "Upload a vertical video" : "Upload an image or video"}
-          </span>
-          <span className="text-[12px] text-j-faint">
-            {format === "reel" ? "9:16 recommended" : "Any aspect ratio"}
-          </span>
-        </label>
+      <Field label="Media" optional>
+        {media ? (
+          <div className="relative overflow-hidden rounded-j border border-j-line">
+            {media.mimeType.startsWith("video") ? (
+              <video src={media.url} muted loop playsInline autoPlay className="max-h-[300px] w-full object-contain" />
+            ) : (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img src={media.url} alt="" className="max-h-[300px] w-full object-contain" />
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                setMedia(null);
+                if (fileRef.current) fileRef.current.value = "";
+              }}
+              aria-label="Remove media"
+              className="absolute top-2 right-2 flex size-8 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm"
+            >
+              <X size={16} />
+            </button>
+            <p className="border-t border-j-line bg-j-surface px-3 py-2 text-[11px] text-j-muted">
+              Pinned to IPFS · {media.url.split("/").pop()?.slice(0, 18)}…
+            </p>
+          </div>
+        ) : (
+          <label
+            className={cn(
+              "flex cursor-pointer flex-col items-center justify-center gap-2 rounded-j border border-dashed border-j-line-strong bg-j-input text-center transition-colors hover:border-j-ink",
+              format === "reel" ? "aspect-[9/16] max-h-[280px]" : "aspect-[16/10]",
+              uploading && "pointer-events-none opacity-60",
+            )}
+          >
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*,video/*"
+              className="sr-only"
+              onChange={(e) => void onFile(e.target.files?.[0])}
+            />
+            {uploading ? (
+              <LoaderCircle size={20} className="animate-spin text-j-muted" />
+            ) : (
+              <Upload size={20} className="text-j-muted" />
+            )}
+            <span className="text-[13px] font-medium">
+              {uploading
+                ? "Pinning to IPFS…"
+                : format === "reel"
+                  ? "Upload a vertical video"
+                  : "Upload an image or video"}
+            </span>
+            <span className="text-[12px] text-j-faint">
+              {format === "reel" ? "9:16 recommended" : "Any aspect ratio"} · max 25MB
+            </span>
+          </label>
+        )}
+        {uploadError && (
+          <p role="alert" className="text-[12px] text-j-danger">
+            {uploadError}
+          </p>
+        )}
       </Field>
 
       <Field label="Name">
@@ -322,6 +407,28 @@ function ProofRow({ label, value, href }: { label: string; value: string; href: 
       </dd>
     </div>
   );
+}
+
+/** Intrinsic media dimensions, read from the file before it leaves the browser. */
+function readDimensions(file: File): Promise<{ width: number; height: number }> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const done = (width: number, height: number) => {
+      URL.revokeObjectURL(url);
+      resolve({ width, height });
+    };
+    if (file.type.startsWith("video")) {
+      const video = document.createElement("video");
+      video.onloadedmetadata = () => done(video.videoWidth, video.videoHeight);
+      video.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Unreadable video")); };
+      video.src = url;
+    } else {
+      const image = new Image();
+      image.onload = () => done(image.naturalWidth, image.naturalHeight);
+      image.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Unreadable image")); };
+      image.src = url;
+    }
+  });
 }
 
 function Field({

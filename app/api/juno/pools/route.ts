@@ -92,6 +92,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "configAddress does not match the pool" }, { status: 400 });
   }
 
+  const num = (key: string) =>
+    typeof body[key] === "number" ? (body[key] as number) : null;
+
   const row = await recordLaunch({
     baseMint,
     poolAddress,
@@ -104,6 +107,10 @@ export async function POST(request: Request) {
     format,
     curvePreset,
     navFeedId: str("navFeedId") || null,
+    mediaUrl: str("mediaUrl") || null,
+    posterUrl: str("posterUrl") || null,
+    mediaWidth: num("mediaWidth"),
+    mediaHeight: num("mediaHeight"),
     createSignature,
   });
 

@@ -9,6 +9,7 @@ import { getPool } from "@/lib/juno/registry";
 import { CoinMedia } from "@/components/juno/coin/CoinMedia";
 import { CoinSummary } from "@/components/juno/coin/CoinSummary";
 import { CoinTabs } from "@/components/juno/coin/CoinTabs";
+import { CreatorPanel } from "@/components/juno/coin/CreatorPanel";
 import { TradePanelClient } from "./TradePanelClient";
 
 export const dynamic = "force-dynamic";
@@ -51,6 +52,7 @@ export default async function CoinPage({
         <aside className="w-full shrink-0 lg:max-w-[420px]">
           <CoinSummary coin={coin} />
           <TradePanelClient coin={coin} quoteTokens={QUOTE_TOKENS} className="mt-4" />
+          <CreatorPanel coin={coin} />
 
           <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1.5 text-[12px]">
             <Proof href={explorer.account(coin.pool)}>Pool</Proof>
