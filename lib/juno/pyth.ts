@@ -1,3 +1,5 @@
+import { Connection } from "@solana/web3.js";
+
 import { getConnection } from "./dbc";
 import type { NavReading } from "./nav";
 import {
@@ -8,6 +10,7 @@ import {
   scaled,
   type PriceUpdate,
 } from "./pyth-account";
+import { pythSource } from "./pyth-source";
 
 /**
  * Pyth price feeds.
@@ -50,14 +53,25 @@ export const PYTH_FEEDS = {
 export type PythFeedName = keyof typeof PYTH_FEEDS;
 
 /**
- * How old a price may be and still be shown as a price. Sponsored feeds are
- * pushed on a heartbeat (one minute by default on mainnet) or a deviation
- * trigger, whichever is first. Devnet's runs slower: SOL/USD was measured
- * publishing every 313–315 s on 2026-09-18, so the default is about twice that.
- * Past this, the UI says "stale" rather than printing a number that may be
- * minutes or months out of date.
+ * How old a price may be and still be shown as a price — 600 s on devnet,
+ * 180 s on mainnet and a mainnet fork (see `pyth-source.ts`), or
+ * `PYTH_MAX_AGE_SECONDS`. Past this, the UI says "stale" rather than printing
+ * a number that may be minutes or months out of date.
  */
-export const MAX_PRICE_AGE_SECONDS = Number(process.env.PYTH_MAX_AGE_SECONDS) || 600;
+export const MAX_PRICE_AGE_SECONDS = pythSource().maxAgeSeconds;
+
+let cachedPythConnection: Connection | null = null;
+
+/**
+ * The app's own connection, unless the cluster reads Pyth elsewhere — a
+ * mainnet fork reads live mainnet, because its cloned accounts never update.
+ */
+export function pythConnection(): Connection {
+  const { rpc } = pythSource();
+  if (!rpc) return getConnection();
+  cachedPythConnection ??= new Connection(rpc, { commitment: "confirmed", disableRetryOnRateLimit: true });
+  return cachedPythConnection;
+}
 
 export function feedIdFor(name: string | null | undefined): string | null {
   if (!name) return null;
@@ -122,10 +136,10 @@ async function readOnChain(feedIds: string[]): Promise<Record<string, NavReading
   const out: Record<string, NavReading> = {};
   let infos;
   try {
-    infos = await getConnection().getMultipleAccountsInfo(addresses);
+    infos = await pythConnection().getMultipleAccountsInfo(addresses);
   } catch {
     for (const id of feedIds) {
-      out[id] = { status: "unavailable", feedId: id, reason: "Solana RPC read failed" };
+      out[id] = { status: "unavailable", feedId: id, reason: RPC_FAILED };
     }
     return out;
   }
@@ -180,12 +194,26 @@ async function readHermes(feedIds: string[]): Promise<Record<string, NavReading>
 }
 
 /*
- * A grid of pools asks for SOL/USD once per tile. Reads are cached for a few
- * seconds and in-flight reads are shared, so a page render costs one RPC call
- * per feed rather than one per pool.
+ * A grid of pools asks for SOL/USD once per tile, and every coin page asks for
+ * its NAV feed — all against a public RPC that answers bursts with 429s.
+ * In-flight reads are shared, and results are held for as long as they can
+ * usefully be: a live price for 15 s (devnet publishes every ~5 min, and the
+ * UI shows the publish time, not the read time), a feed that has not moved
+ * since July for a minute, and a failed read only briefly so it is retried.
  */
-const CACHE_MS = 5_000;
-const cache = new Map<string, { at: number; reading: Promise<NavReading> }>();
+const CACHE_MS = { live: 15_000, settled: 60_000, failed: 5_000 };
+const RPC_FAILED = "Solana RPC read failed";
+const READ_FAILED = "Price read failed";
+const cache = new Map<string, { at: number; ttl: number; reading: Promise<NavReading> }>();
+
+/** Exported for tests. */
+export function ttlFor(reading: NavReading): number {
+  if (reading.status === "live") return CACHE_MS.live;
+  if (reading.status === "unavailable" && (reading.reason === RPC_FAILED || reading.reason === READ_FAILED)) {
+    return CACHE_MS.failed;
+  }
+  return CACHE_MS.settled;
+}
 
 async function readUncached(feedIds: string[]): Promise<Record<string, NavReading>> {
   const onChain = await readOnChain(feedIds);
@@ -209,18 +237,22 @@ export async function readPythFeeds(feedIds: string[]): Promise<Record<string, N
   const now = Date.now();
   const missing = ids.filter((id) => {
     const hit = cache.get(id);
-    return !hit || now - hit.at > CACHE_MS;
+    return !hit || now - hit.at > hit.ttl;
   });
   if (missing.length > 0) {
     const batch = readUncached(missing);
     for (const id of missing) {
-      cache.set(id, {
-        at: now,
-        reading: batch.then(
-          (r) => r[id],
-          (): NavReading => ({ status: "unavailable", feedId: id, reason: "Price read failed" }),
-        ),
+      // Held for the shortest window until the read lands, so a request that
+      // arrives mid-flight shares it rather than starting another.
+      const reading = batch.then(
+        (r) => r[id],
+        (): NavReading => ({ status: "unavailable", feedId: id, reason: READ_FAILED }),
+      );
+      const entry = { at: now, ttl: CACHE_MS.failed, reading };
+      void reading.then((r) => {
+        entry.ttl = ttlFor(r);
       });
+      cache.set(id, entry);
     }
   }
   const entries = await Promise.all(ids.map(async (id) => [id, await cache.get(id)!.reading] as const));

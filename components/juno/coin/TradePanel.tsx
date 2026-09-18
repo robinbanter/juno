@@ -402,7 +402,8 @@ export function TradePanel({
           <AlertTriangle size={15} className="mt-0.5 shrink-0" aria-hidden="true" />
           <span>
             This {side} fills at {usd(navCheck.executionUsd)} per {coin.symbol},{" "}
-            {percent(navCheck.deviation, Math.abs(navCheck.deviation) >= 10 ? 0 : 2)}{" "}
+            {/* Unsigned: "above"/"below" already carries the direction. */}
+            {(Math.abs(navCheck.deviation) * 100).toFixed(Math.abs(navCheck.deviation) >= 10 ? 0 : 2)}%{" "}
             {navCheck.deviation > 0 ? "above" : "below"} the Pyth NAV of{" "}
             {nav!.reading.status === "live" ? usd(nav!.reading.priceUsd) : "—"} — outside the ±
             {nav!.bandBps / 100}% band.

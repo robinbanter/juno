@@ -7,8 +7,9 @@ import {
   priceFeedAccount,
   scaled,
 } from "@/lib/juno/pyth-account";
-import { PYTH_FEEDS, feedIdFor, freshestUpdate, toReading } from "@/lib/juno/pyth";
+import { PYTH_FEEDS, feedIdFor, freshestUpdate, toReading, ttlFor } from "@/lib/juno/pyth";
 import { executionPrice, navBand, quoteAgainstNav, type NavContext } from "@/lib/juno/nav";
+import { pythAccountUrl, pythSource } from "@/lib/juno/pyth-source";
 
 /*
  * Real account data, read from Solana devnet with `getAccountInfo` on
@@ -155,6 +156,69 @@ describe("freshestUpdate / toReading", () => {
       sol,
     ]);
     expect(found?.address).toBe(SOL_USD_DEVNET.address);
+  });
+});
+
+describe("pythSource", () => {
+  it("reads devnet Pyth through the app's own RPC on devnet", () => {
+    expect(pythSource({ NEXT_PUBLIC_SOLANA_CLUSTER: "devnet" })).toEqual({
+      network: "devnet",
+      rpc: null,
+      maxAgeSeconds: 600,
+    });
+    // Unset means devnet, matching `cluster()`.
+    expect(pythSource({}).network).toBe("devnet");
+  });
+
+  it("reads mainnet Pyth through the app's own RPC on mainnet", () => {
+    expect(pythSource({ NEXT_PUBLIC_SOLANA_CLUSTER: "mainnet-beta" })).toEqual({
+      network: "mainnet-beta",
+      rpc: null,
+      maxAgeSeconds: 180,
+    });
+  });
+
+  it("reads live mainnet on a fork, because cloned accounts never update", () => {
+    expect(pythSource({ NEXT_PUBLIC_SOLANA_CLUSTER: "mainnet-fork" })).toEqual({
+      network: "mainnet-beta",
+      rpc: "https://api.mainnet-beta.solana.com",
+      maxAgeSeconds: 180,
+    });
+  });
+
+  it("lets PYTH_RPC_URL and PYTH_MAX_AGE_SECONDS override", () => {
+    const source = pythSource({
+      NEXT_PUBLIC_SOLANA_CLUSTER: "mainnet-fork",
+      PYTH_RPC_URL: "http://127.0.0.1:8899",
+      PYTH_MAX_AGE_SECONDS: "90",
+    });
+    expect(source).toEqual({ network: "mainnet-beta", rpc: "http://127.0.0.1:8899", maxAgeSeconds: 90 });
+  });
+
+  it("links the price account on the network it was read from", () => {
+    const address = SOL_USD_DEVNET.address;
+    expect(pythAccountUrl(address, pythSource({ NEXT_PUBLIC_SOLANA_CLUSTER: "devnet" }))).toBe(
+      `https://solscan.io/account/${address}?cluster=devnet`,
+    );
+    expect(pythAccountUrl(address, pythSource({ NEXT_PUBLIC_SOLANA_CLUSTER: "mainnet-fork" }))).toBe(
+      `https://solscan.io/account/${address}`,
+    );
+  });
+});
+
+describe("ttlFor", () => {
+  it("re-reads live prices often, settled feeds rarely, and failed reads soonest", () => {
+    const live = ttlFor({
+      status: "live", feedId: "x", priceUsd: 1, confidence: 0, publishedAt: "", account: null, source: "solana",
+    });
+    const stale = ttlFor({ status: "stale", feedId: "x", publishedAt: "", account: null, source: "solana" });
+    const missing = ttlFor({ status: "unavailable", feedId: "x", reason: "No Pyth price account for this feed on this cluster" });
+    const failed = ttlFor({ status: "unavailable", feedId: "x", reason: "Solana RPC read failed" });
+    expect(failed).toBeLessThan(live);
+    expect(live).toBeLessThan(stale);
+    expect(missing).toBe(stale);
+    // Never long enough to hide a feed crossing the staleness bound for real.
+    expect(stale).toBeLessThanOrEqual(60_000);
   });
 });
 

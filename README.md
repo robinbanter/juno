@@ -280,6 +280,7 @@ Routes: `/explore` · `/reels` · `/coin/[address]` · `/creator/[wallet]` · `/
 | `MONGODB_URI` / `MONGODB_DB` | no | Comments, likes and follows. Unset, those routes throw and the counts render as zero; nothing else is affected. |
 | `SESSION_SECRET` | for social | Signs wallet sessions (32+ chars). Without it likes, comments and follows are refused with 503 — they are keyed by wallet, and only a signed-in wallet may act as itself. |
 | `PYTH_API_KEY` | no | Pyth is read on-chain without it; the key only adds a Hermes fallback |
+| `PYTH_RPC_URL` | no | On `mainnet-fork` Pyth defaults to live mainnet, since cloned price accounts freeze when the fork starts |
 
 The CLI scripts read the same `.env.local` via `dotenv-cli` and sign with a local key
 instead of a browser wallet.
