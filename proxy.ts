@@ -23,13 +23,21 @@ import { NextResponse, type NextRequest } from "next/server";
 // Solana public keys: base58, 32–44 characters. Excludes 0, O, I and l.
 const BASE58 = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 
+/**
+ * Routes below an id that exist and so deserve the same check. The creator's
+ * Manage view lives under the coin; anything else deeper is not a route and
+ * falls through to Next's own 404.
+ */
+const SUBROUTES: Record<string, string[]> = { coin: ["manage"], creator: [] };
+
 export function proxy(request: NextRequest) {
   // "/coin/<id>" -> ["", "coin", "<id>"]; the matcher guarantees the section.
-  const [, , id, ...rest] = request.nextUrl.pathname.split("/");
+  const [, section, id, ...rest] = request.nextUrl.pathname.split("/");
 
-  // Only the bare /coin/<id> and /creator/<id> pages. Anything deeper is not
-  // a route that exists and falls through to Next's own 404.
-  if (rest.length === 0 && id && !BASE58.test(decodeURIComponent(id))) {
+  const isPage =
+    rest.length === 0 || (rest.length === 1 && (SUBROUTES[section] ?? []).includes(rest[0]));
+
+  if (isPage && id && !BASE58.test(decodeURIComponent(id))) {
     // Rewriting to a path no route matches makes Next render app/not-found.tsx
     // with a genuine 404, rather than a bare-text response.
     return NextResponse.rewrite(new URL("/__not-found", request.url));
@@ -39,5 +47,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/coin/:id", "/creator/:id"],
+  matcher: ["/coin/:id", "/coin/:id/manage", "/creator/:id"],
 };
