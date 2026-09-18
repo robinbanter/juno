@@ -4,7 +4,7 @@ import { hydratePoolsReport } from "@/lib/juno/chain";
 import { UnavailableNotice } from "@/components/juno/UnavailableNotice";
 import { cluster } from "@/lib/juno/cluster";
 import { listPools } from "@/lib/juno/registry";
-import { likeCounts } from "@/lib/juno/social";
+import { commentCounts, likeCounts } from "@/lib/juno/social";
 import { ReelFeed } from "@/components/juno/reels/ReelFeed";
 
 export const metadata = { title: "Reels" };
@@ -20,10 +20,18 @@ export default async function ReelsPage() {
   // whole feed, and a Mongo outage just leaves the counts at zero rather than
   // taking the feed down with it.
   try {
-    const counts = await likeCounts(reels.map((c) => c.address), cluster());
-    reels = reels.map((coin) => ({ ...coin, likes: counts[coin.address] ?? 0 }));
+    const mints = reels.map((c) => c.address);
+    const [likes, comments] = await Promise.all([
+      likeCounts(mints, cluster()),
+      commentCounts(mints, cluster()),
+    ]);
+    reels = reels.map((coin) => ({
+      ...coin,
+      likes: likes[coin.address] ?? 0,
+      commentCount: comments[coin.address] ?? 0,
+    }));
   } catch {
-    // Leave `likes` as-is; the client hook will fill it in if Mongo recovers.
+    // Leave the counts unset; the like hook fills its own in if Mongo recovers.
   }
 
   // "No reels yet" only if there really are none — not when the RPC refused them.
