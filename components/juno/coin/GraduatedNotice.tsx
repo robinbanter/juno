@@ -2,7 +2,6 @@ import { ExternalLink } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { explorer } from "@/lib/juno/cluster";
-import { dammV2PoolFor } from "@/lib/juno/damm";
 import type { Coin } from "@/lib/juno/types";
 
 /**
@@ -14,7 +13,7 @@ import type { Coin } from "@/lib/juno/types";
  * v2, so the honest thing is to point at it.
  */
 export function GraduatedNotice({ coin, className }: { coin: Coin; className?: string }) {
-  const damm = dammV2PoolFor(coin);
+  const damm = coin.graduatedPool;
 
   return (
     <section

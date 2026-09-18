@@ -98,12 +98,13 @@ Verified by running things, not by reading imports.
 
 | | |
 |---|---|
-| **DBC pools created by this code** | **7**, all devnet, all seven creation signatures confirmed `err: null` — listed below |
+| **DBC pools created by this code** | **8**, all devnet, all eight creation signatures confirmed `err: null` — listed below |
 | **Presets exercised on chain** | all four (`content`, `thin-name`, `ipo-book`, `tight-nav`) |
 | **A real buy** | 0.5 SOL into NVDAx; curve progress 0.0000% → 0.0117% |
 | **A real sell** | 5,000 NVDAx back to the pool; curve progress now reads **0.0114%** |
-| **A full lifecycle** | launch → 8 buys → curve at **100.0000%** → **migrated to DAMM v2** |
-| **Creator fees claimed** | 0.009653 SOL, `claimCreatorTradingFee`, balance to zero |
+| **A full lifecycle** | launch → 8 buys → curve at **100.0000%** → **migrated to DAMM v2** — and a second, `thin-name`, through the issuer tooling (`lib/juno/issuer.ts`) |
+| **Creator fees claimed** | 0.009653 SOL, `claimCreatorTradingFee`, balance to zero; then 0.000504652 and 0.05382363 SOL through `lib/juno/issuer.ts` |
+| **Issuer tooling** | `/coin/<mint>/manage`: live curve progress, quote reserve vs `migrationQuoteThreshold`, price, fee decay (opening / now / floor, countdown), preset matched from the on-chain config, the 16 liquidity weights, claimable fees + Claim, Migrate to DAMM v2. Same functions as `juno:inspect` / `juno:claim` / `juno:graduate`. The browser-built claim and migrate transactions simulate clean on devnet; a real browser-wallet signature has not been done by a human |
 | **Token metadata** | pinned to IPFS via Pinata, URI written to the mint at creation |
 | **Reel media** | real video pinned to IPFS, served through `/api/ipfs/<cid>` with server-side gateway failover |
 | **Registry** | Neon Postgres (`juno_pools`) — identity and provenance only |
@@ -111,7 +112,7 @@ Verified by running things, not by reading imports.
 | **Wallet** | Phantom / Solflare via `@solana/wallet-adapter` |
 | **Quotes** | priced by `pool.swapQuote` against live account state |
 | **Swap history** | Direction, size, execution price and trader reconstructed per trade from token-balance deltas — driving a real price chart, real 24h volume, and real trade rows |
-| **Tests** | **66 unit tests across 7 files**, passing — including all four presets asserted against Meteora's own `validateConfigParameters`, and both deprecated paths (DAMM v1, `RateLimiter`) asserted unused |
+| **Tests** | **75 unit tests across 8 files**, passing — including all four presets asserted against Meteora's own `validateConfigParameters`, and both deprecated paths (DAMM v1, `RateLimiter`) asserted unused |
 
 There is **no mock data layer**. `lib/juno/mock.ts` was deleted; if a pool is not
 on-chain *and* in the registry, it does not appear in the app.
@@ -138,7 +139,7 @@ Program, identical on mainnet and devnet:
 
 Deployer: [`9CHr5g24EdzUKg9GZFUvEuAvHAjZGCsF1Z3zVPudWYoE`](https://solscan.io/account/9CHr5g24EdzUKg9GZFUvEuAvHAjZGCsF1Z3zVPudWYoE?cluster=devnet)
 
-### The seven pools
+### The eight pools
 
 | Coin | Preset | Format | Quote | Pool | Creation tx |
 |---|---|---|---|---|---|
@@ -149,6 +150,7 @@ Deployer: [`9CHr5g24EdzUKg9GZFUvEuAvHAjZGCsF1Z3zVPudWYoE`](https://solscan.io/ac
 | **Night Market, District Nine** | `content` | reel | SOL | [`3kXH227N…rGM44`](https://solscan.io/account/3kXH227Niyztfd89asv1eprC9f6Y5p8YgaVvHmLrGM44?cluster=devnet) | [`5gNCvd5v…buugCi`](https://solscan.io/tx/5gNCvd5vULwcw6HQtx5Fe4hkGSKGkJMgfGkRhBBNQN5TmJkFWX2obmqgG44uyQSqEax5kZ9zsMLzqzz5vQbuugCi?cluster=devnet) |
 | **Foundry, 4am** | `content` | reel | SOL | [`FiLgdmSn…CSsX3Z`](https://solscan.io/account/FiLgdmSnVaC8ynuhFhDi9x5QxNnggkfY4FwsQyCSsX3Z?cluster=devnet) | [`5evn1DtK…K56H24`](https://solscan.io/tx/5evn1DtKV4AYfeGLMs6Vp9rdoNWBVH7wyNB5xdjzVDeaMo1DKTGV5HBM1DV4QYXUqRrH5ZgHF4WTrvcJTaK56H24?cluster=devnet) |
 | **Transit Spine** | `thin-name` | reel | SOL | [`ACFyGPsL…qkJWAz`](https://solscan.io/account/ACFyGPsLKmhTBQ6XhoSfytzJr1tkSqkU1UdM97qkJWAz?cluster=devnet) | [`2k5iabQY…bEaxne`](https://solscan.io/tx/2k5iabQYVQeBbKFfCC5bGBGnMpXCze5xJKPCrzjriHiixoxtEzFv7YS1TTuBYWTGKv7fjzXU2LbXiNpjscbEaxne?cluster=devnet) |
+| **Juno Graduation Rehearsal** | `thin-name` | post | SOL | [`8Y4XdeMd…hB9mx`](https://solscan.io/account/8Y4XdeMd2DDr3ymjYgR2DtsM7YML346R3MDK2L5hB9mx?cluster=devnet) | [`2EMDbyUY…qkP7A4b`](https://solscan.io/tx/2EMDbyUYxSwXxgE9xApbezLr38ZDW9mrERcv5w2MtRTADZhWbBw4BrsHViN5QZhgfkJYV2fZ31uHkNBdqGkP7A4b?cluster=devnet) |
 
 ### AAPLx — the first pool, `ipo-book`
 
@@ -253,7 +255,7 @@ npm run dev                        # next dev --webpack
 
 ```bash
 npm test                 # everything
-npm run test:unit        # 66 tests, ~1s — the curve presets live here
+npm run test:unit        # 75 tests, ~1s — the curve presets live here
 npm run build            # production build — green
 ```
 
@@ -296,7 +298,8 @@ leaves your machine. Add `--mainnet` to `juno:launch` only once devnet has worke
 npm run juno:launch   -- --preset ipo-book --name "AAPLx Issuance" --symbol AAPLXI \
                          --quote usdc --nav "Equity.US.AAPL/USD" --yes
 
-# read a pool straight off the program: price, curve progress, threshold, a live quote
+# read a pool straight off the program — the CLI face of the Manage view: price,
+# curve progress, fee decay, matched preset, claimable fees, DAMM v2 target, a live quote
 npm run juno:inspect  -- --mint <baseMint>
 
 # trade against the curve
@@ -309,11 +312,13 @@ npm run juno:trade    -- --mint <baseMint> --side buy --amount 0.01 --partial --
 # parsed swap history: direction, size, execution price, volume, chart points
 npm run juno:swaps    -- --mint <baseMint>
 
-# claim accrued creator trading fees
+# claim accrued creator trading fees (--simulate dry-runs the exact transaction)
+npm run juno:claim    -- --mint <baseMint> --simulate
 npm run juno:claim    -- --mint <baseMint> --yes
 
-# migrate a completed curve into DAMM v2
-npm run juno:graduate -- --mint <baseMint> --preset content --yes
+# migrate a completed curve into DAMM v2 — the fee tier is read off the pool's config
+npm run juno:graduate -- --mint <baseMint> --simulate
+npm run juno:graduate -- --mint <baseMint> --yes
 ```
 
 ---

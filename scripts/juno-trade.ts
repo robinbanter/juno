@@ -17,6 +17,7 @@ import {
   buildSwapTransaction,
   fetchPoolSnapshot,
   getDbcClient,
+  invalidatePoolSnapshot,
   quoteTrade,
   sendTransaction,
 } from "../lib/juno/dbc";
@@ -94,6 +95,8 @@ async function main() {
     onSent: (sig) => console.log(`\nsent           ${sig}`),
   });
 
+  // The snapshot cache would otherwise hand back the pre-trade read.
+  invalidatePoolSnapshot(poolAddress);
   const after = await fetchPoolSnapshot(poolAddress);
   console.log(`\n✅ Trade confirmed`);
   console.log(`tx             ${explorer.tx(signature)}`);

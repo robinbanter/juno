@@ -24,10 +24,11 @@ explorer or by running a script in this repo.
 
 | | |
 |---|---|
-| **DBC pools created by this code** | **7 on devnet**, all four presets exercised — highlights below, full table in [README.md](./README.md) |
+| **DBC pools created by this code** | **8 on devnet**, all four presets exercised — highlights below, full table in [README.md](./README.md) |
 | **Real swaps through the app's own path** | a buy *and* a sell, links below; the curve moved both ways |
 | **A full lifecycle** | launch → trade → curve to 100% → **migrated to DAMM v2** |
-| **Creator fees claimed** | 0.009653 SOL, on-chain |
+| **Creator fees claimed** | 0.009653 SOL, then 0.000504652 and 0.05382363 SOL, on-chain |
+| **Issuer tooling** | creator Manage view at `/coin/<mint>/manage` — monitor, claim, migrate — sharing `lib/juno/issuer.ts` with the CLI; browser-built transactions simulate clean, real wallet signature still needs a human |
 | **Token metadata** | pinned to IPFS, URI written to the mint |
 | **Curve configs** | 4 presets, 16 liquidity-weighted segments each |
 | **Persistence** | Neon Postgres (`juno_pools`), writes verified through the API |
@@ -36,7 +37,7 @@ explorer or by running a script in this repo.
 | **Quotes** | priced by the DBC quoter against live account state |
 | **Comments** | MongoDB via `lib/juno/social.ts`, wired to `app/api/juno/comments` — kept out of Postgres so a comment outage cannot take the market data down. Code reviewed, not runtime-verified. |
 | **Swap history** | direction, size, execution price and trader per trade, from token-balance deltas — driving the price chart, 24h volume and trade rows |
-| **Tests** | 66 unit tests across 7 files, incl. all four presets validated by Meteora's own `validateConfigParameters`. Was 140 before the Norr purge took the tests covering deleted code — see [README.md](./README.md). |
+| **Tests** | 75 unit tests across 8 files, incl. all four presets validated by Meteora's own `validateConfigParameters`. Was 140 before the Norr purge took the tests covering deleted code — see [README.md](./README.md). |
 
 ### Not built
 
@@ -158,8 +159,8 @@ npm run juno:trade    -- --mint <baseMint> --side buy  --amount 0.5  --yes
 npm run juno:trade    -- --mint <baseMint> --side sell --amount 5000 --yes
 npm run juno:trade    -- --mint <baseMint> --side buy --amount 0.01 --partial --yes
 npm run juno:swaps    -- --mint <baseMint>
-npm run juno:claim    -- --mint <baseMint> --yes
-npm run juno:graduate -- --mint <baseMint> --preset content --yes
+npm run juno:claim    -- --mint <baseMint> --simulate   # or --yes to send
+npm run juno:graduate -- --mint <baseMint> --simulate   # or --yes; fee tier read from chain
 ```
 
 Each runs the same code path the UI uses, signed by a local key at

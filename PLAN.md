@@ -55,7 +55,7 @@ Legend: `DONE` · `IN PROGRESS` · `NOT STARTED` · `BLOCKED`
 | 0.6 | `/creator/[handle]` profile with posts/reels tabs | DONE (mock data) |
 | 0.7 | `/create` launch form with curve preset picker | DONE |
 | 0.8 | `/activity` global trade feed | DONE (mock data) |
-| 0.9 | Unit tests + production build green | DONE — 66 tests, 7 files; was 140 before the Norr purge deleted the tests covering deleted code |
+| 0.9 | Unit tests + production build green | DONE — 75 tests, 8 files (66 after the Norr purge, which deleted the tests covering deleted code — was 140; +9 for the issuer tooling) |
 
 ### Phase 1 — On-chain core
 | # | Task | Status |
@@ -188,10 +188,11 @@ itemised. A task counts as complete only if its status line starts with `DONE`.
 | Block 3 — swap indexer | 4 | 4 | built and verified on two devnet pools |
 | Block 4 — social | 3 | 3 | comments, likes and follows all persisted |
 | Block 5 — legacy purge | 1 | 1 | done; build green |
-| **Engineering total** | **64** | **67** | **95.5%** |
+| Block 7 — issuer tooling | 4 | 5 | I.5 needs a human with the creator's browser wallet |
+| **Engineering total** | **68** | **72** | **94.4%** |
 
-**Engineering: 64 / 67 = 95.5%.** The three open items are 2.6 (browser wallet,
-needs a human), 5.3 and 5.4 (Pyth NAV band, needs a Hermes key).
+**Engineering: 68 / 72 = 94.4%.** The four open items are 2.6 and I.5 (browser
+wallet signatures, need a human), 5.3 and 5.4 (Pyth NAV band, needs a Hermes key).
 
 **Submission readiness is much lower, and is the real risk.** Phase 8 is **1 / 7 =
 14%**. The one done item is the README. Still open: deploy to a public URL (8.2), a
@@ -206,7 +207,7 @@ see a repo, a URL and a video, and two of those three do not exist yet.
 
 Verified on chain, in Postgres, and by running the test suite:
 
-- **7 live devnet DBC pools**, all in `juno_pools`, all four presets exercised. All 7
+- **8 live devnet DBC pools**, all in `juno_pools`, all four presets exercised. All 7
   creation signatures confirmed `err: null` against `api.devnet.solana.com`.
 - **A real buy**: NVDAx 0.5 SOL (`59DBxUgP…QJwdGzV`), curve 0.0000% → 0.0117%.
 - **A real sell**: 5,000 NVDAx (`xWxpJFtZ…CRYQJg9`, slot 499958074), curve back to
@@ -215,7 +216,7 @@ Verified on chain, in Postgres, and by running the test suite:
   `EhvtVimk…MYy7L` (`4HatkGNZ…bMVTZtc`). `juno:inspect` reports `graduated true`.
 - **Creator fees claimed**: 0.009653 SOL (`3X4g3aDg…9HdAN`).
 - **IPFS**: token metadata and three reel videos pinned and resolving.
-- **66 unit tests across 7 files passing**, including Meteora's own
+- **75 unit tests across 8 files passing**, including Meteora's own
   `validateConfigParameters` over all four presets.
 
 ---
@@ -311,6 +312,19 @@ can afford to be correct.
 Synthetic rows created while testing were deleted afterwards. What remains is one
 like per coin from the deployer wallet, which is a real wallet that really launched
 those pools.
+
+#### Block 7: Issuer tooling — configure and monitor DBC pools from the app — 4 / 5
+Owner: juno-7. The Meteora brief asks for "tooling that helps issuers configure and
+monitor DBC pools". Before this, claiming and graduating only really worked from CLI
+scripts signed by `.juno/launcher.json`. Full log: `/tmp/juno-issuer-report.md`.
+
+| # | Task | Status |
+|---|---|---|
+| I.1 | One shared code path: `lib/juno/issuer.ts`; `juno:inspect` / `juno:claim` / `juno:graduate` become thin wrappers over it, with a `--simulate` dry run | DONE — the scripts and the Manage view call the same `readIssuerState`, `claimCreatorFees` and `graduatePool`. `juno:graduate` no longer takes `--preset`: the DAMM v2 fee tier is read from the pool's `migrationFeeOption`, because the old `content` default was the wrong tier for three of the four presets |
+| I.2 | Pool monitor at `/coin/<mint>/manage` | DONE — curve progress vs `migrationQuoteThreshold`, quote reserve, price, fee decay (opening / now / floor + live countdown), preset matched **from the on-chain config**, the 16 liquidity weights, and the curve chart. Browser-verified on GRADTN while it was still decaying (5.00% → 1.50% now → 0.60% floor, "6m 13s until the floor") and on AAPLx (USDC, `ipo-book`). Console and network clean apart from dev-mode warnings |
+| I.3 | Claim creator fees from the UI, same path as `juno:claim` | DONE — CLI sends through the refactored path: NVDAx 0.000504652 SOL (`2Cc6mq3g…7ckGR`, lamports +499,652 net of fee) and GRAD 0.05382363 SOL (`5sQqxR6Q…Sqw7`, remaining 0). The browser-built claim transaction (617 bytes) simulates `err: null`, 34,945 CU, `ClaimCreatorTradingFee` |
+| I.4 | Migrate to DAMM v2 from the UI once at 100%, then link to the DAMM v2 pool | DONE — new `thin-name` pool GRADTN (`8Y4XdeMd…hB9mx`) filled to 100% (`5N9E8HeE…PvndB`) and migrated through `graduatePool` (`2hSPTWnq…RYQmen`, `err: null`) into DAMM v2 pool `9UE389Y8…w1Ha` (owner `cpamdp…`, tier option 1). The browser-built migrate transaction simulates `err: null`, 137,744 CU, before the real one was sent. The Manage view, GraduatedNotice and the Details tab now link the DAMM v2 pool; the Details tab showed the DBC pool address under that label before |
+| I.5 | A human signs a UI claim/migrate with the creator's browser wallet | OPEN — automation used a watch-only Wallet Standard wallet (public key only). The transaction reaches the wallet, simulates clean, and the wallet refuses to sign. Every Juno pool's creator is the launcher key, which is not in a browser wallet: import `.juno/launcher.json` into Phantom (devnet), or launch a pool from `/create` with your own wallet |
 
 #### Block 5: Purge dead non-Solana code (Norr / Algorand / x402 / Privy / Clerk / Stripe) — DONE
 Taken over by juno-4 after juno-3 stalled in `needs_input` for 40 minutes without
