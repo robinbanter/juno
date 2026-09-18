@@ -16,6 +16,7 @@ import {
 } from "@/lib/juno/dbc";
 import type { Coin, TradeSide } from "@/lib/juno/types";
 import { describeError } from "./useLaunch";
+import { forgetSession, useWalletSession } from "./useWalletSession";
 
 /**
  * SOL held back from the spendable balance: two token-account rents (the coin
@@ -27,7 +28,12 @@ export type TradeState =
   | { status: "idle" }
   | { status: "signing" }
   | { status: "confirming" }
-  | { status: "done"; signature: string }
+  | {
+      status: "done";
+      signature: string;
+      /** Set when the trade landed but its attached comment could not be posted. */
+      commentError?: string;
+    }
   | { status: "error"; message: string };
 
 /**
@@ -41,6 +47,7 @@ export type TradeState =
 export function useTrade(coin: Coin) {
   const { publicKey, signTransaction } = useWallet();
   const { setVisible } = useWalletModal();
+  const { ensureSession } = useWalletSession();
 
   const [snapshot, setSnapshot] = useState<PoolSnapshot | null>(null);
   const [balanceUsd, setBalanceUsd] = useState(0);
@@ -120,7 +127,13 @@ export function useTrade(coin: Coin) {
   }, [refreshBalances]);
 
   const swap = useCallback(
-    async (input: { side: TradeSide; amountIn: number; minimumAmountOut: number }) => {
+    async (input: {
+      side: TradeSide;
+      amountIn: number;
+      minimumAmountOut: number;
+      /** Optional note posted to the coin's comments, tagged with this trade. */
+      comment?: string;
+    }) => {
       if (!publicKey || !signTransaction) {
         setVisible(true);
         return;
@@ -149,14 +162,58 @@ export function useTrade(coin: Coin) {
         });
 
         setState({ status: "done", signature });
+
+        // The comment box on the trade panel. Posted only once the trade has
+        // confirmed, so a comment tagged "bought" always has a buy behind it,
+        // and a failure here never reports the trade itself as failed.
+        const note = input.comment?.trim();
+        const posting = note
+          ? ensureSession()
+              .then(() =>
+                fetch("/api/juno/comments", {
+                  method: "POST",
+                  headers: { "content-type": "application/json" },
+                  body: JSON.stringify({
+                    coin: coin.address,
+                    wallet: publicKey.toBase58(),
+                    body: note,
+                    side: input.side,
+                    signature,
+                  }),
+                }),
+              )
+              .then(async (response) => {
+                if (response.ok) return;
+                if (response.status === 401) forgetSession();
+                const body = (await response.json().catch(() => ({}))) as { error?: string };
+                throw new Error(body.error ?? "Could not post the comment");
+              })
+              .catch((error: unknown) =>
+                setState({
+                  status: "done",
+                  signature,
+                  commentError: error instanceof Error ? error.message : "Could not post the comment",
+                }),
+              )
+          : Promise.resolve();
+
         // The trade moved the curve and the wallet; re-read both, bypassing
         // the snapshot cache.
-        await Promise.all([refresh(true), refreshBalances()]);
+        await Promise.all([refresh(true), refreshBalances(), posting]);
       } catch (error) {
         setState({ status: "error", message: describeError(error) });
       }
     },
-    [publicKey, signTransaction, setVisible, ensureSnapshot, refresh, refreshBalances],
+    [
+      publicKey,
+      signTransaction,
+      setVisible,
+      ensureSnapshot,
+      refresh,
+      refreshBalances,
+      ensureSession,
+      coin.address,
+    ],
   );
 
   return {

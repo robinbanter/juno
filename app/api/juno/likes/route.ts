@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import { cluster } from "@/lib/juno/cluster";
 import { getPool } from "@/lib/juno/registry";
 import { likeState, toggleLike } from "@/lib/juno/social";
+import { requireWallet } from "@/lib/juno/session";
+import { LIMITS, rateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -50,6 +52,13 @@ export async function POST(request: Request) {
   if (!BASE58.test(wallet)) {
     return NextResponse.json({ error: "wallet is not an address" }, { status: 400 });
   }
+
+  // The wallet must be the one this browser signed in as. Without this, any
+  // caller could like as any address by naming it in the body.
+  const denied = requireWallet(request, wallet);
+  if (denied) return denied;
+  const limited = rateLimit(`social:${wallet}`, LIMITS.socialWrite);
+  if (limited) return limited;
 
   // Same guard the comments route applies: only coins Juno actually launched,
   // otherwise this is an open write endpoint keyed on an arbitrary string.
