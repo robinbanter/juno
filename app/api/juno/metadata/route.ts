@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 
 import { CURVE_PRESETS } from "@/lib/juno/curves";
 import { pinTokenMetadata } from "@/lib/juno/pinata";
+import { clientKey } from "@/lib/juno/request";
+import { LIMITS, rateLimit } from "@/lib/rate-limit";
 import type { CurvePresetId } from "@/lib/juno/types";
 
 export const runtime = "nodejs";
@@ -14,6 +16,9 @@ export const runtime = "nodejs";
  * second chance to attach it.
  */
 export async function POST(request: Request) {
+  const limited = rateLimit(`metadata:${clientKey(request)}`, LIMITS.metadata);
+  if (limited) return limited;
+
   if (!process.env.PINATA_JWT) {
     return NextResponse.json({ error: "Metadata pinning is not configured" }, { status: 503 });
   }
@@ -55,6 +60,7 @@ export async function POST(request: Request) {
       description: str("description"),
       imageUrl: str("imageUrl") || undefined,
       mediaMimeType: str("mimeType") || undefined,
+      posterUrl: str("posterUrl") || undefined,
       externalUrl: str("externalUrl") || undefined,
       attributes,
     });

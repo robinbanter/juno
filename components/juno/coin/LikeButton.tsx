@@ -14,7 +14,7 @@ import { useLikes } from "../useLikes";
  * and a popular one look identical to a visitor.
  */
 export function LikeButton({ coinMint, initialCount = 0 }: { coinMint: string; initialCount?: number }) {
-  const { count, liked, pending, toggle, canLike } = useLikes(coinMint, initialCount);
+  const { count, liked, pending, toggle, canLike, error } = useLikes(coinMint, initialCount);
 
   return (
     <button
@@ -23,7 +23,7 @@ export function LikeButton({ coinMint, initialCount = 0 }: { coinMint: string; i
       disabled={!canLike || pending}
       aria-pressed={liked}
       aria-label={!canLike ? "Connect a wallet to like" : liked ? "Unlike" : "Like"}
-      title={!canLike ? "Connect a wallet to like" : liked ? "Unlike" : "Like"}
+      title={error ?? (!canLike ? "Connect a wallet to like" : liked ? "Unlike" : "Like")}
       className={cn(
         "flex h-9 items-center gap-1.5 rounded-full px-3 text-[13px] font-medium transition-colors",
         "focus-visible:ring-2 focus-visible:ring-j-focus focus-visible:outline-none",

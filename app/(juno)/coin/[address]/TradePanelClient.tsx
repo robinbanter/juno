@@ -44,7 +44,9 @@ export function TradePanelClient({
       if (amountIn <= 0) return null;
       const snapshot = await ensureSnapshot();
       if (!snapshot) return null;
-      // Real curve math against the pool as it stands right now.
+      // Real curve math against the pool as it stands right now. A throw
+      // ("Insufficient Liquidity" when the amount is more than the curve has
+      // left) propagates to TradePanel, which shows it as the quote's error.
       return quoteTrade({ snapshot, side, amountIn, slippageBps: 100 });
     },
     [ensureSnapshot],
@@ -66,7 +68,7 @@ export function TradePanelClient({
         nav={nav}
         onQuote={onQuote}
         submitting={busy}
-        onSubmit={({ side, amountIn, quote }) => {
+        onSubmit={({ side, amountIn, quote, comment }) => {
           // Never send without a quote. The previous fallback was
           // `minimumAmountOut: 0`, commented as "the program itself rejects
           // rather than filling at any price". It does not: simulating a buy
@@ -75,7 +77,7 @@ export function TradePanelClient({
           // A zero minimum is no slippage protection at all. TradePanel
           // already refuses to submit without a quote; this is the backstop.
           if (!quote) return;
-          void swap({ side, amountIn, minimumAmountOut: quote.minimumAmountOut });
+          void swap({ side, amountIn, comment, minimumAmountOut: quote.minimumAmountOut });
         }}
       />
 
@@ -90,7 +92,14 @@ export function TradePanelClient({
 
       {state.status === "done" && (
         <div className="mt-3 flex items-center justify-between gap-3 rounded-j border border-j-pos/40 bg-j-pos/10 px-3 py-2 text-[13px]">
-          <span className="font-semibold text-j-pos">Trade confirmed</span>
+          <span className="font-semibold text-j-pos">
+            Trade confirmed
+            {state.commentError && (
+              <span className="ml-2 font-normal text-j-danger">
+                · comment not posted: {state.commentError}
+              </span>
+            )}
+          </span>
           <span className="flex items-center gap-3">
             <a
               href={explorer.tx(state.signature)}

@@ -54,37 +54,38 @@ describe("rate limiter", () => {
     expect(check(key, 1, 50).ok, "a new window should start clean").toBe(true);
   });
 
-  it("keeps the money endpoints tightly bounded", () => {
-    // These are the ones where abuse costs real funds or real vendor spend.
-    expect(LIMITS.withdraw.limit).toBeLessThanOrEqual(5);
-    expect(LIMITS.withdraw.windowMs).toBe(60_000);
-    expect(LIMITS.blurIngest.limit).toBeLessThanOrEqual(10);
-    expect(LIMITS.voiceToken.limit).toBeLessThanOrEqual(10);
+  it("keeps the endpoints that spend Pinata or RPC quota tightly bounded", () => {
+    // Each of these costs something per call: a pin, or an RPC read.
+    expect(LIMITS.upload.limit).toBeLessThanOrEqual(20);
+    expect(LIMITS.metadata.limit).toBeLessThanOrEqual(20);
+    expect(LIMITS.poolRecord.limit).toBeLessThanOrEqual(10);
+    expect(LIMITS.signIn.limit).toBeLessThanOrEqual(10);
+    expect(LIMITS.poolRecord.windowMs).toBe(60_000);
   });
 
   it("enforces the real limit in production, and only relaxes outside it", () => {
     // The relaxation exists so a dev server / e2e run isn't throttled. This is
     // the assertion that it never leaks into production, where the whole point
-    // is to bound an attacker draining a wallet.
+    // is to bound an attacker.
     vi.stubEnv("NODE_ENV", "production");
     const key = `prod:${Math.random()}`;
     let blocked = 0;
-    for (let i = 0; i < 8; i++) if (rateLimit(key, LIMITS.withdraw)) blocked++;
-    // 5 allowed, 3 rejected — the configured limit, not a multiple of it.
+    for (let i = 0; i < 13; i++) if (rateLimit(key, LIMITS.poolRecord)) blocked++;
+    // 10 allowed, 3 rejected — the configured limit, not a multiple of it.
     expect(blocked).toBe(3);
 
     vi.stubEnv("NODE_ENV", "development");
     const devKey = `dev:${Math.random()}`;
     let devBlocked = 0;
-    for (let i = 0; i < 8; i++) if (rateLimit(devKey, LIMITS.withdraw)) devBlocked++;
+    for (let i = 0; i < 13; i++) if (rateLimit(devKey, LIMITS.poolRecord)) devBlocked++;
     expect(devBlocked).toBe(0);
   });
 
   it("returns 429 with a Retry-After header a client can obey", () => {
     vi.stubEnv("NODE_ENV", "production");
     const key = `hdr:${Math.random()}`;
-    for (let i = 0; i < LIMITS.withdraw.limit; i++) rateLimit(key, LIMITS.withdraw);
-    const res = rateLimit(key, LIMITS.withdraw);
+    for (let i = 0; i < LIMITS.poolRecord.limit; i++) rateLimit(key, LIMITS.poolRecord);
+    const res = rateLimit(key, LIMITS.poolRecord);
     expect(res).not.toBeNull();
     expect(res!.status).toBe(429);
     expect(Number(res!.headers.get("retry-after"))).toBeGreaterThan(0);

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 
 import { followState, toggleFollow } from "@/lib/juno/social";
+import { requireWallet } from "@/lib/juno/session";
+import { LIMITS, rateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -50,6 +52,12 @@ export async function POST(request: Request) {
   if (creator === viewer) {
     return NextResponse.json({ error: "A wallet cannot follow itself" }, { status: 400 });
   }
+
+  // Following is done *as* `viewer`, so the caller must have proved control of it.
+  const denied = requireWallet(request, viewer);
+  if (denied) return denied;
+  const limited = rateLimit(`social:${viewer}`, LIMITS.socialWrite);
+  if (limited) return limited;
 
   return NextResponse.json(
     await toggleFollow({ followerWallet: viewer, creatorWallet: creator }),

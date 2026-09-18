@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useWalletModal } from "@solana/wallet-adapter-react-ui";
-import { PublicKey } from "@solana/web3.js";
+import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
 
 import {
   buildSwapTransaction,
@@ -11,16 +11,29 @@ import {
   getConnection,
   invalidatePoolSnapshot,
   sendTransaction,
+  WSOL,
   type PoolSnapshot,
 } from "@/lib/juno/dbc";
 import type { Coin, TradeSide } from "@/lib/juno/types";
 import { describeError } from "./useLaunch";
+import { forgetSession, useWalletSession } from "./useWalletSession";
+
+/**
+ * SOL held back from the spendable balance: two token-account rents (the coin
+ * account and the temporary wSOL account, ~0.002 SOL each) plus fees.
+ */
+const SOL_FEE_RESERVE = 0.01;
 
 export type TradeState =
   | { status: "idle" }
   | { status: "signing" }
   | { status: "confirming" }
-  | { status: "done"; signature: string }
+  | {
+      status: "done";
+      signature: string;
+      /** Set when the trade landed but its attached comment could not be posted. */
+      commentError?: string;
+    }
   | { status: "error"; message: string };
 
 /**
@@ -34,6 +47,7 @@ export type TradeState =
 export function useTrade(coin: Coin) {
   const { publicKey, signTransaction } = useWallet();
   const { setVisible } = useWalletModal();
+  const { ensureSession } = useWalletSession();
 
   const [snapshot, setSnapshot] = useState<PoolSnapshot | null>(null);
   const [balanceUsd, setBalanceUsd] = useState(0);
@@ -72,7 +86,13 @@ export function useTrade(coin: Coin) {
     }
     const connection = getConnection();
 
-    const [quote, base] = await Promise.all([
+    // A SOL-quoted pool is paid from native SOL: the swap wraps it in the same
+    // transaction. Reading only the wrapped-SOL token account, which almost no
+    // wallet holds, reported a funded wallet as "Balance: 0 SOL" and disabled
+    // every buy behind "Insufficient balance".
+    const quoteIsSol = coin.quote.mint === WSOL.mint;
+
+    const [quote, base, lamports] = await Promise.all([
       connection
         .getParsedTokenAccountsByOwner(publicKey, {
           mint: new PublicKey(coin.quote.mint),
@@ -83,6 +103,7 @@ export function useTrade(coin: Coin) {
           mint: new PublicKey(coin.address),
         })
         .catch(() => null),
+      quoteIsSol ? connection.getBalance(publicKey).catch(() => 0) : Promise.resolve(0),
     ]);
 
     const sum = (accounts: typeof quote) =>
@@ -92,7 +113,12 @@ export function useTrade(coin: Coin) {
         0,
       ) ?? 0;
 
-    setBalanceUsd(sum(quote));
+    // Native SOL less what the swap itself needs: the network fee, and rent
+    // for any token account it has to open. Offering that as spendable would
+    // make "Max" a transaction that fails.
+    const spendableSol = Math.max(0, lamports / LAMPORTS_PER_SOL - SOL_FEE_RESERVE);
+
+    setBalanceUsd(sum(quote) + spendableSol);
     setHolding(sum(base));
   }, [publicKey, coin.quote.mint, coin.address]);
 
@@ -101,7 +127,13 @@ export function useTrade(coin: Coin) {
   }, [refreshBalances]);
 
   const swap = useCallback(
-    async (input: { side: TradeSide; amountIn: number; minimumAmountOut: number }) => {
+    async (input: {
+      side: TradeSide;
+      amountIn: number;
+      minimumAmountOut: number;
+      /** Optional note posted to the coin's comments, tagged with this trade. */
+      comment?: string;
+    }) => {
       if (!publicKey || !signTransaction) {
         setVisible(true);
         return;
@@ -130,14 +162,58 @@ export function useTrade(coin: Coin) {
         });
 
         setState({ status: "done", signature });
+
+        // The comment box on the trade panel. Posted only once the trade has
+        // confirmed, so a comment tagged "bought" always has a buy behind it,
+        // and a failure here never reports the trade itself as failed.
+        const note = input.comment?.trim();
+        const posting = note
+          ? ensureSession()
+              .then(() =>
+                fetch("/api/juno/comments", {
+                  method: "POST",
+                  headers: { "content-type": "application/json" },
+                  body: JSON.stringify({
+                    coin: coin.address,
+                    wallet: publicKey.toBase58(),
+                    body: note,
+                    side: input.side,
+                    signature,
+                  }),
+                }),
+              )
+              .then(async (response) => {
+                if (response.ok) return;
+                if (response.status === 401) forgetSession();
+                const body = (await response.json().catch(() => ({}))) as { error?: string };
+                throw new Error(body.error ?? "Could not post the comment");
+              })
+              .catch((error: unknown) =>
+                setState({
+                  status: "done",
+                  signature,
+                  commentError: error instanceof Error ? error.message : "Could not post the comment",
+                }),
+              )
+          : Promise.resolve();
+
         // The trade moved the curve and the wallet; re-read both, bypassing
         // the snapshot cache.
-        await Promise.all([refresh(true), refreshBalances()]);
+        await Promise.all([refresh(true), refreshBalances(), posting]);
       } catch (error) {
         setState({ status: "error", message: describeError(error) });
       }
     },
-    [publicKey, signTransaction, setVisible, ensureSnapshot, refresh, refreshBalances],
+    [
+      publicKey,
+      signTransaction,
+      setVisible,
+      ensureSnapshot,
+      refresh,
+      refreshBalances,
+      ensureSession,
+      coin.address,
+    ],
   );
 
   return {

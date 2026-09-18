@@ -41,6 +41,11 @@ export function ProfileView({ creator, coins }: { creator: Creator; coins: Coin[
         followPending={follow.pending}
         onFollow={follow.toggle}
       />
+      {follow.error && (
+        <p role="alert" className="px-4 pb-2 text-[13px] text-j-danger">
+          {follow.error}
+        </p>
+      )}
       <ProfileTabs value={tab} onChange={setTab} />
 
       <div className="pt-0.5">

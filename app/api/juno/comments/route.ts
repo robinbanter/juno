@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import { cluster } from "@/lib/juno/cluster";
 import { getPool } from "@/lib/juno/registry";
 import { addComment, listComments, MAX_COMMENT } from "@/lib/juno/social";
+import { requireWallet } from "@/lib/juno/session";
+import { LIMITS, rateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -36,6 +38,12 @@ export async function POST(request: Request) {
   if (!BASE58.test(wallet)) {
     return NextResponse.json({ error: "wallet is not an address" }, { status: 400 });
   }
+
+  // A comment is published under `wallet`; only its holder may do that.
+  const denied = requireWallet(request, wallet);
+  if (denied) return denied;
+  const limited = rateLimit(`social:${wallet}`, LIMITS.socialWrite);
+  if (limited) return limited;
   if (!text) {
     return NextResponse.json({ error: "Comment is empty" }, { status: 400 });
   }

@@ -1,9 +1,14 @@
 import "server-only";
 
-import { PublicKey } from "@solana/web3.js";
 import type BN from "bn.js";
 
-import { getConnection, getDbcClient, bnToUi, fetchPoolSnapshot } from "./dbc";
+import {
+  bnToUi,
+  fetchHolderAccounts,
+  fetchPoolSnapshot,
+  getDbcClient,
+  prefetchPools,
+} from "./dbc";
 import { quoteTokenUsdPrice } from "./pyth";
 import { curveShape } from "./curve-shape";
 import { feeSchedule, tokenomics } from "./economics";
@@ -75,35 +80,41 @@ export async function hydratePool(
   const priceUsd = snapshot.price * rate;
   const client = getDbcClient();
 
-  // Holders and creator fees are both real reads. `getTokenLargestAccounts`
-  // returns the top 20, which is a floor on the holder count rather than an
-  // exact figure — enough to render, and honest about small markets.
-  const [largest, fees] = options.detailed
+  // Holders and creator fees are both real reads. `fetchHolderAccounts`
+  // returns every account with a non-zero balance, so the count is exact.
+  const [holderAccounts, fees] = options.detailed
     ? await Promise.all([
-        getConnection()
-          .getTokenLargestAccounts(new PublicKey(row.baseMint))
-          .catch(() => null),
+        fetchHolderAccounts(row.baseMint).catch(() => null),
         client.state.getPoolFeeMetrics(row.poolAddress).catch(() => null),
       ])
     : [null, null];
 
-  // null, not 0: `largest` is null when the RPC refused, and "0 holders" is
-  // a claim we would not have earned.
-  const holders =
-    largest === null
-      ? null
-      : largest.value.filter((account) => (account.uiAmount ?? 0) > 0).length;
+  // null, not 0: null means the RPC refused, and "0 holders" is a claim we
+  // would not have earned.
+  const holders = holderAccounts === null ? null : holderAccounts.length;
 
   const creatorRewards = fees
     ? bnToUi(fees.current.creatorQuoteFee, snapshot.quoteDecimals) * rate
     : 0;
 
+  // The stored MIME type decides image vs video: IPFS URLs carry no file
+  // extension, so the extension test only covers media hosted elsewhere.
+  const isVideo = row.mediaMime
+    ? row.mediaMime.startsWith("video/")
+    : /\.(mp4|webm|mov)$/i.test(row.mediaUrl ?? "");
+  // A poster is rendered as an <img>. A video's own URL there is a broken
+  // image, so a video without a separate still falls back to the identicon.
+  const poster =
+    row.posterUrl && !(isVideo && row.posterUrl === row.mediaUrl)
+      ? row.posterUrl
+      : isVideo
+        ? identicon(row.baseMint)
+        : (row.mediaUrl ?? identicon(row.baseMint));
+
   const media = {
-    kind: (row.mediaUrl?.match(/\.(mp4|webm|mov)$/i) ? "video" : "image") as
-      | "image"
-      | "video",
+    kind: (isVideo ? "video" : "image") as "image" | "video",
     url: row.mediaUrl ?? identicon(row.baseMint),
-    posterUrl: row.posterUrl ?? row.mediaUrl ?? identicon(row.baseMint),
+    posterUrl: poster,
     width: row.mediaWidth ?? (row.format === "reel" ? 720 : 1000),
     height: row.mediaHeight ?? (row.format === "reel" ? 1280 : 1000),
   };
@@ -193,6 +204,11 @@ export async function hydratePoolsReport(
   rows: JunoPoolRow[],
   width = 2,
 ): Promise<HydrationReport> {
+  // One bulk read for every pool on the list, so the per-pool hydration below
+  // is served from memory. A refusal here costs nothing: each pool then reads
+  // itself, and fails or retries exactly as it did before.
+  await prefetchPools(rows.map((row) => row.poolAddress)).catch(() => undefined);
+
   const FAILED = Symbol("failed");
   const out: Array<Coin | null | typeof FAILED> = new Array(rows.length).fill(null);
   let cursor = 0;

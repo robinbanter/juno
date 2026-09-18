@@ -43,6 +43,8 @@ export function useLaunch() {
         navFeedId?: string | null;
         /** Gateway URL of already-pinned media, if any. */
         mediaUrl?: string | null;
+        /** Still image for thumbnails. For a video, a pinned frame. */
+        posterUrl?: string | null;
         mimeType?: string | null;
         mediaWidth?: number | null;
         mediaHeight?: number | null;
@@ -70,6 +72,7 @@ export function useLaunch() {
               description: request.description ?? "",
               imageUrl: request.mediaUrl ?? "",
               mimeType: request.mimeType ?? "",
+              posterUrl: request.posterUrl ?? "",
               curvePreset: request.preset,
               navFeedId: request.navFeedId ?? "",
             }),
@@ -118,7 +121,8 @@ export function useLaunch() {
               curvePreset: request.preset,
               navFeedId: request.navFeedId ?? null,
               mediaUrl: request.mediaUrl ?? null,
-              posterUrl: request.mediaUrl ?? null,
+              posterUrl: request.posterUrl ?? null,
+              mediaMime: request.mimeType ?? null,
               mediaWidth: request.mediaWidth ?? null,
               mediaHeight: request.mediaHeight ?? null,
               createSignature: signatures[signatures.length - 1],

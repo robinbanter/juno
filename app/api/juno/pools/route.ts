@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import { CURVE_PRESETS } from "@/lib/juno/curves";
 import { getDbcClient } from "@/lib/juno/dbc";
 import { listPools, recordLaunch } from "@/lib/juno/registry";
+import { clientKey } from "@/lib/juno/request";
+import { LIMITS, rateLimit } from "@/lib/rate-limit";
 import type { CoinFormat, CurvePresetId } from "@/lib/juno/types";
 
 export const runtime = "nodejs";
@@ -25,6 +27,12 @@ export async function GET() {
  * would be an index of claims.
  */
 export async function POST(request: Request) {
+  // No session required: the chain is the authority here (the pool, its mint,
+  // config and creator are all re-read below), and the CLI records launches
+  // through this route too. The limit bounds the RPC reads a caller can force.
+  const limited = rateLimit(`pools:${clientKey(request)}`, LIMITS.poolRecord);
+  if (limited) return limited;
+
   let body: Record<string, unknown>;
   try {
     body = await request.json();
@@ -109,6 +117,9 @@ export async function POST(request: Request) {
     navFeedId: str("navFeedId") || null,
     mediaUrl: str("mediaUrl") || null,
     posterUrl: str("posterUrl") || null,
+    // IPFS URLs carry no extension, so this is the only record of whether the
+    // media is a video. Anything that is not an image or video type is dropped.
+    mediaMime: /^(image|video)\/[\w.+-]+$/.test(str("mediaMime")) ? str("mediaMime") : null,
     mediaWidth: num("mediaWidth"),
     mediaHeight: num("mediaHeight"),
     createSignature,

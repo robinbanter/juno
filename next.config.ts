@@ -8,69 +8,19 @@ const nextConfig: NextConfig = {
   // Pin the workspace root so a stray lockfile in a parent dir isn't picked up.
   turbopack: { root: __dirname },
   outputFileTracingRoot: __dirname,
-  // Native/binary packages used by the auto-blur server code must NOT be bundled
-  // (the ffmpeg/ffprobe installers ship platform binaries + non-JS files the
-  // bundler can't trace). Load them from node_modules at runtime instead.
-  serverExternalPackages: [
-    "sharp",
-    "@ffmpeg-installer/ffmpeg",
-    "@ffprobe-installer/ffprobe",
-    "fluent-ffmpeg",
-    "replicate",
-    // Server-only data/storage clients — node-postgres ("pg") is node-only and
-    // must never enter the client/browser graph; keeping both external stops
-    // Turbopack from intermittently failing to resolve them into the page build.
-    "pg",
-    "@supabase/supabase-js",
-  ],
-  // sharp (libvips) and the ffmpeg/ffprobe installers load their native binaries
-  // via dynamic requires the file tracer can't follow — force them into the
-  // functions that composite (blur routes) and extract keyframes (posts upload).
-  outputFileTracingIncludes: {
-    "/api/blur/**": [
-      "./node_modules/@img/**",
-      "./node_modules/sharp/**",
-      "./node_modules/@ffmpeg-installer/**",
-      "./node_modules/@ffprobe-installer/**",
-    ],
-    "/api/posts": [
-      "./node_modules/@ffmpeg-installer/**",
-      "./node_modules/@ffprobe-installer/**",
-    ],
-  },
-  images: {
-    remotePatterns: [
-      { protocol: "https", hostname: "*.supabase.co" },
-      { protocol: "https", hostname: "*.supabase.in" },
-      // Private Vercel Blob signed URLs (the active storage backend). Allowing
-      // the host lets next/image resize + re-encode the full-res blurred
-      // previews instead of shipping the multi-MB originals to the client.
-      { protocol: "https", hostname: "*.blob.vercel-storage.com" },
-    ],
-    // AVIF first (smallest), WebP fallback — big LCP/bandwidth win on the feed.
-    formats: ["image/avif", "image/webp"],
-    // Next 16 requires an explicit qualities allowlist. 50 is plenty for the
-    // blurred teaser (it's displayed under a 15px blur); 75 stays the default.
-    qualities: [50, 75],
-  },
-  // `next build --webpack` (needed for the serwist service worker) chokes on
-  // @txnlab/use-wallet-ui-react, which inlines its font as
-  //   new URL("data:font/woff2;base64,…", import.meta.url)
-  // Webpack's asset handling types that data URI as an asset and attaches a
-  // `generator.filename`, which `asset/inline` rejects → "Invalid generator
-  // object … unknown property 'filename'". The data URI is self-contained, so
-  // stop webpack from rewriting `new URL()` inside this package and let the
-  // browser resolve it natively. Scoped to the one package; Turbopack is
-  // unaffected (it handles the data URI fine).
-  webpack: (config) => {
-    config.module.rules.push({
-      test: /[\\/]node_modules[\\/]@txnlab[\\/]use-wallet-ui-react[\\/]/,
-      parser: { url: false },
-    });
-    return config;
-  },
+  // node-postgres is node-only and must never enter the client graph; sharp
+  // loads a native binary the bundler cannot trace.
+  serverExternalPackages: ["sharp", "pg"],
   // Don't advertise the framework.
   poweredByHeader: false,
+  // The root lands on Explore, the grid of every live pool. A config redirect,
+  // not `redirect()` in app/page.tsx: the root loading.tsx streams a spinner
+  // and commits 200 before a page can redirect, which turned "/" into a 200
+  // spinner followed by a client-side hop. This is a real 307 before any
+  // rendering happens.
+  async redirects() {
+    return [{ source: "/", destination: "/explore", permanent: false }];
+  },
   async headers() {
     // Always-safe hardening (no functional impact in dev or prod).
     const base = [
@@ -79,7 +29,7 @@ const nextConfig: NextConfig = {
       { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
       {
         key: "Permissions-Policy",
-        value: "camera=(), microphone=(self), geolocation=(), browsing-topics=()",
+        value: "camera=(), microphone=(), geolocation=(), browsing-topics=()",
       },
     ];
     // HSTS + CSP are production-only: a strict CSP would fight Turbopack HMR and
@@ -94,15 +44,17 @@ const nextConfig: NextConfig = {
         value: [
           "default-src 'self'",
           // 'unsafe-inline' covers the pre-paint theme script + inline styles.
-          // Privy (auth) runs its login UI in an iframe from auth.privy.io.
-          "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://auth.privy.io https://challenges.cloudflare.com",
+          "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
           "style-src 'self' 'unsafe-inline'",
+          // Media and token art live on IPFS gateways; identicons are data URIs.
           "img-src 'self' data: blob: https:",
           "media-src 'self' blob: https:",
           "font-src 'self' data:",
-          // Privy, Algorand nodes (algonode), Supabase, WalletConnect relays.
+          // Solana RPC (HTTP + websocket), whichever endpoint is configured.
           "connect-src 'self' https: wss:",
-          "frame-src 'self' https://auth.privy.io https://verify.walletconnect.com https://verify.walletconnect.org https://challenges.cloudflare.com",
+          // Solflare's web wallet runs in an iframe from connect.solflare.com;
+          // without this, connecting Solflare without its extension is blocked.
+          "frame-src 'self' https://connect.solflare.com",
           "worker-src 'self' blob:",
           "object-src 'none'",
           "base-uri 'self'",

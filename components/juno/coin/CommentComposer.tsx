@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 
+import { forgetSession, useWalletSession } from "@/components/juno/wallet/useWalletSession";
+
 import { cn } from "@/lib/utils";
 import { shortAddress, since } from "@/lib/juno/format";
 import { identicon } from "@/lib/juno/identicon";
@@ -29,6 +31,7 @@ export function CommentComposer({
 }) {
   const { publicKey } = useWallet();
   const { setVisible } = useWalletModal();
+  const { ensureSession } = useWalletSession();
   const [body, setBody] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -49,12 +52,15 @@ export function CommentComposer({
     setBody("");
 
     try {
+      // Comments are published under the wallet, so prove it once first.
+      await ensureSession();
       const response = await fetch("/api/juno/comments", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ coin: coinMint, wallet: publicKey.toBase58(), body: text }),
       });
       const payload = await response.json();
+      if (response.status === 401) forgetSession();
       if (!response.ok) throw new Error(payload.error ?? "Could not post");
 
       onPosted({

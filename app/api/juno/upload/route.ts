@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 
 import { pinFile } from "@/lib/juno/pinata";
+import { clientKey } from "@/lib/juno/request";
+import { LIMITS, rateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -9,6 +11,9 @@ const MAX_BYTES = 25 * 1024 * 1024;
 const ALLOWED = /^(image|video)\//;
 
 export async function POST(request: Request) {
+  const limited = rateLimit(`upload:${clientKey(request)}`, LIMITS.upload);
+  if (limited) return limited;
+
   if (!process.env.PINATA_JWT) {
     return NextResponse.json({ error: "Uploads are not configured" }, { status: 503 });
   }

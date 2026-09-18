@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 
+import { forgetSession, useWalletSession } from "@/components/juno/wallet/useWalletSession";
+
 /**
  * A coin's like count, and whether the connected wallet is one of them.
  *
@@ -18,7 +20,10 @@ import { useWallet } from "@solana/wallet-adapter-react";
  */
 export function useLikes(coinMint: string | undefined, initialCount = 0) {
   const { publicKey } = useWallet();
+  const { ensureSession } = useWalletSession();
   const wallet = publicKey?.toBase58();
+  // Why the last like did not go through — shown by the caller, if it wants.
+  const [error, setError] = useState<string | null>(null);
 
   const [count, setCount] = useState(initialCount);
   const [liked, setLiked] = useState(false);
@@ -50,25 +55,33 @@ export function useLikes(coinMint: string | undefined, initialCount = 0) {
   const toggle = useCallback(async () => {
     if (!coinMint || !wallet || pending) return;
     setPending(true);
+    setError(null);
     try {
+      // A like is made *as* this wallet, so the server needs proof of it once.
+      await ensureSession();
       const response = await fetch("/api/juno/likes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ coin: coinMint, wallet }),
       });
-      if (!response.ok) return;
+      if (!response.ok) {
+        if (response.status === 401) forgetSession();
+        setError(((await response.json().catch(() => ({}))) as { error?: string }).error ?? "Could not like");
+        return;
+      }
       const data = (await response.json()) as { count: number; liked: boolean };
       setCount(data.count);
       setLiked(data.liked);
       setLoaded(true);
-    } catch {
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not like");
       // Leave the displayed state alone. It still reflects the last thing the
       // server confirmed, which is better than a like that appears and then
       // vanishes on the next load.
     } finally {
       setPending(false);
     }
-  }, [coinMint, wallet, pending]);
+  }, [coinMint, wallet, pending, ensureSession]);
 
-  return { count, liked, loaded, pending, toggle, canLike: Boolean(wallet) };
+  return { count, liked, loaded, pending, toggle, error, canLike: Boolean(wallet) };
 }

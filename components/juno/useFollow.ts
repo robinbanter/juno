@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 
+import { forgetSession, useWalletSession } from "@/components/juno/wallet/useWalletSession";
+
 /**
  * Follower counts for a creator, and whether the connected wallet follows them.
  *
@@ -22,6 +24,8 @@ export type FollowData = {
 
 export function useFollow(creatorWallet: string | undefined, initial?: FollowData) {
   const { publicKey } = useWallet();
+  const { ensureSession } = useWalletSession();
+  const [error, setError] = useState<string | null>(null);
   const viewer = publicKey?.toBase58();
 
   const [data, setData] = useState<FollowData>(
@@ -53,26 +57,35 @@ export function useFollow(creatorWallet: string | undefined, initial?: FollowDat
   const toggle = useCallback(async () => {
     if (!creatorWallet || !viewer || isSelf || pending) return;
     setPending(true);
+    setError(null);
     try {
+      // Following is done as `viewer`; the server needs proof of that once.
+      await ensureSession();
       const response = await fetch("/api/juno/follows", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ creator: creatorWallet, viewer }),
       });
-      if (!response.ok) return;
+      if (!response.ok) {
+        if (response.status === 401) forgetSession();
+        setError(((await response.json().catch(() => ({}))) as { error?: string }).error ?? "Could not follow");
+        return;
+      }
       setData((await response.json()) as FollowData);
-    } catch {
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not follow");
       // Keep the last server-confirmed state rather than showing a follow that
       // disappears on the next load.
     } finally {
       setPending(false);
     }
-  }, [creatorWallet, viewer, isSelf, pending]);
+  }, [creatorWallet, viewer, isSelf, pending, ensureSession]);
 
   return {
     ...data,
     pending,
     toggle,
+    error,
     isSelf,
     canFollow: Boolean(viewer) && !isSelf,
   };

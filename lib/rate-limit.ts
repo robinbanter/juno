@@ -1,15 +1,15 @@
 import "server-only";
 
 /**
- * Rate limiting for the endpoints where abuse costs real money.
+ * Rate limiting for the endpoints where abuse costs money or quota.
  *
  * Deliberately in-process: a fixed-window counter in a Map, no Redis, no extra
  * infrastructure to run. The tradeoff is honest — each serverless instance keeps
  * its own counter, so the effective limit is `limit × instances` and it resets
  * on cold start. That is a real weakness against a determined distributed
  * attacker, and it still turns "unbounded" into "bounded per instance", which is
- * the difference between one script draining your Replicate credit and one
- * script getting 10 requests in.
+ * the difference between one script filling the Pinata account and one
+ * script getting 20 requests in.
  *
  * If this app ever runs at a scale where that gap matters, swap the store for
  * Upstash/Redis behind the same `check()` signature — nothing else changes.
@@ -82,18 +82,16 @@ export function check(key: string, limit: number, windowMs: number): RateLimitRe
 
 /** Limits, named by what they protect rather than by number. */
 export const LIMITS = {
-  /** Moves real money out of the platform. */
-  withdraw: { limit: 5, windowMs: 60_000 },
-  /** Moves real money between users. */
-  tip: { limit: 20, windowMs: 60_000 },
-  /** Spends the platform's gas provisioning a wallet. */
-  deposit: { limit: 10, windowMs: 60_000 },
-  /** Each call spends real money at a paid vendor (Replicate). */
-  blurIngest: { limit: 10, windowMs: 60_000 },
-  /** Each token mints a paid ElevenLabs session. */
-  voiceToken: { limit: 10, windowMs: 60_000 },
-  /** Uploads cost storage and CPU (sharp). */
+  /** Each upload is pinned to IPFS on the project's Pinata account. */
   upload: { limit: 20, windowMs: 60_000 },
+  /** Each call pins a metadata JSON to Pinata. */
+  metadata: { limit: 20, windowMs: 60_000 },
+  /** Each call re-reads a pool from the RPC before writing the registry. */
+  poolRecord: { limit: 10, windowMs: 60_000 },
+  /** Signature verification is cheap, but a flood of it is not. */
+  signIn: { limit: 10, windowMs: 60_000 },
+  /** Likes, comments and follows — per signed-in wallet. */
+  socialWrite: { limit: 30, windowMs: 60_000 },
 } as const;
 
 /**

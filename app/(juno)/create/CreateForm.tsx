@@ -7,8 +7,8 @@ import { Clapperboard, ExternalLink, ImageIcon, LoaderCircle, TrendingUp, Upload
 import { cn } from "@/lib/utils";
 import { CURVE_PRESET_LIST, CURVE_PRESETS } from "@/lib/juno/curves";
 import { QUOTE_TOKENS } from "@/lib/juno/dbc";
-import { usd } from "@/lib/juno/format";
-import type { CoinFormat, CurvePresetId } from "@/lib/juno/types";
+import { compact, usd } from "@/lib/juno/format";
+import type { CoinFormat, CurvePresetId, QuoteToken } from "@/lib/juno/types";
 import { cluster, explorer, meteoraPoolUrl } from "@/lib/juno/cluster";
 import { presetShape } from "@/lib/juno/curve-shape";
 import { Button } from "@/components/juno/ui/Button";
@@ -90,13 +90,15 @@ export function CreateForm() {
   const [symbol, setSymbol] = useState("");
   const [description, setDescription] = useState("");
   const [quote, setQuote] = useState(QUOTE_TOKENS[0]);
-  const [initialMc, setInitialMc] = useState(1_000);
-  const [migrationMc, setMigrationMc] = useState(25_000);
+  const [initialMc, setInitialMc] = useState<number>(VALUATION_DEFAULTS.USDC.initial);
+  const [migrationMc, setMigrationMc] = useState<number>(VALUATION_DEFAULTS.USDC.migration);
 
   const { connected } = useWallet();
   const { state, launch, reset } = useLaunch();
   const [media, setMedia] = useState<{
     url: string;
+    /** A still image for grids and thumbnails; for a video, its first frame. */
+    posterUrl: string | null;
     mimeType: string;
     width: number;
     height: number;
@@ -112,6 +114,16 @@ export function CreateForm() {
   async function onFile(file: File | undefined) {
     if (!file) return;
     setUploadError(null);
+    // The same rules the upload route enforces, checked before a byte leaves
+    // the browser: a refusal the user can read, instead of a failed request.
+    if (!/^(image|video)\//.test(file.type)) {
+      setUploadError(`${file.name} is not an image or video.`);
+      return;
+    }
+    if (file.size > MAX_UPLOAD_BYTES) {
+      setUploadError(`${file.name} is over 25MB.`);
+      return;
+    }
     setUploading(true);
     try {
       // Intrinsic dimensions drive the grid's aspect ratio, so they are read
@@ -122,8 +134,27 @@ export function CreateForm() {
       const response = await fetch("/api/juno/upload", { method: "POST", body: form });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error ?? "Upload failed");
+
+      // A video cannot stand in for its own thumbnail: grids and the trade
+      // panel render the poster as an <img>, and an <img> of an mp4 is a
+      // broken image. Pin a real frame alongside it.
+      let posterUrl: string | null = file.type.startsWith("video") ? null : body.url;
+      if (file.type.startsWith("video")) {
+        const frame = await videoPoster(file).catch(() => null);
+        if (frame) {
+          const posterForm = new FormData();
+          posterForm.append("file", frame, "poster.jpg");
+          const posterResponse = await fetch("/api/juno/upload", {
+            method: "POST",
+            body: posterForm,
+          });
+          if (posterResponse.ok) posterUrl = (await posterResponse.json()).url;
+        }
+      }
+
       setMedia({
         url: body.url,
+        posterUrl,
         mimeType: body.mimeType,
         width: dimensions.width,
         height: dimensions.height,
@@ -144,8 +175,24 @@ export function CreateForm() {
     setNavFeedId(template.navFeedId);
     setFormat("post");
     const quoteToken = QUOTE_TOKENS.find((t) => t.symbol === template.quoteSymbol) ?? QUOTE_TOKENS[0];
-    setQuote(quoteToken);
+    chooseQuote(quoteToken);
   }
+
+  /**
+   * Valuations are in quote-token units: the curve is built in them. Moving
+   * between USDC and SOL therefore resets them to that token's defaults.
+   * Keeping "25,000" across the switch would silently turn a $25k graduation
+   * into a 25,000 SOL one.
+   */
+  function chooseQuote(token: QuoteToken) {
+    if (token.mint === quote.mint) return;
+    setQuote(token);
+    const defaults = VALUATION_DEFAULTS[token.symbol === "SOL" ? "SOL" : "USDC"];
+    setInitialMc(defaults.initial);
+    setMigrationMc(defaults.migration);
+  }
+  const quoteIsSol = quote.symbol === "SOL";
+  const valuation = (value: number) => (quoteIsSol ? `${compact(value, 2)} SOL` : usd(value));
 
   const active = CURVE_PRESETS[preset];
 
@@ -174,11 +221,15 @@ export function CreateForm() {
       className="mt-6 flex flex-col gap-7"
       onSubmit={(e) => {
         e.preventDefault();
-        if (!valid) return;
+        // The metadata URI is baked into the mint at creation and the presets
+        // renounce update authority, so launching mid-upload would ship a coin
+        // that can never get its image.
+        if (!valid || uploading) return;
         void launch({
           quote,
           format,
           mediaUrl: media?.url ?? null,
+          posterUrl: media?.posterUrl ?? null,
           mimeType: media?.mimeType ?? null,
           mediaWidth: media?.width || null,
           mediaHeight: media?.height || null,
@@ -436,7 +487,7 @@ export function CreateForm() {
             <div className="mb-1 flex items-baseline justify-between">
               <span className="text-[12px] font-semibold">{active.label}</span>
               <span className="text-[11px] text-j-faint">
-                {shape.points.length} segments · {usd(initialMc)} → {usd(migrationMc)}
+                {shape.points.length} segments · {valuation(initialMc)} → {valuation(migrationMc)}
               </span>
             </div>
             <CurveChart shape={shape} progress={0} height={110} />
@@ -455,7 +506,7 @@ export function CreateForm() {
               key={token.mint}
               type="button"
               aria-pressed={quote.mint === token.mint}
-              onClick={() => setQuote(token)}
+              onClick={() => chooseQuote(token)}
               className={cn(
                 "h-10 flex-1 rounded-j border text-[14px] font-semibold transition-colors",
                 "focus-visible:ring-2 focus-visible:ring-j-focus focus-visible:outline-none",
@@ -472,10 +523,20 @@ export function CreateForm() {
 
       <div className="grid grid-cols-2 gap-3">
         <Field label="Opening valuation">
-          <NumberInput value={initialMc} onChange={setInitialMc} min={100} step={100} />
+          <NumberInput
+            value={initialMc}
+            onChange={setInitialMc}
+            unit={quote.symbol}
+            {...VALUATION_DEFAULTS[quoteIsSol ? "SOL" : "USDC"].initialInput}
+          />
         </Field>
         <Field label="Graduates at">
-          <NumberInput value={migrationMc} onChange={setMigrationMc} min={1000} step={1000} />
+          <NumberInput
+            value={migrationMc}
+            onChange={setMigrationMc}
+            unit={quote.symbol}
+            {...VALUATION_DEFAULTS[quoteIsSol ? "SOL" : "USDC"].migrationInput}
+          />
         </Field>
       </div>
 
@@ -493,15 +554,17 @@ export function CreateForm() {
           {navFeedId && <SummaryRow label="Pyth NAV">{navFeedId}</SummaryRow>}
           <SummaryRow label="Curve">{active.label}</SummaryRow>
           <SummaryRow label="Quote">{quote.symbol}</SummaryRow>
-          <SummaryRow label="Opens at">{usd(initialMc)}</SummaryRow>
-          <SummaryRow label="Graduates at">{usd(migrationMc)}</SummaryRow>
+          <SummaryRow label="Opens at">{valuation(initialMc)}</SummaryRow>
+          <SummaryRow label="Graduates at">{valuation(migrationMc)}</SummaryRow>
           <SummaryRow label="Migrates to">Meteora DAMM v2</SummaryRow>
         </dl>
       </div>
 
       <div>
-        <Button type="submit" variant="buy" size="lg" className="w-full" disabled={!valid || busy}>
-          {state.status === "building"
+        <Button type="submit" variant="buy" size="lg" className="w-full" disabled={!valid || busy || uploading}>
+          {uploading
+            ? "Uploading media…"
+            : state.status === "building"
             ? "Building transactions…"
             : state.status === "signing"
               ? `${state.label} (${state.step}/${state.total})`
@@ -629,6 +692,50 @@ function PresetSparkline({
 }
 
 /** Intrinsic media dimensions, read from the file before it leaves the browser. */
+/** Mirrors `MAX_BYTES` in app/api/juno/upload/route.ts. */
+const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
+
+/**
+ * The first second of a video as a JPEG, drawn in the browser.
+ *
+ * Seeks a little way in rather than to 0: many encoders open on a black frame.
+ */
+function videoPoster(file: File): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const video = document.createElement("video");
+    video.muted = true;
+    video.playsInline = true;
+    video.preload = "auto";
+    const fail = (message: string) => {
+      URL.revokeObjectURL(url);
+      reject(new Error(message));
+    };
+    video.onerror = () => fail("Unreadable video");
+    video.onloadeddata = () => {
+      video.currentTime = Math.min(1, (video.duration || 0) / 2);
+    };
+    video.onseeked = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const context = canvas.getContext("2d");
+      if (!context || canvas.width === 0) return fail("No frame");
+      context.drawImage(video, 0, 0);
+      canvas.toBlob(
+        (blob) => {
+          URL.revokeObjectURL(url);
+          if (blob) resolve(blob);
+          else reject(new Error("No frame"));
+        },
+        "image/jpeg",
+        0.85,
+      );
+    };
+    video.src = url;
+  });
+}
+
 function readDimensions(file: File): Promise<{ width: number; height: number }> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
@@ -701,20 +808,43 @@ function Input({
   );
 }
 
+/**
+ * Starting valuations per quote token, in that token's units. SOL ones are
+ * sized for a demo curve a single wallet can take to graduation.
+ */
+const VALUATION_DEFAULTS = {
+  USDC: {
+    initial: 1_000,
+    migration: 25_000,
+    initialInput: { min: 100, step: 100 },
+    migrationInput: { min: 1_000, step: 1_000 },
+  },
+  SOL: {
+    initial: 10,
+    migration: 250,
+    initialInput: { min: 1, step: 1 },
+    migrationInput: { min: 5, step: 5 },
+  },
+} as const;
+
 function NumberInput({
   value,
   onChange,
   min,
   step,
+  unit,
 }: {
   value: number;
   onChange: (v: number) => void;
   min: number;
   step: number;
+  /** The quote token the valuation is denominated in. */
+  unit: string;
 }) {
+  const dollars = unit !== "SOL";
   return (
-    <span className="flex h-11 items-center rounded-j border border-j-line bg-j-input pl-3.5">
-      <span className="text-[14px] text-j-muted">$</span>
+    <span className="flex h-11 items-center rounded-j border border-j-line bg-j-input pl-3.5 pr-3.5">
+      {dollars && <span className="text-[14px] text-j-muted">$</span>}
       <input
         type="number"
         inputMode="numeric"
@@ -724,6 +854,7 @@ function NumberInput({
         onChange={(e) => onChange(Number(e.target.value) || 0)}
         className="h-full w-full bg-transparent px-1.5 text-[14px] tabular-nums outline-none"
       />
+      {!dollars && <span className="text-[14px] text-j-muted">{unit}</span>}
     </span>
   );
 }

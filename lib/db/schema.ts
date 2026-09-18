@@ -13,6 +13,9 @@ import {
   index,
   uniqueIndex,
   check,
+  doublePrecision,
+  bigint,
+  primaryKey,
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 
@@ -1077,5 +1080,43 @@ export const junoPools = pgTable(
     index("juno_pools_cluster_created_idx").on(table.cluster, table.createdAt),
     index("juno_pools_creator_idx").on(table.creatorWallet),
     uniqueIndex("juno_pools_pool_address_idx").on(table.poolAddress),
+  ],
+);
+
+/* ==================================================================
+   Juno — decoded pool transactions.
+
+   Unlike `juno_pools`, this is not identity: it is a durable record of
+   what finalized transactions did. That is safe to store for exactly the
+   reason live pool state is not — a finalized transaction never changes.
+
+   It exists because of the public devnet RPC's per-method quota. Decoding
+   a swap costs one `getParsedTransaction`, and re-decoding every pool's
+   whole history on every render spent that quota before the activity feed
+   could paint. Here each signature is fetched once, ever; a render costs
+   one `getSignaturesForAddress` per pool plus whatever is genuinely new.
+
+   Non-swaps (pool creation, fee claims, migration) are stored too, with
+   `kind = 'other'`, so they are not re-fetched to be rejected again.
+   ================================================================== */
+export const junoPoolTxs = pgTable(
+  "juno_pool_txs",
+  {
+    poolAddress: varchar("pool_address", { length: 44 }).notNull(),
+    signature: varchar("signature", { length: 96 }).notNull(),
+    /** 'swap' or 'other'. Only swaps carry the fields below. */
+    kind: varchar("kind", { length: 8 }).notNull(),
+    side: varchar("side", { length: 4 }),
+    baseAmount: doublePrecision("base_amount"),
+    quoteAmount: doublePrecision("quote_amount"),
+    price: doublePrecision("price"),
+    trader: varchar("trader", { length: 44 }),
+    /** Unix seconds, as the validator recorded it. */
+    blockTime: bigint("block_time", { mode: "number" }),
+    indexedAt: timestamp("indexed_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.poolAddress, table.signature] }),
+    index("juno_pool_txs_pool_time_idx").on(table.poolAddress, table.blockTime),
   ],
 );
