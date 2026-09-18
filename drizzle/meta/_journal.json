@@ -43,6 +43,13 @@
       "when": 1789643346547,
       "tag": "0005_ancient_kingpin",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789708873290,
+      "tag": "0006_juno_pool_txs",
+      "breakpoints": true
     }
   ]
 }

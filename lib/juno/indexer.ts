@@ -1,6 +1,7 @@
 import { PublicKey, type ParsedTransactionWithMeta } from "@solana/web3.js";
 
 import { getConnection } from "./dbc";
+import type { StoredTx, SwapStore } from "./swap-store";
 
 /**
  * Swap history for a DBC pool, read straight from the RPC.
@@ -35,8 +36,9 @@ import { getConnection } from "./dbc";
  *
  * The public devnet endpoint is what this runs against unless
  * `NEXT_PUBLIC_SOLANA_RPC` is set, and it rate-limits hard. Every read here is
- * batched into as few round trips as possible and cached in-process, and
- * **every failure path returns `null`, never `[]`**. That distinction carries
+ * batched into as few round trips as possible, cached in-process, and every
+ * finalized transaction decoded is persisted (`swap-store.ts`) so it is never
+ * fetched again. **Every failure path returns `null`, never `[]`**. That distinction carries
  * all the way to the UI: `null` means "we could not read it" and renders an
  * em-dash, `[]` means "we read it and there are no trades" and renders a zero.
  * Rendering a rate-limited read as a confident `$0` would be a lie on a
@@ -75,12 +77,13 @@ export type PricePoint = {
 /**
  * How many signatures to walk back per pool.
  *
- * `getSignaturesForAddress` will return up to 1000, but every one of them
- * becomes a transaction fetch, and those are the expensive part. 60 covers the
- * entire history of every pool Juno has launched; on a busier pool it is a
- * window, and `SwapHistory.truncated` says so rather than pretending otherwise.
+ * `getSignaturesForAddress` will return up to 1000 in one call. Each
+ * signature becomes a transaction fetch only the first time it is seen — after
+ * that it comes from `juno_pool_txs` — so the window can be wider than the
+ * fetch budget of a single read (`MAX_NEW_PER_READ`). On a busier pool it is
+ * still a window, and `SwapHistory.truncated` says so.
  */
-const SIGNATURE_LIMIT = 60;
+const SIGNATURE_LIMIT = 200;
 
 /**
  * Gap between transaction fetches.
@@ -267,14 +270,50 @@ export function parseSwap(
 }
 
 /**
+ * Where decoded transactions are remembered between reads.
+ *
+ * Resolved lazily so this module stays importable without a database — the
+ * unit tests and any caller that passes `store: null` never touch Postgres.
+ * With `DATABASE_URL` set (the app and the CLI), it is `juno_pool_txs`.
+ */
+let defaultStore: Promise<SwapStore | null> | null = null;
+
+function resolveStore(explicit: SwapStore | null | undefined): Promise<SwapStore | null> {
+  if (explicit !== undefined) return Promise.resolve(explicit);
+  if (!process.env.DATABASE_URL) return Promise.resolve(null);
+  defaultStore ??= import("./swap-store")
+    .then((module) => module.pgSwapStore)
+    .catch(() => null);
+  return defaultStore;
+}
+
+/**
+ * New transactions decoded per read, at most.
+ *
+ * A pool seen for the first time may have a long backlog. Decoding all of it
+ * inside one page render is how a render ends up waiting on a spent quota;
+ * capping it means the backlog is worked off across reads — every decoded
+ * signature is persisted, so none is fetched twice — and the rows not yet
+ * reached count as `missed`, which keeps the aggregates honest meanwhile.
+ */
+const MAX_NEW_PER_READ = 40;
+
+/**
  * Every swap this RPC can still see for a pool, newest first.
  *
  * Null means the read failed — callers must not render that as "no trades".
  * A history with an empty `swaps` array means the pool genuinely has none.
+ *
+ * With a store, only signatures the store has never seen are fetched, and only
+ * finalized ones are written back — a finalized transaction cannot change, so
+ * its decoded form is as true next week as it is now. When the RPC refuses
+ * even the signature list, the stored trades are still real trades and are
+ * returned, marked `missed` so no aggregate is computed over them.
  */
 export async function listSwaps(
   poolAddress: string,
   baseMint: string,
+  options: { store?: SwapStore | null } = {},
 ): Promise<SwapHistory | null> {
   const key = `${poolAddress}:${baseMint}`;
 
@@ -285,15 +324,29 @@ export async function listSwaps(
   if (pending) return pending;
 
   const run = (async (): Promise<SwapHistory | null> => {
+    const store = await resolveStore(options.store);
     try {
       const connection = getConnection();
-      const signatures = await withRetry(() =>
-        connection.getSignaturesForAddress(
-          new PublicKey(poolAddress),
-          { limit: SIGNATURE_LIMIT },
-          "confirmed",
-        ),
-      );
+
+      let signatures;
+      try {
+        signatures = await withRetry(() =>
+          connection.getSignaturesForAddress(
+            new PublicKey(poolAddress),
+            { limit: SIGNATURE_LIMIT },
+            "confirmed",
+          ),
+        );
+      } catch (error) {
+        const stored = store ? await store.loadAll(poolAddress).catch(() => []) : [];
+        if (stored.length === 0) throw error;
+        const swaps = stored
+          .map((tx) => tx.swap)
+          .filter((swap): swap is Swap => swap !== null)
+          .sort((a, b) => (b.blockTime ?? 0) - (a.blockTime ?? 0));
+        // Not cached: the next render should try the RPC again.
+        return { swaps, truncated: true, missed: 1, oldestBlockTime: null };
+      }
 
       const truncated = signatures.length >= SIGNATURE_LIMIT;
       const oldestBlockTime = signatures[signatures.length - 1]?.blockTime ?? null;
@@ -310,6 +363,20 @@ export async function listSwaps(
         return history;
       }
 
+      const known = store
+        ? await store
+            .load(
+              poolAddress,
+              landed.map((entry) => entry.signature),
+            )
+            .catch(() => new Map<string, StoredTx>())
+        : new Map<string, StoredTx>();
+
+      const swaps: Swap[] = [];
+      for (const tx of known.values()) if (tx.swap) swaps.push(tx.swap);
+
+      const fresh = landed.filter((entry) => !known.has(entry.signature));
+
       // One at a time, spaced. See REQUEST_GAP_MS — the batched form of this
       // call is refused outright by the public endpoint.
       //
@@ -317,22 +384,36 @@ export async function listSwaps(
       // the nine trades we did read because the tenth was rate-limited would
       // be throwing away truth to punish a partial failure; instead the rows
       // and the chart render what is real and the aggregates stand down.
-      const swaps: Swap[] = [];
-      let missed = 0;
-      for (let i = 0; i < landed.length; i++) {
+      let missed = Math.max(0, fresh.length - MAX_NEW_PER_READ);
+      const toSave: StoredTx[] = [];
+      const batch = fresh.slice(0, MAX_NEW_PER_READ);
+      for (let i = 0; i < batch.length; i++) {
         if (i > 0) await sleep(REQUEST_GAP_MS);
         try {
           const tx = await withRetry(() =>
-            connection.getParsedTransaction(landed[i].signature, {
+            connection.getParsedTransaction(batch[i].signature, {
               maxSupportedTransactionVersion: 0,
               commitment: "confirmed",
             }),
           );
           const swap = parseSwap(tx, baseMint);
           if (swap) swaps.push(swap);
+          // Null means the node has no record yet; try it again next read.
+          if (tx && batch[i].confirmationStatus === "finalized") {
+            toSave.push({ signature: batch[i].signature, swap });
+          }
         } catch {
           missed++;
         }
+      }
+
+      if (store && toSave.length > 0) {
+        // A failed write only costs a re-fetch next time; the read stands.
+        await store.save(poolAddress, toSave).catch((error) => {
+          if (process.env.JUNO_DEBUG) {
+            console.error(`[indexer] store ${poolAddress}:`, error);
+          }
+        });
       }
 
       // Nothing readable at all is a failed read, not an empty pool.
