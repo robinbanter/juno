@@ -218,7 +218,7 @@ function ReelFooter({ coin, onBuy }: { coin: Coin; onBuy: () => void }) {
   return (
     <div className="absolute inset-x-0 bottom-0 z-10 flex flex-col gap-3 p-4 pr-20 pb-6 sm:pr-24">
       <Link
-        href={`/creator/${coin.creator.handle}`}
+        href={`/creator/${coin.creator.wallet}`}
         className="flex w-fit items-center gap-2 rounded-full focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none"
       >
         <Avatar src={coin.creator.avatarUrl} alt={coin.creator.handle} size={32} />
