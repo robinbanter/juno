@@ -80,6 +80,7 @@ Fixtures created by the plan itself (section D) and reused later:
 | C10 | Image upload | A PNG uploads, previews, shows "Pinned to IPFS · Qm…" | |
 | C11 | Remove media | The remove button clears the preview | |
 | C12 | Video upload | An MP4 uploads; a poster frame is pinned too (two upload requests, both 201) | |
+| C13 | Valuation units follow the quote | USDC: inputs prefixed "$", summary "$1k → $25k". Switching to SOL resets to 10 → 250 and shows "SOL" on the inputs, the curve caption and the summary — never "$" for a SOL amount | |
 
 ## D. On-chain — launch (fixtures)
 

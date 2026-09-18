@@ -7,8 +7,8 @@ import { Clapperboard, ExternalLink, ImageIcon, LoaderCircle, TrendingUp, Upload
 import { cn } from "@/lib/utils";
 import { CURVE_PRESET_LIST, CURVE_PRESETS } from "@/lib/juno/curves";
 import { QUOTE_TOKENS } from "@/lib/juno/dbc";
-import { usd } from "@/lib/juno/format";
-import type { CoinFormat, CurvePresetId } from "@/lib/juno/types";
+import { compact, usd } from "@/lib/juno/format";
+import type { CoinFormat, CurvePresetId, QuoteToken } from "@/lib/juno/types";
 import { cluster, explorer, meteoraPoolUrl } from "@/lib/juno/cluster";
 import { presetShape } from "@/lib/juno/curve-shape";
 import { Button } from "@/components/juno/ui/Button";
@@ -90,8 +90,8 @@ export function CreateForm() {
   const [symbol, setSymbol] = useState("");
   const [description, setDescription] = useState("");
   const [quote, setQuote] = useState(QUOTE_TOKENS[0]);
-  const [initialMc, setInitialMc] = useState(1_000);
-  const [migrationMc, setMigrationMc] = useState(25_000);
+  const [initialMc, setInitialMc] = useState<number>(VALUATION_DEFAULTS.USDC.initial);
+  const [migrationMc, setMigrationMc] = useState<number>(VALUATION_DEFAULTS.USDC.migration);
 
   const { connected } = useWallet();
   const { state, launch, reset } = useLaunch();
@@ -175,8 +175,24 @@ export function CreateForm() {
     setNavFeedId(template.navFeedId);
     setFormat("post");
     const quoteToken = QUOTE_TOKENS.find((t) => t.symbol === template.quoteSymbol) ?? QUOTE_TOKENS[0];
-    setQuote(quoteToken);
+    chooseQuote(quoteToken);
   }
+
+  /**
+   * Valuations are in quote-token units: the curve is built in them. Moving
+   * between USDC and SOL therefore resets them to that token's defaults.
+   * Keeping "25,000" across the switch would silently turn a $25k graduation
+   * into a 25,000 SOL one.
+   */
+  function chooseQuote(token: QuoteToken) {
+    if (token.mint === quote.mint) return;
+    setQuote(token);
+    const defaults = VALUATION_DEFAULTS[token.symbol === "SOL" ? "SOL" : "USDC"];
+    setInitialMc(defaults.initial);
+    setMigrationMc(defaults.migration);
+  }
+  const quoteIsSol = quote.symbol === "SOL";
+  const valuation = (value: number) => (quoteIsSol ? `${compact(value, 2)} SOL` : usd(value));
 
   const active = CURVE_PRESETS[preset];
 
@@ -471,7 +487,7 @@ export function CreateForm() {
             <div className="mb-1 flex items-baseline justify-between">
               <span className="text-[12px] font-semibold">{active.label}</span>
               <span className="text-[11px] text-j-faint">
-                {shape.points.length} segments · {usd(initialMc)} → {usd(migrationMc)}
+                {shape.points.length} segments · {valuation(initialMc)} → {valuation(migrationMc)}
               </span>
             </div>
             <CurveChart shape={shape} progress={0} height={110} />
@@ -490,7 +506,7 @@ export function CreateForm() {
               key={token.mint}
               type="button"
               aria-pressed={quote.mint === token.mint}
-              onClick={() => setQuote(token)}
+              onClick={() => chooseQuote(token)}
               className={cn(
                 "h-10 flex-1 rounded-j border text-[14px] font-semibold transition-colors",
                 "focus-visible:ring-2 focus-visible:ring-j-focus focus-visible:outline-none",
@@ -507,10 +523,20 @@ export function CreateForm() {
 
       <div className="grid grid-cols-2 gap-3">
         <Field label="Opening valuation">
-          <NumberInput value={initialMc} onChange={setInitialMc} min={100} step={100} />
+          <NumberInput
+            value={initialMc}
+            onChange={setInitialMc}
+            unit={quote.symbol}
+            {...VALUATION_DEFAULTS[quoteIsSol ? "SOL" : "USDC"].initialInput}
+          />
         </Field>
         <Field label="Graduates at">
-          <NumberInput value={migrationMc} onChange={setMigrationMc} min={1000} step={1000} />
+          <NumberInput
+            value={migrationMc}
+            onChange={setMigrationMc}
+            unit={quote.symbol}
+            {...VALUATION_DEFAULTS[quoteIsSol ? "SOL" : "USDC"].migrationInput}
+          />
         </Field>
       </div>
 
@@ -528,8 +554,8 @@ export function CreateForm() {
           {navFeedId && <SummaryRow label="Pyth NAV">{navFeedId}</SummaryRow>}
           <SummaryRow label="Curve">{active.label}</SummaryRow>
           <SummaryRow label="Quote">{quote.symbol}</SummaryRow>
-          <SummaryRow label="Opens at">{usd(initialMc)}</SummaryRow>
-          <SummaryRow label="Graduates at">{usd(migrationMc)}</SummaryRow>
+          <SummaryRow label="Opens at">{valuation(initialMc)}</SummaryRow>
+          <SummaryRow label="Graduates at">{valuation(migrationMc)}</SummaryRow>
           <SummaryRow label="Migrates to">Meteora DAMM v2</SummaryRow>
         </dl>
       </div>
@@ -782,20 +808,43 @@ function Input({
   );
 }
 
+/**
+ * Starting valuations per quote token, in that token's units. SOL ones are
+ * sized for a demo curve a single wallet can take to graduation.
+ */
+const VALUATION_DEFAULTS = {
+  USDC: {
+    initial: 1_000,
+    migration: 25_000,
+    initialInput: { min: 100, step: 100 },
+    migrationInput: { min: 1_000, step: 1_000 },
+  },
+  SOL: {
+    initial: 10,
+    migration: 250,
+    initialInput: { min: 1, step: 1 },
+    migrationInput: { min: 5, step: 5 },
+  },
+} as const;
+
 function NumberInput({
   value,
   onChange,
   min,
   step,
+  unit,
 }: {
   value: number;
   onChange: (v: number) => void;
   min: number;
   step: number;
+  /** The quote token the valuation is denominated in. */
+  unit: string;
 }) {
+  const dollars = unit !== "SOL";
   return (
-    <span className="flex h-11 items-center rounded-j border border-j-line bg-j-input pl-3.5">
-      <span className="text-[14px] text-j-muted">$</span>
+    <span className="flex h-11 items-center rounded-j border border-j-line bg-j-input pl-3.5 pr-3.5">
+      {dollars && <span className="text-[14px] text-j-muted">$</span>}
       <input
         type="number"
         inputMode="numeric"
@@ -805,6 +854,7 @@ function NumberInput({
         onChange={(e) => onChange(Number(e.target.value) || 0)}
         className="h-full w-full bg-transparent px-1.5 text-[14px] tabular-nums outline-none"
       />
+      {!dollars && <span className="text-[14px] text-j-muted">{unit}</span>}
     </span>
   );
 }
