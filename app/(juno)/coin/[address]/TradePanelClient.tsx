@@ -4,7 +4,7 @@ import { useCallback } from "react";
 import { ExternalLink } from "lucide-react";
 
 import { explorer } from "@/lib/juno/cluster";
-import { quoteTrade } from "@/lib/juno/dbc";
+import { DEFAULT_SLIPPAGE_BPS, quoteTrade } from "@/lib/juno/dbc";
 import type { NavContext } from "@/lib/juno/nav";
 import type { Coin, QuoteToken, TradeSide } from "@/lib/juno/types";
 import { TradePanel, type TradeQuoteResult } from "@/components/juno/coin/TradePanel";
@@ -47,7 +47,7 @@ export function TradePanelClient({
       // Real curve math against the pool as it stands right now. A throw
       // ("Insufficient Liquidity" when the amount is more than the curve has
       // left) propagates to TradePanel, which shows it as the quote's error.
-      return quoteTrade({ snapshot, side, amountIn, slippageBps: 100 });
+      return quoteTrade({ snapshot, side, amountIn, slippageBps: DEFAULT_SLIPPAGE_BPS });
     },
     [ensureSnapshot],
   );

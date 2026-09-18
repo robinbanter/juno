@@ -405,6 +405,12 @@ export type TradeQuote = {
 };
 
 /**
+ * Slippage tolerance for every quote Juno turns into a `minimumAmountOut`:
+ * the coin page, the reel quick-buy and the CLI all use this one number.
+ */
+export const DEFAULT_SLIPPAGE_BPS = 100;
+
+/**
  * Quote a trade against the live curve.
  *
  * `swapBaseForQuote` is DBC's direction flag: true is a sell (base in, quote
@@ -417,7 +423,7 @@ export async function quoteTrade(params: {
   amountIn: number;
   slippageBps?: number;
 }): Promise<TradeQuote> {
-  const { snapshot, side, amountIn, slippageBps = 100 } = params;
+  const { snapshot, side, amountIn, slippageBps = DEFAULT_SLIPPAGE_BPS } = params;
   const client = getDbcClient();
   const swapBaseForQuote = side === "sell";
 
@@ -731,6 +737,72 @@ export async function sendLaunch(params: {
   return signatures;
 }
 
+export type PartialFillQuote = {
+  /** What the curve will actually take, UI units — at most the requested input. */
+  amountIn: number;
+  amountOut: number;
+  /** `amountOut` less the slippage tolerance: the swap's only price guard. */
+  minimumAmountOut: number;
+};
+
+/**
+ * Quote a partial fill against the live curve.
+ *
+ * An exact-in quote is the wrong basis for a partial fill: it throws once the
+ * input exceeds what the curve can take, which is exactly when a partial fill
+ * is used. This asks the program's own partial-fill math what would actually
+ * fill, and derives the minimum from that.
+ */
+export async function quotePartialFill(params: {
+  snapshot: PoolSnapshot;
+  side: TradeSide;
+  /** Upper bound on the input, UI units. */
+  amountIn: number;
+  slippageBps?: number;
+}): Promise<PartialFillQuote> {
+  const { snapshot, side, amountIn, slippageBps = DEFAULT_SLIPPAGE_BPS } = params;
+  const swapBaseForQuote = side === "sell";
+  const { baseDecimals, quoteDecimals } = snapshot;
+  const inDecimals = swapBaseForQuote ? baseDecimals : quoteDecimals;
+  const outDecimals = swapBaseForQuote ? quoteDecimals : baseDecimals;
+
+  const currentPoint = await getCurrentPoint(getConnection(), ActivationType.Timestamp);
+  const result = getDbcClient().pool.swapQuote2({
+    virtualPool: snapshot.pool,
+    config: snapshot.config,
+    swapBaseForQuote,
+    swapMode: SwapMode.PartialFill,
+    amountIn: uiToBn(amountIn, inDecimals),
+    slippageBps,
+    hasReferral: false,
+    eligibleForFirstSwapWithMinFee: false,
+    currentPoint,
+  }) as unknown as {
+    outputAmount: BN;
+    minimumAmountOut?: BN;
+    includedFeeInputAmount?: BN;
+    amountLeft?: BN;
+  };
+
+  const out = result.outputAmount;
+  // The SDK computes the minimum when given a slippage; derive it the same
+  // way if a version ever omits it, rather than falling back to nothing.
+  const minimum =
+    result.minimumAmountOut ??
+    out.mul(new BN(10_000 - slippageBps)).div(new BN(10_000));
+  const filledIn = result.includedFeeInputAmount
+    ? bnToUi(result.includedFeeInputAmount, inDecimals)
+    : result.amountLeft
+      ? amountIn - bnToUi(result.amountLeft, inDecimals)
+      : amountIn;
+
+  return {
+    amountIn: filledIn,
+    amountOut: bnToUi(out, outDecimals),
+    minimumAmountOut: bnToUi(minimum, outDecimals),
+  };
+}
+
 /**
  * Buy whatever is left of a curve without knowing exactly how much that is.
  *
@@ -739,6 +811,11 @@ export async function sendLaunch(params: {
  * complete curve a guessing game measured in lamports. `SwapMode.PartialFill`
  * fills what the pool can absorb and returns the rest, so "complete this
  * curve" becomes one call instead of a binary search.
+ *
+ * `minimumAmountOut` is required and must be positive — take it from
+ * `quotePartialFill`. The DBC program fills a swap with a zero minimum at any
+ * price (verified by simulation), so a zero is only accepted with the
+ * explicit, loudly named `allowZeroMinimum`.
  */
 export async function buildPartialFillSwapTransaction(params: {
   snapshot: PoolSnapshot;
@@ -746,8 +823,17 @@ export async function buildPartialFillSwapTransaction(params: {
   side: TradeSide;
   /** Upper bound. The program fills up to the curve's capacity. */
   amountIn: number;
-  minimumAmountOut?: number;
+  /** From `quotePartialFill`. Must be > 0 unless `allowZeroMinimum`. */
+  minimumAmountOut: number;
+  /** Send with no price guard at all. Only for an explicit operator opt-out. */
+  allowZeroMinimum?: boolean;
 }): Promise<Transaction> {
+  if (!(params.minimumAmountOut > 0) && !params.allowZeroMinimum) {
+    throw new Error(
+      "Refusing a partial-fill swap with no minimum output: it would fill at any price. " +
+        "Pass a minimumAmountOut from quotePartialFill.",
+    );
+  }
   const swapBaseForQuote = params.side === "sell";
   const { baseDecimals, quoteDecimals } = params.snapshot;
   const inDecimals = swapBaseForQuote ? baseDecimals : quoteDecimals;
@@ -758,7 +844,7 @@ export async function buildPartialFillSwapTransaction(params: {
     pool: params.snapshot.poolAddress,
     swapMode: SwapMode.PartialFill,
     amountIn: uiToBn(params.amountIn, inDecimals),
-    minimumAmountOut: uiToBn(params.minimumAmountOut ?? 0, outDecimals),
+    minimumAmountOut: uiToBn(Math.max(0, params.minimumAmountOut), outDecimals),
     swapBaseForQuote,
     referralTokenAccount: null,
   });

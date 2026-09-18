@@ -6,7 +6,7 @@ import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 
 import { cn } from "@/lib/utils";
 import { explorer } from "@/lib/juno/cluster";
-import { quoteTrade, type TradeQuote } from "@/lib/juno/dbc";
+import { DEFAULT_SLIPPAGE_BPS, quoteTrade, type TradeQuote } from "@/lib/juno/dbc";
 import { quoteAmount, tokenAmount, usd } from "@/lib/juno/format";
 import type { Coin } from "@/lib/juno/types";
 import { useTrade } from "../wallet/useTrade";
@@ -76,7 +76,7 @@ function Sheet({ coin, onClose }: { coin: Coin; onClose: () => void }) {
       try {
         const snapshot = await ensureSnapshot();
         if (!snapshot) throw new Error("Pool is not readable right now.");
-        const next = await quoteTrade({ snapshot, side: "buy", amountIn: amount, slippageBps: 100 });
+        const next = await quoteTrade({ snapshot, side: "buy", amountIn: amount, slippageBps: DEFAULT_SLIPPAGE_BPS });
         if (!cancelled) setQuote(next);
       } catch (error) {
         if (cancelled) return;

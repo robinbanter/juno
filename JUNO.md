@@ -38,7 +38,7 @@ explorer or by running a script in this repo.
 | **Likes and follows** | MongoDB, unique-indexed so a wallet can like or follow once; verified against the real database, including concurrent toggles. Counts show for everyone; the action needs a wallet. |
 | **Comments** | MongoDB via `lib/juno/social.ts`, wired to `app/api/juno/comments` — kept out of Postgres so a comment outage cannot take the market data down. Code reviewed, not runtime-verified. |
 | **Swap history** | direction, size, execution price and trader per trade, from token-balance deltas — driving the price chart, 24h volume and trade rows |
-| **Tests** | 123 unit tests across 11 files, incl. all four presets validated by Meteora's own `validateConfigParameters`. Was 140 before the Norr purge took the tests covering deleted code — see [README.md](./README.md). |
+| **Tests** | 126 unit tests across 12 files, incl. all four presets validated by Meteora's own `validateConfigParameters`. Was 140 before the Norr purge took the tests covering deleted code — see [README.md](./README.md). |
 
 ### Not built
 
@@ -156,7 +156,7 @@ npm run juno:launch   -- --preset ipo-book --name "AAPLx Issuance" --symbol AAPL
 npm run juno:inspect  -- --mint <baseMint>
 npm run juno:trade    -- --mint <baseMint> --side buy  --amount 0.5  --yes
 npm run juno:trade    -- --mint <baseMint> --side sell --amount 5000 --yes
-npm run juno:trade    -- --mint <baseMint> --side buy --amount 0.01 --partial --yes
+npm run juno:trade    -- --mint <baseMint> --side buy --amount 0.01 --partial --yes   # min-out from a partial-fill quote; --simulate to dry-run
 npm run juno:swaps    -- --mint <baseMint>
 npm run juno:fork                                   # accounts a mainnet fork must clone
 npm run juno:claim    -- --mint <baseMint> --simulate   # or --yes to send
