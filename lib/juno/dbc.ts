@@ -34,7 +34,7 @@ import {
 } from "@solana/web3.js";
 import BN from "bn.js";
 
-import { isMainnet, rpcEndpoint } from "./cluster";
+import { rpcEndpoint, usesMainnetAddresses } from "./cluster";
 import { buildPresetParams, type BuildPresetOptions } from "./curves";
 import type { CurveState, QuoteToken, TradeSide } from "./types";
 
@@ -82,9 +82,12 @@ export const WSOL: QuoteToken = {
   decimals: 9,
 };
 
-/** Circle USDC. Different mint per cluster — quoting the wrong one fails. */
+/**
+ * Circle USDC. Different mint per cluster — quoting the wrong one fails. A
+ * mainnet fork uses the mainnet mint, cloned into the local validator.
+ */
 export const USDC: QuoteToken = {
-  mint: isMainnet()
+  mint: usesMainnetAddresses()
     ? "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
     : "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
   symbol: "USDC",

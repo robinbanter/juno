@@ -112,7 +112,7 @@ Verified by running things, not by reading imports.
 | **Wallet** | Phantom / Solflare via `@solana/wallet-adapter` |
 | **Quotes** | priced by `pool.swapQuote` against live account state |
 | **Swap history** | Direction, size, execution price and trader reconstructed per trade from token-balance deltas — driving a real price chart, real 24h volume, and real trade rows |
-| **Tests** | **98 unit tests across 9 files**, passing — including all four presets asserted against Meteora's own `validateConfigParameters`, and both deprecated paths (DAMM v1, `RateLimiter`) asserted unused |
+| **Tests** | **107 unit tests across 10 files**, passing — including all four presets asserted against Meteora's own `validateConfigParameters`, and both deprecated paths (DAMM v1, `RateLimiter`) asserted unused |
 
 There is **no mock data layer**. `lib/juno/mock.ts` was deleted; if a pool is not
 on-chain *and* in the registry, it does not appear in the app.
@@ -255,16 +255,16 @@ npm run dev                        # next dev --webpack
 
 ```bash
 npm test                 # everything
-npm run test:unit        # 98 tests, ~1s — the curve presets live here
+npm run test:unit        # 107 tests, ~1s — the curve presets live here
 npm run build            # production build — green
 ```
 
 The suite used to be 140. It is smaller because the Norr tests went with the Norr
 code: deleting 237 files of a forked Algorand app took the 13 test files covering it,
 and `juno-routes` went too once its subject — keeping Norr's age gate off Juno's
-routes — stopped existing. Nothing that guards live code was removed. Of the 98,
-**75 are Juno's own** (curves 13, format 13, indexer 17, Pyth decoder + NAV band 23,
-issuer tooling 9) and 23 cover shared infrastructure.
+routes — stopped existing. Nothing that guards live code was removed. Of the 107,
+**84 are Juno's own** (curves 13, format 13, indexer 17, Pyth decoder + NAV band 23,
+issuer tooling 9, mainnet-fork config 9) and 23 cover shared infrastructure.
 
 Routes: `/explore` · `/reels` · `/coin/[address]` · `/creator/[wallet]` · `/create` ·
 `/activity`
@@ -274,7 +274,7 @@ Routes: `/explore` · `/reels` · `/coin/[address]` · `/creator/[wallet]` · `/
 | Variable | Required | Purpose |
 |---|---|---|
 | `DATABASE_URL` | yes | Postgres (Neon) for the `juno_pools` registry |
-| `NEXT_PUBLIC_SOLANA_CLUSTER` | yes | `devnet` or `mainnet-beta` |
+| `NEXT_PUBLIC_SOLANA_CLUSTER` | yes | `devnet`, `mainnet-beta`, or `mainnet-fork` (mainnet addresses on a local validator — see [DEPLOY.md](./DEPLOY.md)) |
 | `NEXT_PUBLIC_SOLANA_RPC` | recommended | A dedicated RPC. The public endpoints rate-limit hard enough to break a demo. |
 | `PINATA_JWT` | for launching | Pins media and token metadata to IPFS. Without it a mint launches with `uri: ""` and every wallet renders it blank. |
 | `NEXT_PUBLIC_IPFS_GATEWAY` | no | Gateway baked into pinned metadata for wallets and explorers |
@@ -311,6 +311,9 @@ npm run juno:trade    -- --mint <baseMint> --side buy --amount 0.01 --partial --
 
 # parsed swap history: direction, size, execution price, volume, chart points
 npm run juno:swaps    -- --mint <baseMint>
+
+# mainnet accounts a local fork must clone, checked read-only against mainnet
+npm run juno:fork
 
 # claim accrued creator trading fees (--simulate dry-runs the exact transaction)
 npm run juno:claim    -- --mint <baseMint> --simulate

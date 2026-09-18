@@ -55,7 +55,7 @@ Legend: `DONE` · `IN PROGRESS` · `NOT STARTED` · `BLOCKED`
 | 0.6 | `/creator/[handle]` profile with posts/reels tabs | DONE (mock data) |
 | 0.7 | `/create` launch form with curve preset picker | DONE |
 | 0.8 | `/activity` global trade feed | DONE (mock data) |
-| 0.9 | Unit tests + production build green | DONE — 98 tests, 9 files: 66 after the Norr purge (which deleted the tests covering deleted code — was 140), +23 for the Pyth decoder/band suite, +9 for the issuer tooling |
+| 0.9 | Unit tests + production build green | DONE — 107 tests, 10 files: 66 after the Norr purge (which deleted the tests covering deleted code — was 140), +23 for the Pyth decoder/band suite, +9 for the issuer tooling, +9 for the mainnet-fork config |
 
 ### Phase 1 — On-chain core
 | # | Task | Status |
@@ -143,7 +143,7 @@ Legend: `DONE` · `IN PROGRESS` · `NOT STARTED` · `BLOCKED`
 | 8.3 | Set `NEXT_PUBLIC_SOLANA_RPC` to a dedicated endpoint | BLOCKED — no RPC key in env |
 | 8.4 | Pitch video ≤3 min | NOT STARTED (human) |
 | 8.5 | Technical video ≤5 min | NOT STARTED (human) |
-| 8.6 | One mainnet pool | BLOCKED — needs mainnet SOL + user approval |
+| 8.6 | One mainnet pool | BLOCKED — needs mainnet SOL + user approval. Rehearsed end to end on a mainnet fork (Block 8), so the remaining step is the real launch |
 | 8.7 | Submit on hackathons.solana.com | NOT STARTED (human) |
 
 ---
@@ -189,9 +189,10 @@ itemised. A task counts as complete only if its status line starts with `DONE`.
 | Block 4 — social | 3 | 3 | comments, likes and follows all persisted |
 | Block 5 — legacy purge | 1 | 1 | done; build green |
 | Block 7 — issuer tooling | 4 | 5 | I.5 needs a human with the creator's browser wallet |
-| **Engineering total** | **70** | **72** | **97.2%** |
+| Block 8 — mainnet-fork rehearsal | 1 | 1 | full issuance lifecycle on cloned mainnet state |
+| **Engineering total** | **71** | **73** | **97.3%** |
 
-**Engineering: 70 / 72 = 97.2%.** The open items are 2.6 and I.5 (browser-wallet
+**Engineering: 71 / 73 = 97.3%.** The open items are 2.6 and I.5 (browser-wallet
 signatures, need a human). 5.3 and 5.4 were unblocked by reading Pyth on-chain instead
 of via Hermes.
 Caveat that matters for the demo: on devnet the equity feeds are months stale, so the
@@ -221,7 +222,7 @@ Verified on chain, in Postgres, and by running the test suite:
   `EhvtVimk…MYy7L` (`4HatkGNZ…bMVTZtc`). `juno:inspect` reports `graduated true`.
 - **Creator fees claimed**: 0.009653 SOL (`3X4g3aDg…9HdAN`).
 - **IPFS**: token metadata and three reel videos pinned and resolving.
-- **98 unit tests across 9 files passing**, including Meteora's own
+- **107 unit tests across 10 files passing**, including Meteora's own
   `validateConfigParameters` over all four presets.
 
 ---
@@ -317,6 +318,14 @@ can afford to be correct.
 Synthetic rows created while testing were deleted afterwards. What remains is one
 like per coin from the deployer wallet, which is a real wallet that really launched
 those pools.
+
+#### Block 8: Mainnet-fork rehearsal — 1 / 1
+Owner: juno-7. Run STOCKLANA issuance against real mainnet addresses on a local validator,
+behind cluster-aware config. How to run it: DEPLOY.md, *Rehearsing on a mainnet fork*.
+
+| # | Task | Status |
+|---|---|---|
+| F.1 | `mainnet-fork` cluster + `juno:fork` clone list, proven by running the flow | DONE — `lib/juno/cluster.ts` separates `usesMainnetAddresses()` (USDC, Pyth) from the endpoint (local RPC) and explorer (Solana Explorer, `cluster=custom`); `isMainnet()` stays true only on real mainnet, so the launch script still refuses a mainnet airdrop. `lib/juno/fork.ts` lists 25 accounts, all confirmed present on mainnet by a read-only `getMultipleAccountsInfo`. On `solana-test-validator`: `content` launch → fill to 100% → claim 0.439014696 SOL → migrate into DAMM v2 `5BeBWkeH…iTUgwvu` (exists); a USDC-quoted `ipo-book` issuance with `Equity.US.AAPL/USD` on mainnet USDC; `juno:pyth` reads mainnet AAPL $336.25 from the clone; `/api/health` → `cluster: mainnet-fork`. The first run failed to migrate (`Transfer: insufficient lamports 0`) because the funded DAMM v2 pool authority PDA was not cloned; the list now includes it and the DBC pool authority |
 
 #### Block 7: Issuer tooling — configure and monitor DBC pools from the app — 4 / 5
 Owner: juno-7. The Meteora brief asks for "tooling that helps issuers configure and

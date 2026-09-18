@@ -20,6 +20,7 @@
     "juno:claim": "dotenv -e .env.local -- tsx scripts/juno-claim.ts",
     "juno:graduate": "dotenv -e .env.local -- tsx scripts/juno-graduate.ts",
     "juno:swaps": "dotenv -e .env.local -- tsx scripts/juno-swaps.ts",
+    "juno:fork": "tsx scripts/juno-fork.ts",
     "juno:pyth": "dotenv -e .env.local -- tsx scripts/juno-pyth.ts"
   },
   "dependencies": {

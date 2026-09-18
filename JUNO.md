@@ -37,7 +37,7 @@ explorer or by running a script in this repo.
 | **Quotes** | priced by the DBC quoter against live account state |
 | **Comments** | MongoDB via `lib/juno/social.ts`, wired to `app/api/juno/comments` — kept out of Postgres so a comment outage cannot take the market data down. Code reviewed, not runtime-verified. |
 | **Swap history** | direction, size, execution price and trader per trade, from token-balance deltas — driving the price chart, 24h volume and trade rows |
-| **Tests** | 98 unit tests across 9 files, incl. all four presets validated by Meteora's own `validateConfigParameters`. Was 140 before the Norr purge took the tests covering deleted code — see [README.md](./README.md). |
+| **Tests** | 107 unit tests across 10 files, incl. all four presets validated by Meteora's own `validateConfigParameters`. Was 140 before the Norr purge took the tests covering deleted code — see [README.md](./README.md). |
 
 ### Not built
 
@@ -159,6 +159,7 @@ npm run juno:trade    -- --mint <baseMint> --side buy  --amount 0.5  --yes
 npm run juno:trade    -- --mint <baseMint> --side sell --amount 5000 --yes
 npm run juno:trade    -- --mint <baseMint> --side buy --amount 0.01 --partial --yes
 npm run juno:swaps    -- --mint <baseMint>
+npm run juno:fork                                   # accounts a mainnet fork must clone
 npm run juno:claim    -- --mint <baseMint> --simulate   # or --yes to send
 npm run juno:graduate -- --mint <baseMint> --simulate   # or --yes; fee tier read from chain
 ```
@@ -172,7 +173,7 @@ key on first run; fund it from the devnet faucet before launching.
 | Variable | Purpose |
 |---|---|
 | `DATABASE_URL` | Postgres for the pool registry |
-| `NEXT_PUBLIC_SOLANA_CLUSTER` | `devnet` or `mainnet-beta` |
+| `NEXT_PUBLIC_SOLANA_CLUSTER` | `devnet`, `mainnet-beta`, or `mainnet-fork` (mainnet addresses on a local validator — see [DEPLOY.md](./DEPLOY.md)) |
 | `NEXT_PUBLIC_SOLANA_RPC` | Dedicated RPC. The public endpoints rate-limit hard enough to break a demo. |
 | `PINATA_JWT` | Pins media and token metadata to IPFS. Without it a mint launches with `uri: ""` and wallets render it blank. |
 | `PYTH_API_KEY` | Optional. Pyth is read on-chain without it; the key only enables a Hermes fallback for feeds the chain cannot answer. |
