@@ -37,13 +37,13 @@ explorer or by running a script in this repo.
 | **Quotes** | priced by the DBC quoter against live account state |
 | **Comments** | MongoDB via `lib/juno/social.ts`, wired to `app/api/juno/comments` — kept out of Postgres so a comment outage cannot take the market data down. Code reviewed, not runtime-verified. |
 | **Swap history** | direction, size, execution price and trader per trade, from token-balance deltas — driving the price chart, 24h volume and trade rows |
-| **Tests** | 75 unit tests across 8 files, incl. all four presets validated by Meteora's own `validateConfigParameters`. Was 140 before the Norr purge took the tests covering deleted code — see [README.md](./README.md). |
+| **Tests** | 98 unit tests across 9 files, incl. all four presets validated by Meteora's own `validateConfigParameters`. Was 140 before the Norr purge took the tests covering deleted code — see [README.md](./README.md). |
 
 ### Not built
 
 | | Why |
 |---|---|
-| **Pyth NAV band** | Code is written (`lib/juno/pyth.ts`) but Hermes moved its price endpoints behind an API key, and none exists in this repo. The UI shows no NAV rather than a fabricated one. |
+| **Pyth NAV band on devnet** | Built and wired — Pyth is read straight from its `PriceUpdateV2` accounts on Solana, no key. But Pyth stopped pushing US equities on devnet on 2026-07-02, so the equity pools render **Stale** with the last publish date instead of a number. The same code shows a live band on mainnet, where AAPL/NVDA/TSLA/MSFT/AMZN update every few seconds on shard 1. SOL/USD, USDC/USD and USDT/USD are live on devnet. |
 | **Mainnet pool** | Devnet only so far. |
 | **Consistent swap history** | The indexer is built (`lib/juno/indexer.ts`) and verified on two devnet pools, but the public devnet RPC enforces a per-method quota. When it refuses, the chart, 24h volume and trade rows fall back to the honest empty state. A dedicated `NEXT_PUBLIC_SOLANA_RPC` is what makes it consistent. See [README.md](./README.md). |
 | **Likes** | Not persisted. `ReelCard` holds `liked` in local state; nothing populates `coin.likes`, so it does not survive a reload. |
@@ -175,7 +175,8 @@ key on first run; fund it from the devnet faucet before launching.
 | `NEXT_PUBLIC_SOLANA_CLUSTER` | `devnet` or `mainnet-beta` |
 | `NEXT_PUBLIC_SOLANA_RPC` | Dedicated RPC. The public endpoints rate-limit hard enough to break a demo. |
 | `PINATA_JWT` | Pins media and token metadata to IPFS. Without it a mint launches with `uri: ""` and wallets render it blank. |
-| `PYTH_API_KEY` | Optional. Without it, no NAV band is shown. |
+| `PYTH_API_KEY` | Optional. Pyth is read on-chain without it; the key only enables a Hermes fallback for feeds the chain cannot answer. |
+| `PYTH_MAX_AGE_SECONDS` | Optional, default 600. Older prices are shown as stale, never as a number. |
 
 ---
 
