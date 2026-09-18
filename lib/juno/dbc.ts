@@ -30,6 +30,7 @@ import {
   PublicKey,
   Transaction,
   type Commitment,
+  type ParsedAccountData,
 } from "@solana/web3.js";
 import BN from "bn.js";
 
@@ -147,7 +148,12 @@ export type PoolSnapshot = {
  * endpoint answers that load with 429s. Cached for the process lifetime.
  */
 const configCache = new Map<string, PoolConfig>();
-const decimalsCache = new Map<string, number>();
+// Seeded with the quote tokens, whose decimals are declared above: every
+// Juno pool quotes in one of them, so a cold list render otherwise spends two
+// reads per quote mint (token-program probe, then the mint) learning them.
+const decimalsCache = new Map<string, number>(
+  QUOTE_TOKENS.map((token) => [token.mint, token.decimals]),
+);
 
 async function cachedConfig(configAddress: PublicKey): Promise<PoolConfig | null> {
   const key = configAddress.toBase58();
@@ -191,12 +197,129 @@ export async function fetchPoolSnapshot(
   return value;
 }
 
+/**
+ * Pool accounts read in bulk by `prefetchPools`, keyed by pool address.
+ *
+ * Same lifetime as a snapshot. It exists so a list view pays for its pools
+ * once instead of once per tile.
+ */
+const poolAccountCache = new Map<string, { at: number; pool: VirtualPool }>();
+
+/**
+ * Read every listed pool — and any config not yet cached — in one
+ * `getMultipleAccountsInfo` each, so the per-pool snapshot reads that follow
+ * are served from memory.
+ *
+ * Measured through a logging proxy, `/explore` over eight pools issued about
+ * thirty `getAccountInfo` calls: one per pool, plus the SDK's own silent
+ * fallback read whenever the first was rate-limited, plus the caller's retry.
+ * On an endpoint that meters requests per method, that was the difference
+ * between a grid and an error page. This is two calls.
+ *
+ * Throws when the RPC refuses. The caller then falls back to per-pool reads
+ * and their own failure handling — it is a warm-up, never the only path.
+ * Addresses that are not standard DBC pools (missing on this cluster, or the
+ * transfer-hook variant) are simply not cached, and the per-pool read handles
+ * them exactly as before.
+ */
+export async function prefetchPools(poolAddresses: string[]): Promise<void> {
+  const unique = [...new Set(poolAddresses)];
+  if (unique.length === 0) return;
+  const program = getDbcClient().state.program;
+
+  const now = Date.now();
+  const accounts: Array<VirtualPool | null> = [];
+  // `getMultipleAccountsInfo` takes at most 100 keys.
+  for (let i = 0; i < unique.length; i += 100) {
+    const chunk = unique.slice(i, i + 100).map((address) => new PublicKey(address));
+    accounts.push(
+      ...((await program.account.virtualPool.fetchMultiple(
+        chunk,
+        COMMITMENT,
+      )) as Array<VirtualPool | null>),
+    );
+  }
+
+  const missingConfigs = new Set<string>();
+  unique.forEach((address, index) => {
+    const pool = accounts[index];
+    if (!pool) return;
+    poolAccountCache.set(address, { at: now, pool });
+    const config = poolState(pool).config.toBase58();
+    if (!configCache.has(config)) missingConfigs.add(config);
+  });
+
+  if (missingConfigs.size === 0) return;
+  const configKeys = [...missingConfigs].slice(0, 100);
+  const configs = await program.account.poolConfig.fetchMultiple(
+    configKeys.map((address) => new PublicKey(address)),
+    COMMITMENT,
+  );
+  configKeys.forEach((address, index) => {
+    const config = configs[index];
+    if (config) configCache.set(address, config as PoolConfig);
+  });
+}
+
+/** One token account holding a mint, in UI units, with the wallet that owns it. */
+export type HolderAccount = { address: PublicKey; owner: string; uiAmount: number };
+
+/**
+ * Every token account holding the mint, largest first, shared between
+ * concurrent callers.
+ *
+ * Read with `getProgramAccounts` filtered to the mint, not with
+ * `getTokenLargestAccounts`. The latter is what the public devnet endpoint
+ * refuses outright — measured: 429 on every attempt, so the holder count and
+ * the Holders tab never rendered there. The filtered scan is answered, and it
+ * returns every holder rather than the top 20, so the count is exact instead
+ * of a floor. Juno launches its base mints as classic SPL tokens (the preset
+ * default), whose accounts are exactly 165 bytes with the mint at offset 0.
+ *
+ * The coin page needs this twice in one render — the header count and the
+ * Holders tab — so the promise is shared for the snapshot TTL, then dropped
+ * so a later render reads fresh.
+ */
+const TOKEN_PROGRAM_ID = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+
+const holdersCache = new Map<string, { at: number; value: Promise<HolderAccount[]> }>();
+
+export function fetchHolderAccounts(mint: string): Promise<HolderAccount[]> {
+  const hit = holdersCache.get(mint);
+  if (hit && Date.now() - hit.at < SNAPSHOT_TTL_MS) return hit.value;
+  const value = getConnection()
+    .getParsedProgramAccounts(TOKEN_PROGRAM_ID, {
+      commitment: COMMITMENT,
+      filters: [{ dataSize: 165 }, { memcmp: { offset: 0, bytes: mint } }],
+    })
+    .then((accounts) =>
+      accounts
+        .map(({ pubkey, account }) => {
+          const data = account.data as ParsedAccountData;
+          const info = data.parsed?.info;
+          const amount = info?.tokenAmount?.uiAmount;
+          return {
+            address: pubkey,
+            owner: typeof info?.owner === "string" ? info.owner : pubkey.toBase58(),
+            uiAmount: typeof amount === "number" ? amount : 0,
+          };
+        })
+        .filter((holder) => holder.uiAmount > 0)
+        .sort((a, b) => b.uiAmount - a.uiAmount),
+    );
+  holdersCache.set(mint, { at: Date.now(), value });
+  // A refusal must not be served to the next render as the answer.
+  value.catch(() => holdersCache.delete(mint));
+  return value;
+}
+
 /** Drop a pool's cached snapshot — call after a trade so the next read is live. */
 export function invalidatePoolSnapshot(poolAddress: string | PublicKey): void {
   const prefix = `${poolAddress.toString()}:`;
   for (const key of snapshotCache.keys()) {
     if (key.startsWith(prefix)) snapshotCache.delete(key);
   }
+  poolAccountCache.delete(poolAddress.toString());
 }
 
 async function readPoolSnapshot(
@@ -206,7 +329,11 @@ async function readPoolSnapshot(
   const client = getDbcClient();
   const address = new PublicKey(poolAddress);
 
-  const pool = await client.state.getPool(address);
+  const prefetched = poolAccountCache.get(address.toBase58());
+  const pool =
+    prefetched && Date.now() - prefetched.at < SNAPSHOT_TTL_MS
+      ? prefetched.pool
+      : await client.state.getPool(address);
   if (!pool) return null;
 
   const state = poolState(pool);

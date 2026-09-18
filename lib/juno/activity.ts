@@ -2,7 +2,7 @@ import "server-only";
 
 import { PublicKey } from "@solana/web3.js";
 
-import { getConnection } from "./dbc";
+import { fetchHolderAccounts, getConnection } from "./dbc";
 import { identicon } from "./identicon";
 import { shortAddress } from "./format";
 import { listSwaps } from "./indexer";
@@ -119,25 +119,28 @@ export async function listPoolActivityReport(
   }
 }
 
-/** Largest token accounts for the mint — the top 20 the RPC will return. */
-export async function listPoolHolders(baseMint: string): Promise<Holder[]> {
+/**
+ * Holders of the mint, largest first — every account with a balance, capped at
+ * `limit` rows. Shares are of everything held, the pool's own vault included,
+ * since that is where unsold supply sits.
+ *
+ * `wallet` is the owning wallet, not the token account: that is the address a
+ * visitor recognises and the one a creator profile is keyed by.
+ */
+export async function listPoolHolders(baseMint: string, limit = 50): Promise<Holder[]> {
   try {
-    const result = await getConnection().getTokenLargestAccounts(
-      new PublicKey(baseMint),
-      "confirmed",
-    );
-    const accounts = result.value.filter((a) => (a.uiAmount ?? 0) > 0);
-    const total = accounts.reduce((sum, a) => sum + (a.uiAmount ?? 0), 0);
+    const accounts = await fetchHolderAccounts(baseMint);
+    const total = accounts.reduce((sum, a) => sum + a.uiAmount, 0);
 
-    return accounts.map((account, index) => ({
+    return accounts.slice(0, limit).map((account, index) => ({
       rank: index + 1,
       actor: {
-        handle: shortAddress(account.address.toBase58(), 4, 4),
-        avatarUrl: identicon(account.address.toBase58()),
+        handle: shortAddress(account.owner, 4, 4),
+        avatarUrl: identicon(account.owner),
       },
-      wallet: account.address.toBase58(),
-      balance: account.uiAmount ?? 0,
-      share: total > 0 ? (account.uiAmount ?? 0) / total : 0,
+      wallet: account.owner,
+      balance: account.uiAmount,
+      share: total > 0 ? account.uiAmount / total : 0,
     }));
   } catch {
     return [];

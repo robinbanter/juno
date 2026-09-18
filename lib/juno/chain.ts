@@ -1,9 +1,14 @@
 import "server-only";
 
-import { PublicKey } from "@solana/web3.js";
 import type BN from "bn.js";
 
-import { getConnection, getDbcClient, bnToUi, fetchPoolSnapshot } from "./dbc";
+import {
+  bnToUi,
+  fetchHolderAccounts,
+  fetchPoolSnapshot,
+  getDbcClient,
+  prefetchPools,
+} from "./dbc";
 import { quoteTokenUsdPrice } from "./pyth";
 import { curveShape } from "./curve-shape";
 import { feeSchedule, tokenomics } from "./economics";
@@ -74,24 +79,18 @@ export async function hydratePool(
   const priceUsd = snapshot.price * rate;
   const client = getDbcClient();
 
-  // Holders and creator fees are both real reads. `getTokenLargestAccounts`
-  // returns the top 20, which is a floor on the holder count rather than an
-  // exact figure — enough to render, and honest about small markets.
-  const [largest, fees] = options.detailed
+  // Holders and creator fees are both real reads. `fetchHolderAccounts`
+  // returns every account with a non-zero balance, so the count is exact.
+  const [holderAccounts, fees] = options.detailed
     ? await Promise.all([
-        getConnection()
-          .getTokenLargestAccounts(new PublicKey(row.baseMint))
-          .catch(() => null),
+        fetchHolderAccounts(row.baseMint).catch(() => null),
         client.state.getPoolFeeMetrics(row.poolAddress).catch(() => null),
       ])
     : [null, null];
 
-  // null, not 0: `largest` is null when the RPC refused, and "0 holders" is
-  // a claim we would not have earned.
-  const holders =
-    largest === null
-      ? null
-      : largest.value.filter((account) => (account.uiAmount ?? 0) > 0).length;
+  // null, not 0: null means the RPC refused, and "0 holders" is a claim we
+  // would not have earned.
+  const holders = holderAccounts === null ? null : holderAccounts.length;
 
   const creatorRewards = fees
     ? bnToUi(fees.current.creatorQuoteFee, snapshot.quoteDecimals) * rate
@@ -184,6 +183,11 @@ export async function hydratePoolsReport(
   rows: JunoPoolRow[],
   width = 2,
 ): Promise<HydrationReport> {
+  // One bulk read for every pool on the list, so the per-pool hydration below
+  // is served from memory. A refusal here costs nothing: each pool then reads
+  // itself, and fails or retries exactly as it did before.
+  await prefetchPools(rows.map((row) => row.poolAddress)).catch(() => undefined);
+
   const FAILED = Symbol("failed");
   const out: Array<Coin | null | typeof FAILED> = new Array(rows.length).fill(null);
   let cursor = 0;
