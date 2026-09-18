@@ -17,11 +17,14 @@ type TabId = "activity" | "holders" | "comments" | "details";
 export function CoinTabs({
   coin,
   activity,
+  activityUnavailable = false,
   holders,
   comments,
 }: {
   coin: Coin;
   activity: Activity[];
+  /** The RPC refused the history read — so an empty list means "unknown", not "none". */
+  activityUnavailable?: boolean;
   holders: Holder[];
   comments: Comment[];
 }) {
@@ -45,7 +48,16 @@ export function CoinTabs({
       />
 
       <div className="pt-2">
-        {tab === "activity" && <ActivityList items={activity} />}
+        {tab === "activity" && (
+          <ActivityList
+            items={activity}
+            empty={
+              activityUnavailable
+                ? "Trade history could not be read — the Solana RPC refused the request. Try again shortly."
+                : "No trades yet."
+            }
+          />
+        )}
         {tab === "holders" && <HoldersList items={holders} />}
         {tab === "comments" && (
           <>

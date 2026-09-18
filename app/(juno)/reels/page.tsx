@@ -1,6 +1,7 @@
 import Link from "next/link";
 
-import { hydratePools } from "@/lib/juno/chain";
+import { hydratePoolsReport } from "@/lib/juno/chain";
+import { UnavailableNotice } from "@/components/juno/UnavailableNotice";
 import { cluster } from "@/lib/juno/cluster";
 import { listPools } from "@/lib/juno/registry";
 import { likeCounts } from "@/lib/juno/social";
@@ -10,8 +11,9 @@ export const metadata = { title: "Reels" };
 export const dynamic = "force-dynamic";
 
 export default async function ReelsPage() {
-  const coins = await hydratePools(await listPools());
-  let reels = coins.filter((coin) => coin.format === "reel");
+  const report = await hydratePoolsReport(await listPools());
+  let reels = report.coins.filter((coin) => coin.format === "reel");
+  const unavailable = report.unavailable.filter((row) => row.format === "reel");
 
   // Seed the counts server-side so the rail paints the real number instead of
   // a zero that jumps once each card's own fetch lands. One aggregate for the
@@ -22,6 +24,20 @@ export default async function ReelsPage() {
     reels = reels.map((coin) => ({ ...coin, likes: counts[coin.address] ?? 0 }));
   } catch {
     // Leave `likes` as-is; the client hook will fill it in if Mongo recovers.
+  }
+
+  // "No reels yet" only if there really are none — not when the RPC refused them.
+  if (reels.length === 0 && unavailable.length > 0) {
+    return (
+      <div className="mx-auto w-full max-w-[520px] px-4 pt-6">
+        <UnavailableNotice
+          missing={unavailable.length}
+          total={unavailable.length}
+          names={unavailable.map((row) => row.name)}
+          retryHref="/reels"
+        />
+      </div>
+    );
   }
 
   if (reels.length === 0) {
@@ -44,6 +60,16 @@ export default async function ReelsPage() {
 
   return (
     <div className="mx-auto w-full max-w-[520px]">
+      {unavailable.length > 0 && (
+        <div className="px-4 pt-3">
+          <UnavailableNotice
+            missing={unavailable.length}
+            total={reels.length + unavailable.length}
+            names={unavailable.map((row) => row.name)}
+            retryHref="/reels"
+          />
+        </div>
+      )}
       <ReelFeed reels={reels} />
     </div>
   );
