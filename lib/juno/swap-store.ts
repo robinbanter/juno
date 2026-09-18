@@ -1,4 +1,4 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 import { getDb } from "@/lib/db";
 import { junoPoolTxs } from "@/lib/db/schema";
@@ -20,9 +20,7 @@ import type { Swap } from "./indexer";
 export type StoredTx = { signature: string; swap: Swap | null };
 
 export type SwapStore = {
-  /** Every stored transaction for these signatures on this pool. */
-  load(poolAddress: string, signatures: string[]): Promise<Map<string, StoredTx>>;
-  /** Everything stored for the pool — used when the RPC refuses the signature list. */
+  /** Everything stored for the pool, whether or not the RPC still lists it. */
   loadAll(poolAddress: string): Promise<StoredTx[]>;
   save(poolAddress: string, txs: StoredTx[]): Promise<void>;
 };
@@ -44,22 +42,6 @@ function toStored(row: typeof junoPoolTxs.$inferSelect): StoredTx {
 }
 
 export const pgSwapStore: SwapStore = {
-  async load(poolAddress, signatures) {
-    const out = new Map<string, StoredTx>();
-    if (signatures.length === 0) return out;
-    const rows = await getDb()
-      .select()
-      .from(junoPoolTxs)
-      .where(
-        and(
-          eq(junoPoolTxs.poolAddress, poolAddress),
-          inArray(junoPoolTxs.signature, signatures),
-        ),
-      );
-    for (const row of rows) out.set(row.signature, toStored(row));
-    return out;
-  },
-
   async loadAll(poolAddress) {
     const rows = await getDb()
       .select()

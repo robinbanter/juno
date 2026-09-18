@@ -349,31 +349,35 @@ export async function listSwaps(
       }
 
       const truncated = signatures.length >= SIGNATURE_LIMIT;
-      const oldestBlockTime = signatures[signatures.length - 1]?.blockTime ?? null;
       const landed = signatures.filter((entry) => !entry.err);
 
-      if (landed.length === 0) {
-        const history: SwapHistory = {
-          swaps: [],
-          truncated,
-          missed: 0,
-          oldestBlockTime,
-        };
-        cache.set(key, { at: Date.now(), history });
-        return history;
-      }
-
-      const known = store
-        ? await store
-            .load(
-              poolAddress,
-              landed.map((entry) => entry.signature),
-            )
-            .catch(() => new Map<string, StoredTx>())
-        : new Map<string, StoredTx>();
+      // Everything already decoded for this pool, not only what the RPC still
+      // lists. RPC nodes prune transaction history: a non-archival node keeps
+      // a window, and a local validator keeps minutes. Reading only the
+      // stored rows whose signatures are still in that window made older
+      // trades vanish from the feed and the chart once the window moved past
+      // them, while Postgres still held every one.
+      const stored = store
+        ? await store.loadAll(poolAddress).catch(() => [] as StoredTx[])
+        : [];
+      const known = new Map(stored.map((tx) => [tx.signature, tx]));
 
       const swaps: Swap[] = [];
       for (const tx of known.values()) if (tx.swap) swaps.push(tx.swap);
+
+      // How far back the history reaches: the older of the RPC window and the
+      // oldest stored trade.
+      const oldestBlockTime =
+        [signatures[signatures.length - 1]?.blockTime ?? null, ...swaps.map((s) => s.blockTime)]
+          .filter((t): t is number => typeof t === "number")
+          .reduce<number | null>((min, t) => (min === null || t < min ? t : min), null);
+
+      if (landed.length === 0) {
+        swaps.sort((a, b) => (b.blockTime ?? 0) - (a.blockTime ?? 0));
+        const history: SwapHistory = { swaps, truncated, missed: 0, oldestBlockTime };
+        cache.set(key, { at: Date.now(), history });
+        return history;
+      }
 
       const fresh = landed.filter((entry) => !known.has(entry.signature));
 
@@ -416,8 +420,9 @@ export async function listSwaps(
         });
       }
 
-      // Nothing readable at all is a failed read, not an empty pool.
-      if (missed === landed.length) return null;
+      // Nothing readable at all — and nothing stored — is a failed read, not
+      // an empty pool.
+      if (missed === landed.length && swaps.length === 0) return null;
 
       swaps.sort((a, b) => (b.blockTime ?? 0) - (a.blockTime ?? 0));
       const history: SwapHistory = { swaps, truncated, missed, oldestBlockTime };
