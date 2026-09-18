@@ -179,7 +179,7 @@ describe("pythSource", () => {
   });
 
   it("reads live mainnet on a fork, because cloned accounts never update", () => {
-    expect(pythSource({ NEXT_PUBLIC_SOLANA_CLUSTER: "localnet-fork" })).toEqual({
+    expect(pythSource({ NEXT_PUBLIC_SOLANA_CLUSTER: "mainnet-fork" })).toEqual({
       network: "mainnet-beta",
       rpc: "https://api.mainnet-beta.solana.com",
       maxAgeSeconds: 180,
@@ -188,7 +188,7 @@ describe("pythSource", () => {
 
   it("lets PYTH_RPC_URL and PYTH_MAX_AGE_SECONDS override", () => {
     const source = pythSource({
-      NEXT_PUBLIC_SOLANA_CLUSTER: "localnet-fork",
+      NEXT_PUBLIC_SOLANA_CLUSTER: "mainnet-fork",
       PYTH_RPC_URL: "http://127.0.0.1:8899",
       PYTH_MAX_AGE_SECONDS: "90",
     });
@@ -200,7 +200,7 @@ describe("pythSource", () => {
     expect(pythAccountUrl(address, pythSource({ NEXT_PUBLIC_SOLANA_CLUSTER: "devnet" }))).toBe(
       `https://solscan.io/account/${address}?cluster=devnet`,
     );
-    expect(pythAccountUrl(address, pythSource({ NEXT_PUBLIC_SOLANA_CLUSTER: "localnet-fork" }))).toBe(
+    expect(pythAccountUrl(address, pythSource({ NEXT_PUBLIC_SOLANA_CLUSTER: "mainnet-fork" }))).toBe(
       `https://solscan.io/account/${address}`,
     );
   });

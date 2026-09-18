@@ -55,7 +55,7 @@ Legend: `DONE` · `IN PROGRESS` · `NOT STARTED` · `BLOCKED`
 | 0.6 | `/creator/[handle]` profile with posts/reels tabs | DONE (mock data) |
 | 0.7 | `/create` launch form with curve preset picker | DONE |
 | 0.8 | `/activity` global trade feed | DONE (mock data) |
-| 0.9 | Unit tests + production build green | DONE — 114 tests, 10 files: 66 after the Norr purge (which deleted the tests covering deleted code — was 140), +29 for the Pyth reader/band/source suite, +9 for the issuer tooling, +10 for the mainnet-fork config |
+| 0.9 | Unit tests + production build green | DONE — 123 tests, 11 files: 66 after the Norr purge (which deleted the tests covering deleted code — was 140), +29 for the Pyth reader/band/source suite, +9 for the issuer tooling, +10 for the mainnet-fork config, +9 for wallet sessions |
 
 ### Phase 1 — On-chain core
 | # | Task | Status |
@@ -223,7 +223,7 @@ Verified on chain, in Postgres, and by running the test suite:
   `EhvtVimk…MYy7L` (`4HatkGNZ…bMVTZtc`). `juno:inspect` reports `graduated true`.
 - **Creator fees claimed**: 0.009653 SOL (`3X4g3aDg…9HdAN`).
 - **IPFS**: token metadata and three reel videos pinned and resolving.
-- **114 unit tests across 10 files passing**, including Meteora's own
+- **123 unit tests across 11 files passing**, including Meteora's own
   `validateConfigParameters` over all four presets.
 
 ---

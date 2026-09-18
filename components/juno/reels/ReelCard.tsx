@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Heart, MessageCircle, Play, Share2, Volume2, VolumeX } from "lucide-react";
 
@@ -135,6 +136,25 @@ function ReelSideRail({
   onToggleMuted: () => void;
 }) {
   const { count, liked, pending, toggle, canLike } = useLikes(coin.address, coin.likes ?? 0);
+  const router = useRouter();
+  const [copied, setCopied] = useState(false);
+
+  // The coin's own page is what gets shared: it is where the reel can be
+  // bought and discussed. System share sheet where there is one, else copy.
+  async function share() {
+    const url = `${window.location.origin}/coin/${coin.address}`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: `${coin.name} on Juno`, url });
+        return;
+      }
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Dismissing the share sheet rejects; that is not an error.
+    }
+  }
 
   return (
     <div className="absolute right-3 bottom-32 z-10 flex flex-col items-center gap-5 sm:right-5">
@@ -146,6 +166,7 @@ function ReelSideRail({
         count={count}
         onClick={toggle}
         disabled={!canLike || pending}
+        pressed={liked}
       >
         <Heart
           size={26}
@@ -154,11 +175,16 @@ function ReelSideRail({
         />
       </ReelAction>
 
-      <ReelAction label="Comments" count={coin.commentCount ?? 0}>
+      {/* Comments live on the coin page; the count is seeded server-side. */}
+      <ReelAction
+        label="Comments"
+        count={coin.commentCount}
+        onClick={() => router.push(`/coin/${coin.address}`)}
+      >
         <MessageCircle size={26} className="text-white" />
       </ReelAction>
 
-      <ReelAction label="Share">
+      <ReelAction label={copied ? "Link copied" : "Share"} onClick={share}>
         <Share2 size={24} className="text-white" />
       </ReelAction>
 
@@ -178,12 +204,15 @@ function ReelAction({
   count,
   onClick,
   disabled,
+  pressed,
   children,
 }: {
   label: string;
   count?: number;
-  onClick?: () => void;
+  onClick: () => void;
   disabled?: boolean;
+  /** For toggles (the like): exposed as aria-pressed. */
+  pressed?: boolean;
   children: React.ReactNode;
 }) {
   return (
@@ -191,6 +220,7 @@ function ReelAction({
       type="button"
       onClick={onClick}
       disabled={disabled}
+      aria-pressed={pressed}
       aria-label={label}
       title={label}
       className="flex flex-col items-center gap-1 rounded-full transition-transform active:scale-90 focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-60"
@@ -267,7 +297,16 @@ function ReelFooter({ coin, onBuy }: { coin: Coin; onBuy: () => void }) {
           <Delta value={coin.marketCap} direction={coin.marketCapChangePct} currency={coin.marketCapCurrency} />
           <span className="text-[11px] text-white/60">
             {coin.holders !== null && <>{compact(coin.holders, 1)} holders</>}
-            {coin.volume24h !== null && <> · {usd(coin.volume24h)} 24h</>}
+            {/* Volume is in the quote token; only a USD-valued pool gets "$". */}
+            {coin.volume24h !== null && (
+              <>
+                {" · "}
+                {coin.marketCapCurrency === "USD"
+                  ? usd(coin.volume24h)
+                  : `${compact(coin.volume24h, 2)} ${coin.quote.symbol}`}{" "}
+                24h
+              </>
+            )}
           </span>
         </span>
       </div>

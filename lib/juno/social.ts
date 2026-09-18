@@ -119,6 +119,21 @@ export async function countComments(coinMint: string, cluster: string): Promise<
   return (await comments()).countDocuments({ coinMint, cluster });
 }
 
+/** Comment counts for many coins in one aggregate, for feeds. */
+export async function commentCounts(
+  coinMints: string[],
+  cluster: string,
+): Promise<Record<string, number>> {
+  if (coinMints.length === 0) return {};
+  const rows = await (await comments())
+    .aggregate<{ _id: string; n: number }>([
+      { $match: { cluster, coinMint: { $in: coinMints } } },
+      { $group: { _id: "$coinMint", n: { $sum: 1 } } },
+    ])
+    .toArray();
+  return Object.fromEntries(rows.map((r) => [r._id, r.n]));
+}
+
 /* ------------------------------------------------------------------ */
 /* Likes                                                               */
 /* ------------------------------------------------------------------ */

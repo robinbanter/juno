@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import type { Coin, Creator } from "@/lib/juno/types";
 import { useFollow } from "@/components/juno/useFollow";
@@ -14,7 +15,10 @@ import { ProfileTabs, type ProfileTabId } from "@/components/juno/profile/Profil
  * in the initial HTML.
  */
 export function ProfileView({ creator, coins }: { creator: Creator; coins: Coin[] }) {
+  const router = useRouter();
   const [tab, setTab] = useState<ProfileTabId>("posts");
+  // Newest first: the coin the creator most recently put a curve behind.
+  const latest = [...coins].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))[0];
   const follow = useFollow(creator.wallet, {
     followers: creator.followers,
     following: creator.following,
@@ -40,6 +44,7 @@ export function ProfileView({ creator, coins }: { creator: Creator; coins: Coin[
         isSelf={follow.isSelf}
         followPending={follow.pending}
         onFollow={follow.toggle}
+        onBuy={latest ? () => router.push(`/coin/${latest.address}`) : undefined}
       />
       {follow.error && (
         <p role="alert" className="px-4 pb-2 text-[13px] text-j-danger">

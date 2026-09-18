@@ -1,16 +1,20 @@
 "use client";
 
-import { Bell, ChevronDown, Mail, MoreHorizontal } from "lucide-react";
 
 import { compact } from "@/lib/juno/format";
 import type { Creator } from "@/lib/juno/types";
 import { Avatar } from "../ui/Avatar";
-import { Button, IconButton } from "../ui/Button";
+import { Button } from "../ui/Button";
 import { Delta } from "../ui/Delta";
 
 /**
- * A creator's header: identity, the creator coin's live market cap, and the
- * two actions that matter — buy the coin, follow the person.
+ * A creator's header: identity, the combined live market cap of their coins,
+ * and the two actions that matter: buy their latest coin, follow the person.
+ *
+ * Every control here does something. Notify, More options, Message and a
+ * name dropdown used to sit here with no handler behind them. Juno has no
+ * notifications or messaging, so they are gone rather than left as buttons
+ * that silently do nothing.
  */
 export function ProfileHeader({
   creator,
@@ -20,7 +24,6 @@ export function ProfileHeader({
   followPending = false,
   onBuy,
   onFollow,
-  onMessage,
 }: {
   creator: Creator;
   following?: boolean;
@@ -28,9 +31,9 @@ export function ProfileHeader({
   canFollow?: boolean;
   isSelf?: boolean;
   followPending?: boolean;
+  /** Opens the creator's newest coin. Absent when they have launched none. */
   onBuy?: () => void;
   onFollow?: () => void;
-  onMessage?: () => void;
 }) {
   return (
     <section className="px-4 pt-2 sm:px-0">
@@ -41,23 +44,9 @@ export function ProfileHeader({
           <h1 className="truncate text-[26px] leading-tight font-bold tracking-tight">
             ${creator.ticker}
           </h1>
-          <button
-            type="button"
-            className="-ml-0.5 mt-0.5 flex items-center gap-1 rounded px-0.5 text-[14px] text-j-muted transition-colors hover:text-j-ink focus-visible:ring-2 focus-visible:ring-j-focus focus-visible:outline-none"
-          >
-            <span className="truncate">{creator.displayName}</span>
-            <ChevronDown size={15} aria-hidden="true" />
-          </button>
+          <p className="mt-0.5 truncate text-[14px] text-j-muted">{creator.displayName}</p>
         </div>
 
-        <div className="flex shrink-0 items-center gap-2">
-          <IconButton label="Notify me about this creator">
-            <Bell size={19} strokeWidth={1.75} />
-          </IconButton>
-          <IconButton label="More options">
-            <MoreHorizontal size={19} strokeWidth={1.75} />
-          </IconButton>
-        </div>
       </div>
 
       {creator.bio && (
@@ -90,9 +79,11 @@ export function ProfileHeader({
       </div>
 
       <div className="mt-4 flex items-center gap-2">
-        <Button variant="buy" size="lg" className="flex-1" onClick={onBuy}>
-          Buy
-        </Button>
+        {onBuy && (
+          <Button variant="buy" size="lg" className="flex-1" onClick={onBuy}>
+            Buy latest
+          </Button>
+        )}
         <Button
           variant={following ? "outline" : "contrast"}
           size="lg"
@@ -112,9 +103,6 @@ export function ProfileHeader({
         >
           {isSelf ? "Your profile" : following ? "Following" : "Follow"}
         </Button>
-        <IconButton label="Message" className="size-[52px]" onClick={onMessage}>
-          <Mail size={19} strokeWidth={1.75} />
-        </IconButton>
       </div>
     </section>
   );

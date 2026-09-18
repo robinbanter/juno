@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 
 import { forgetSession, useWalletSession } from "@/components/juno/wallet/useWalletSession";
@@ -32,6 +32,11 @@ export function useFollow(creatorWallet: string | undefined, initial?: FollowDat
     initial ?? { followers: 0, following: 0, following_them: false },
   );
   const [pending, setPending] = useState(false);
+  // Whose `following_them` we hold, and a counter of writes, for the same
+  // reason as in useLikes: before the viewer's state arrives the button read
+  // "Follow" to someone who already follows, and pressing it unfollowed.
+  const [loadedFor, setLoadedFor] = useState<string | null | undefined>(undefined);
+  const writes = useRef(0);
 
   useEffect(() => {
     if (!creatorWallet) return;
@@ -40,10 +45,13 @@ export function useFollow(creatorWallet: string | undefined, initial?: FollowDat
     const query = viewer
       ? `?creator=${creatorWallet}&viewer=${viewer}`
       : `?creator=${creatorWallet}`;
+    const startedAt = writes.current;
     fetch(`/api/juno/follows${query}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((json: FollowData | null) => {
-        if (!cancelled && json) setData(json);
+        if (cancelled || !json || writes.current !== startedAt) return;
+        setData(json);
+        setLoadedFor(viewer ?? null);
       })
       .catch(() => undefined);
 
@@ -55,7 +63,8 @@ export function useFollow(creatorWallet: string | undefined, initial?: FollowDat
   const isSelf = Boolean(viewer && creatorWallet && viewer === creatorWallet);
 
   const toggle = useCallback(async () => {
-    if (!creatorWallet || !viewer || isSelf || pending) return;
+    if (!creatorWallet || !viewer || isSelf || pending || loadedFor !== viewer) return;
+    writes.current++;
     setPending(true);
     setError(null);
     try {
@@ -79,11 +88,11 @@ export function useFollow(creatorWallet: string | undefined, initial?: FollowDat
     } finally {
       setPending(false);
     }
-  }, [creatorWallet, viewer, isSelf, pending, ensureSession]);
+  }, [creatorWallet, viewer, isSelf, pending, loadedFor, ensureSession]);
 
   return {
     ...data,
-    pending,
+    pending: pending || (Boolean(viewer) && loadedFor !== viewer),
     toggle,
     error,
     isSelf,

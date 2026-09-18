@@ -63,6 +63,7 @@ Fixtures created by the plan itself (section D) and reused later:
 | B8 | Mobile layout (402 px) | Bottom nav visible, side rail hidden, no horizontal scroll | |
 | B9 | Get-the-App card | Present on explore; dismiss removes it; absent on `/coin/*` and `/reels` | |
 | B10 | 404 | `/nope` renders the not-found page with HTTP 404 | |
+| B11 | No dead controls | Every button in `components/juno` and `app/(juno)` has an action (static sweep: no `<button>`/`Button`/`IconButton` without `onClick`/submit), and each exercised one does what its label says | |
 
 ## C. `/create` — form behaviour
 
@@ -129,6 +130,7 @@ Fixtures created by the plan itself (section D) and reused later:
 | F13 | No NAV panel on non-stock coins | `F-POST` shows no NAV panel | |
 | F14 | Graduated coin | `F-GRAD` after D-graduation shows the graduated notice and a DAMM v2 link instead of the trade panel | |
 | F15 | RPC down | Validator stopped → "this coin exists, but its live data could not be read" view, no crash | |
+| F16 | Share | "Share" copies the page URL (desktop: clipboard, label becomes "Link copied"); no other inert icon buttons in the coin header | |
 
 ## G. Trading (`/coin` trade panel)
 
@@ -158,7 +160,7 @@ Fixtures created by the plan itself (section D) and reused later:
 | H2 | Like (first time) | Wallet asked to sign the sign-in message once; count +1, pressed | |
 | H3 | Unlike | Count −1, not pressed; no second signature | |
 | H4 | Comment | Posting shows the comment immediately and after reload | |
-| H5 | Comment validation | Empty → not sent; > 500 chars refused with the limit stated | |
+| H5 | Comment validation | Empty → nothing sent; the box stops at 280 characters with a live counter reaching 0; the API refuses a 281-character body with 400 stating the 280 limit | |
 | H6 | Follow / unfollow | On `/creator/<Wallet B>`: Follow → Following, followers +1; again → back | |
 | H7 | Self-follow | On own profile: "Your profile", no follow action | |
 | H8 | Sign-in rejected | Wallet refuses `signMessage` → message "Sign-in was cancelled in the wallet", nothing written | |
@@ -173,7 +175,7 @@ Fixtures created by the plan itself (section D) and reused later:
 |---|---|---|---|
 | I1 | Empty state (before D4) | "No reels yet" + Create CTA | |
 | I2 | Feed | `F-REEL` card plays the video, shows name, creator, curve progress | |
-| I3 | Quick buy | "Buy" opens the quick-buy sheet; a buy confirms on the fork | |
+| I3 | Quick buy | "Buy" opens the quick-buy sheet with presets in the pool's quote token (SOL for a SOL reel) and a live quote; buying signs once, confirms on the fork ("Bought · View tx"), and the coin balance rises | |
 | I4 | Like from reel | Works as H2/H3 | |
 
 ## J. `/creator/[handle]`
@@ -184,6 +186,7 @@ Fixtures created by the plan itself (section D) and reused later:
 | J2 | Tabs | Posts / Reels populated from fixtures; empty tabs say so | |
 | J3 | Invalid handle | `/creator/notawallet` → 404 | |
 | J4 | Unknown wallet | Valid wallet with no coins → empty profile, no errors | |
+| J5 | Profile actions | "Buy latest" opens the creator's newest coin; hidden for a wallet with no coins; no Notify/More/Message/name-dropdown controls without an action | |
 
 ## K. `/activity`
 

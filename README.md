@@ -113,7 +113,7 @@ Verified by running things, not by reading imports.
 | **Quotes** | priced by `pool.swapQuote` against live account state |
 | **Likes and follows** | Persisted in MongoDB (`lib/juno/social.ts`, `app/api/juno/likes`, `app/api/juno/follows`), keyed with unique indexes so a wallet can like a coin or follow a creator exactly once. Verified against the real database, including six simultaneous toggles that never pushed a count past the number of distinct wallets. Counts render for everyone; the action needs a connected wallet, and there is no optimistic increment. |
 | **Swap history** | Direction, size, execution price and trader reconstructed per trade from token-balance deltas — driving a real price chart, real 24h volume, and real trade rows |
-| **Tests** | **114 unit tests across 10 files**, passing — including all four presets asserted against Meteora's own `validateConfigParameters`, and both deprecated paths (DAMM v1, `RateLimiter`) asserted unused |
+| **Tests** | **123 unit tests across 11 files**, passing — including all four presets asserted against Meteora's own `validateConfigParameters`, and both deprecated paths (DAMM v1, `RateLimiter`) asserted unused |
 
 There is **no mock data layer**. `lib/juno/mock.ts` was deleted; if a pool is not
 on-chain *and* in the registry, it does not appear in the app.
@@ -254,16 +254,17 @@ npm run dev                        # next dev --webpack
 
 ```bash
 npm test                 # everything
-npm run test:unit        # 114 tests, ~1s — the curve presets live here
+npm run test:unit        # 123 tests, ~1s — the curve presets live here
 npm run build            # production build — green
 ```
 
 The suite used to be 140. It is smaller because the Norr tests went with the Norr
 code: deleting 237 files of a forked Algorand app took the 13 test files covering it,
 and `juno-routes` went too once its subject — keeping Norr's age gate off Juno's
-routes — stopped existing. Nothing that guards live code was removed. Of the 114,
-**91 are Juno's own** (curves 13, format 13, indexer 17, Pyth reader + NAV band 29,
-issuer tooling 9, mainnet-fork config 10) and 23 cover shared infrastructure.
+routes — stopped existing. Nothing that guards live code was removed. Of the 123,
+**100 are Juno's own** (curves 13, format 13, indexer 17, Pyth reader + NAV band 29,
+issuer tooling 9, mainnet-fork config 10, wallet sessions 9) and 23 cover shared
+infrastructure.
 
 Routes: `/explore` · `/reels` · `/coin/[address]` · `/creator/[wallet]` · `/create` ·
 `/activity`
