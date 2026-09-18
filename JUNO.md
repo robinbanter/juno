@@ -36,7 +36,7 @@ explorer or by running a script in this repo.
 | **Quotes** | priced by the DBC quoter against live account state |
 | **Comments** | MongoDB via `lib/juno/social.ts`, wired to `app/api/juno/comments` — kept out of Postgres so a comment outage cannot take the market data down. Code reviewed, not runtime-verified. |
 | **Swap history** | direction, size, execution price and trader per trade, from token-balance deltas — driving the price chart, 24h volume and trade rows |
-| **Tests** | 89 unit tests across 8 files, incl. all four presets validated by Meteora's own `validateConfigParameters`. Was 140 before the Norr purge took the tests covering deleted code — see [README.md](./README.md). |
+| **Tests** | 90 unit tests across 8 files, incl. all four presets validated by Meteora's own `validateConfigParameters`. Was 140 before the Norr purge took the tests covering deleted code — see [README.md](./README.md). |
 
 ### Not built
 

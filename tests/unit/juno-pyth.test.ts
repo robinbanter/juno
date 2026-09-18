@@ -7,7 +7,7 @@ import {
   priceFeedAccount,
   scaled,
 } from "@/lib/juno/pyth-account";
-import { PYTH_FEEDS, feedIdFor, freshestUpdate, toReading } from "@/lib/juno/pyth";
+import { PYTH_FEEDS, feedIdFor, freshestUpdate, toReading, ttlFor } from "@/lib/juno/pyth";
 import { executionPrice, navBand, quoteAgainstNav, type NavContext } from "@/lib/juno/nav";
 
 /*
@@ -155,6 +155,22 @@ describe("freshestUpdate / toReading", () => {
       sol,
     ]);
     expect(found?.address).toBe(SOL_USD_DEVNET.address);
+  });
+});
+
+describe("ttlFor", () => {
+  it("re-reads live prices often, settled feeds rarely, and failed reads soonest", () => {
+    const live = ttlFor({
+      status: "live", feedId: "x", priceUsd: 1, confidence: 0, publishedAt: "", account: null, source: "solana",
+    });
+    const stale = ttlFor({ status: "stale", feedId: "x", publishedAt: "", account: null, source: "solana" });
+    const missing = ttlFor({ status: "unavailable", feedId: "x", reason: "No Pyth price account for this feed on this cluster" });
+    const failed = ttlFor({ status: "unavailable", feedId: "x", reason: "Solana RPC read failed" });
+    expect(failed).toBeLessThan(live);
+    expect(live).toBeLessThan(stale);
+    expect(missing).toBe(stale);
+    // Never long enough to hide a feed crossing the staleness bound for real.
+    expect(stale).toBeLessThanOrEqual(60_000);
   });
 });
 
