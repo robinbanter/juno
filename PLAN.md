@@ -366,6 +366,96 @@ but it is Juno code rather than Norr surface.
 
 ---
 
+## Browser verification — 2026-09-18
+
+A full pass over every route in a real browser, run after the indexer, likes and
+follows, the Norr purge and the de-Norred shell had all landed. Build and tests
+passing had not proved the pages work — and they did not all work.
+
+**Final result: 18/18 items PASS on live devnet data, plus B18 (RPC failure) PASS on
+all 10 pages under both a total and a partial outage. Eight real bugs found and fixed
+at the root.** Run against a production build (`next build && next start`), HEAD
+`b732a1d`.
+
+### How it was run
+- **Pass criteria were written before looking** (`.juno-verify/criteria.md`, local).
+  Any console error, page error, failed request or own-origin 4xx/5xx fails an item.
+- **Not the AO browser panel.** It cannot verify this app: every React page stays on
+  its Suspense fallback, snapshots return "(empty page)", and screenshots fail even on
+  a plain JSON URL. Four app-level causes were ruled out one at a time (CSP, service
+  worker, stale chunks, X-Frame-Options), then an independent headless Chrome rendered
+  the same page completely. The pass uses Playwright driving the installed Google Chrome.
+- **RPC failure tested deterministically**, not by waiting for a rate limit: a
+  fault-injecting RPC answered every call (total) or half of them (partial) with the
+  exact 429 body devnet returns.
+
+### Results
+| # | Item | Result | Evidence |
+|---|---|---|---|
+| B1 | `/` | PASS | redirects to `/explore`, title "Explore · Juno", no Norr UI |
+| B2 | `/explore` | PASS | 8 tiles (every registry pool), a 24h cell on each |
+| B3 | `?q=nvda` | PASS | "1 result for “nvda”", only NVDAx |
+| B4 | `?q=zzzz` | PASS | "Nothing matches" empty state |
+| B5 | `?sort=trending` | PASS | full ranking; see bug 8 for the latency fix |
+| B6 | `?sort=graduating` | PASS | graduated pool sorts last |
+| B7 | `/reels` | PASS | 3 reels, exactly 1 playing, like counts real, like disabled w/o wallet |
+| B8 | `/coin` AAPLx (`ipo-book`, USDC) | PASS | renders; chart drawn |
+| B9 | `/coin` NVDAx (`thin-name`, SOL) | PASS | price chart (3 points), 24h volume 0.210 SOL, **BUY and SELL rows** with sizes |
+| B10 | `/coin` graduated pool | PASS | graduated state, DAMM v2 link to `EhvtVimk…MYy7L` |
+| B11 | `/creator/9CHr…` | PASS | 8 posts (registry truth), real follower count, Follow disabled w/o wallet with honest title |
+| B12–14 | `/create` post / reel / stock | PASS | 4 presets; Reel mode selects; Stock Issuance shows AAPL/NVDA/TSLA/MSFT and NVDA picks `thin-name` |
+| B15 | `/activity` | PASS | 16 rows, 12 decoded; NVDAx **SELL 5,000** row present |
+| B16 | `/coin/not-a-mint` | PASS | **HTTP 404** + not-found page |
+| B16b | `/coin/<well-formed, unknown>` | PASS* | not-found page + `noindex`; HTTP 200 — see limitation |
+| B17 | `/creator/not-a-wallet` | PASS | **HTTP 404** + not-found page |
+| B18 | RPC failure, all 10 pages | PASS | total and partial outage: no crash, no false "No coins yet / No reels yet / Nothing has traded yet / 0 Posts"; every data-less view says why |
+| B19 | `/api/health` | PASS | 200, database ok, rpc ok |
+
+### Bugs found and fixed
+| # | Bug | Root cause | Commit |
+|---|---|---|---|
+| 1 | CSP violation logged on every page | wallet-adapter CSS `@import`s Google Fonts; CSP blocks it | `bd88421` |
+| 2 | Coin page crashed on an RPC 429 | uncaught throw from the snapshot read | `68d82cb` |
+| 3 | Lists silently dropped coins — "2 Posts" for a wallet with 8; "No coins yet" in outages | `hydratePools` treated "RPC refused" as "does not exist" | `68d82cb` |
+| 4 | Activity said "Nothing has traded yet" during outages | fallback returned `[]` on failure | `68d82cb` |
+| 5 | **Every creator link was broken, always** | linked `/creator/9CHr…WYoE` (display handle), not the wallet | `0361938` |
+| 6 | Malformed addresses returned HTTP 200 | `loading.tsx` commits 200 before `notFound()` | `c038635` |
+| 7 | **A trade could go out with `minimumAmountOut = 0` — no slippage protection** | failed/unloaded quote fell back to 0; Buy not gated on a quote; stale quote could be ~10× too weak | `f8f78a8` |
+| 8 | Trending sort took 36s cold | awaited every pool's sequential history walk | `b732a1d` |
+
+**Bug 7 is the one that mattered most.** The code justified the zero fallback with a
+comment saying the program "rejects rather than filling at any price". Simulating a
+0.001 SOL buy (never sent) disproved it: `minimumAmountOut = 0` returns `err: null`;
+an unreachable minimum returns `ExceededSlippage`.
+
+Bug 5 was invisible until bug 6's fix: the new proxy made the broken link's prefetch
+return a real 404, and it surfaced in the console on every coin page.
+
+Bug 8 measured with curl: **36.4s cold / 16.6s warm → 8.4s cold / 3.0s warm.** The
+first visit ranks what it can read in a 5s budget and says how many coins were not
+ranked; the rest finish in the background and the next visit ranks everything.
+
+### Not verified, and why
+- **The connected-wallet trade path.** A headless browser has no wallet (the same
+  blocker as task 2.6). The slippage fix rests on the simulation above plus a backstop
+  in `TradePanelClient` that refuses to swap without a quote whatever the UI state.
+- **Comments round trip.** Code-reviewed, not exercised: it would write a test comment
+  into the shared database.
+
+### Accepted limitation
+Well-formed but unknown mints return HTTP 200 with `noindex` and the not-found page. A
+true 404 needs a Postgres lookup in `proxy`, which Next's docs say proxy is not for,
+and it would add a round trip to every coin view. This is the framework's documented
+behaviour for streamed routes.
+
+### Flagged, not changed
+TradePanel pre-fills a buy amount of 20, so every coin page view fires a browser-side
+quote — about 9 devnet RPC calls, traced with CDP. That contradicts `useTrade`'s stated
+design of not fetching on mount, and it spends the shared public quota. It is a UX
+decision in a file juno-6 is editing, so it is reported here rather than changed.
+
+---
+
 ## 4. On-chain facts (devnet)
 
 First pool launched by the app's own code path, 2026-09-17:
