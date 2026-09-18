@@ -56,16 +56,17 @@ export function TradePanelClient({
         quotePricesUsd={{ [coin.quote.mint]: 1 }}
         onQuote={onQuote}
         submitting={busy}
-        onSubmit={({ side, amountIn, quote }) =>
-          void swap({
-            side,
-            amountIn,
-            // Fall back to zero only when the quoter returned nothing, in
-            // which case the program itself rejects rather than filling at
-            // any price.
-            minimumAmountOut: quote?.minimumAmountOut ?? 0,
-          })
-        }
+        onSubmit={({ side, amountIn, quote }) => {
+          // Never send without a quote. The previous fallback was
+          // `minimumAmountOut: 0`, commented as "the program itself rejects
+          // rather than filling at any price". It does not: simulating a buy
+          // against the DBC program with minimumAmountOut = 0 returns
+          // err: null, while an unreachable minimum returns ExceededSlippage.
+          // A zero minimum is no slippage protection at all. TradePanel
+          // already refuses to submit without a quote; this is the backstop.
+          if (!quote) return;
+          void swap({ side, amountIn, minimumAmountOut: quote.minimumAmountOut });
+        }}
       />
 
       {state.status === "error" && (
