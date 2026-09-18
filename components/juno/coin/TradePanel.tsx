@@ -26,6 +26,8 @@ export type TradeQuoteResult = {
   fee: number;
   /** Ratio, e.g. 0.012 for 1.2%. */
   priceImpact: number;
+  /** The buy completes the curve: only `spent` is used, `refunded` comes back. */
+  partialFill?: { spent: number; refunded: number };
 };
 
 export function TradePanel({
@@ -367,6 +369,16 @@ export function TradePanel({
             </dd>
           </div>
         )}
+        {quote?.partialFill && (
+          <div className="flex items-start justify-between gap-3">
+            <dt className="text-j-muted">Fills</dt>
+            <dd className="text-right tabular-nums">
+              {quoteAmount(quote.partialFill.spent)} {token.symbol} of {quoteAmount(amountIn)} —
+              completes the curve; {quoteAmount(quote.partialFill.refunded)} {token.symbol} stays
+              in your wallet
+            </dd>
+          </div>
+        )}
         {quoteError && (
           <div className="flex items-center justify-between">
             <dt className="text-j-muted">Quote</dt>
@@ -448,7 +460,9 @@ export function TradePanel({
                 ? "Couldn’t get a price — tap to retry"
                 : "Getting a price…"
               : buying
-                ? "Buy"
+                ? quote?.partialFill
+                  ? "Buy & complete the curve"
+                  : "Buy"
                 : "Sell"}
       </Button>
     </div>

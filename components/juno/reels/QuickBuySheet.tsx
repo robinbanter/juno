@@ -110,7 +110,9 @@ function Sheet({ coin, onClose }: { coin: Coin; onClose: () => void }) {
           ? "Can’t buy this amount"
           : !quote
             ? "Getting a price…"
-            : `Buy ${spend(amount)}`;
+            : quote.partialFill
+              ? `Buy ${spend(quote.partialFill.spent)} & complete the curve`
+              : `Buy ${spend(amount)}`;
 
   return (
     <div
@@ -199,7 +201,12 @@ function Sheet({ coin, onClose }: { coin: Coin; onClose: () => void }) {
           onClick={() => {
             if (!connected) return setVisible(true);
             if (!quote) return;
-            void swap({ side: "buy", amountIn: amount, minimumAmountOut: quote.minimumAmountOut });
+            void swap({
+              side: "buy",
+              amountIn: amount,
+              minimumAmountOut: quote.minimumAmountOut,
+              partial: Boolean(quote.partialFill),
+            });
           }}
         >
           {label}

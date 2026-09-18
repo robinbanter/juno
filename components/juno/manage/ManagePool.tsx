@@ -240,7 +240,7 @@ export function ManagePool({
             >
               <span>DAMM v2 pool {shortAddress(state.dammPool, 6, 6)}</span>
               <span className="flex items-center gap-1 text-[12px] font-normal text-j-muted">
-                {dammLive === false ? "account not found" : "Solscan"}
+                {dammLive === false ? "account not found" : "Explorer"}
                 <ExternalLink size={11} />
               </span>
             </a>
@@ -338,6 +338,10 @@ function FeeCard({ state }: { state: IssuerState }) {
   }
 
   const remaining = Math.max(0, fee.secondsRemaining - Math.floor((now - state.readAt) / 1000));
+  // The last period, or a fee already at its floor, is the floor — the
+  // seconds counter alone rounded to "1s until the floor" on a schedule that
+  // had finished ("Period 60 of 60").
+  const atFloor = remaining === 0 || fee.period >= fee.totalPeriods || fee.currentBps <= fee.endBps;
 
   return (
     <Card title="Fee schedule">
@@ -350,7 +354,7 @@ function FeeCard({ state }: { state: IssuerState }) {
         Period {fee.period} of {fee.totalPeriods} ({fee.mode} decay).{" "}
         {state.graduated ? (
           <span>The curve is closed; trades now pay the DAMM v2 pool&apos;s fee, not this schedule.</span>
-        ) : remaining === 0 ? (
+        ) : atFloor ? (
           <span>At the floor — the anti-snipe window has closed.</span>
         ) : (
           <span className="text-j-brand">{duration(remaining)} until the floor.</span>

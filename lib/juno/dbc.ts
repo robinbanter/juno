@@ -402,6 +402,12 @@ export type TradeQuote = {
   fee: number;
   /** Price impact as a ratio, e.g. 0.012 for 1.2%. */
   priceImpact: number;
+  /**
+   * Set when a buy is larger than what is left on the curve. The trade then
+   * fills only what the curve can take, completing it, and returns the rest;
+   * `spent` is the input actually used, fee included.
+   */
+  partialFill?: { spent: number; refunded: number };
 };
 
 /**
@@ -427,28 +433,66 @@ export async function quoteTrade(params: {
 
   const currentPoint = await getCurrentPoint(getConnection(), ActivationType.Timestamp);
 
-  const result = client.pool.swapQuote({
+  const base = {
     virtualPool: snapshot.pool,
     config: snapshot.config,
     swapBaseForQuote,
-    amountIn: uiToBn(amountIn, inDecimals),
     slippageBps,
     hasReferral: false,
     eligibleForFirstSwapWithMinFee: false,
     currentPoint,
-  }) as unknown as SwapResultFields & { minimumAmountOut: BN };
-
-  const amountOut = bnToUi(result.outputAmount, outDecimals);
-  const spotOut = swapBaseForQuote ? amountIn * snapshot.price : amountIn / snapshot.price;
-
-  return {
-    amountOut,
-    minimumAmountOut: bnToUi(result.minimumAmountOut, outDecimals),
-    // `collectFeeMode` is QuoteToken for every Juno preset, so the fee is
-    // always denominated in the quote token regardless of direction.
-    fee: bnToUi(result.tradingFee, quoteDecimals),
-    priceImpact: spotOut > 0 ? Math.max(0, (spotOut - amountOut) / spotOut) : 0,
   };
+  const spotOut = (input: number) =>
+    swapBaseForQuote ? input * snapshot.price : input / snapshot.price;
+
+  try {
+    const result = client.pool.swapQuote({
+      ...base,
+      amountIn: uiToBn(amountIn, inDecimals),
+    }) as unknown as SwapResultFields & { minimumAmountOut: BN };
+
+    const amountOut = bnToUi(result.outputAmount, outDecimals);
+    return {
+      amountOut,
+      minimumAmountOut: bnToUi(result.minimumAmountOut, outDecimals),
+      // `collectFeeMode` is QuoteToken for every Juno preset, so the fee is
+      // always denominated in the quote token regardless of direction.
+      fee: bnToUi(result.tradingFee, quoteDecimals),
+      priceImpact: spotOut(amountIn) > 0 ? Math.max(0, (spotOut(amountIn) - amountOut) / spotOut(amountIn)) : 0,
+    };
+  } catch (error) {
+    // A buy bigger than what is left on the curve cannot fill exactly — the
+    // program refuses it. It can still fill *partially*: take what the curve
+    // holds, complete it, and return the rest (`swap2`, PartialFill). That is
+    // the only way to finish a curve without knowing its remainder to the
+    // lamport, so it is offered rather than reported as a dead end.
+    if (swapBaseForQuote || !/insufficient liquidity/i.test(String((error as Error)?.message))) {
+      throw error;
+    }
+    const partial = client.pool.swapQuote2({
+      ...base,
+      swapMode: SwapMode.PartialFill,
+      amountIn: uiToBn(amountIn, inDecimals),
+    }) as unknown as {
+      includedFeeInputAmount: BN;
+      outputAmount: BN;
+      tradingFee: BN;
+      minimumAmountOut?: BN;
+    };
+    const spent = bnToUi(partial.includedFeeInputAmount, inDecimals);
+    const amountOut = bnToUi(partial.outputAmount, outDecimals);
+    return {
+      amountOut,
+      minimumAmountOut: bnToUi(partial.minimumAmountOut ?? partial.outputAmount, outDecimals),
+      fee: bnToUi(partial.tradingFee, quoteDecimals),
+      priceImpact: spotOut(spent) > 0 ? Math.max(0, (spotOut(spent) - amountOut) / spotOut(spent)) : 0,
+      // Not the SDK's `amountLeft`: that is measured after the fee is taken
+      // out of the whole input (1% on a 90 SOL buy, 0.88 SOL, went missing
+      // between "spent" and "refunded"). The program only ever takes the
+      // fee-inclusive input it used, so the rest simply stays in the wallet.
+      partialFill: { spent, refunded: amountIn - spent },
+    };
+  }
 }
 
 /* ------------------------------------------------------------------ */

@@ -6,6 +6,7 @@ import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
 
 import {
+  buildPartialFillSwapTransaction,
   buildSwapTransaction,
   fetchPoolSnapshot,
   getConnection,
@@ -133,6 +134,11 @@ export function useTrade(coin: Coin) {
       minimumAmountOut: number;
       /** Optional note posted to the coin's comments, tagged with this trade. */
       comment?: string;
+      /**
+       * Fill only what is left on the curve and return the rest (swap2,
+       * PartialFill). Set when the quote said the buy would complete the curve.
+       */
+      partial?: boolean;
     }) => {
       if (!publicKey || !signTransaction) {
         setVisible(true);
@@ -146,7 +152,8 @@ export function useTrade(coin: Coin) {
 
       try {
         setState({ status: "signing" });
-        const transaction = await buildSwapTransaction({
+        const build = input.partial ? buildPartialFillSwapTransaction : buildSwapTransaction;
+        const transaction = await build({
           snapshot: current,
           owner: publicKey,
           side: input.side,

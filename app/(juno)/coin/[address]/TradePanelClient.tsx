@@ -77,7 +77,13 @@ export function TradePanelClient({
           // A zero minimum is no slippage protection at all. TradePanel
           // already refuses to submit without a quote; this is the backstop.
           if (!quote) return;
-          void swap({ side, amountIn, comment, minimumAmountOut: quote.minimumAmountOut });
+          void swap({
+            side,
+            amountIn,
+            comment,
+            minimumAmountOut: quote.minimumAmountOut,
+            partial: Boolean(quote.partialFill),
+          });
         }}
       />
 
