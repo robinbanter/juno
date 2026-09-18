@@ -37,8 +37,16 @@ export function TradePanelClient({
       if (amountIn <= 0) return null;
       const snapshot = await ensureSnapshot();
       if (!snapshot) return null;
-      // Real curve math against the pool as it stands right now.
-      return quoteTrade({ snapshot, side, amountIn, slippageBps: 100 });
+      // Real curve math against the pool as it stands right now. The quoter
+      // throws rather than returning when the amount is more than the curve
+      // has left ("Insufficient Liquidity"). That is an answer, "no fill at
+      // this size", not a crash, so it renders as no quote instead of
+      // escaping as an unhandled rejection.
+      try {
+        return await quoteTrade({ snapshot, side, amountIn, slippageBps: 100 });
+      } catch {
+        return null;
+      }
     },
     [ensureSnapshot],
   );

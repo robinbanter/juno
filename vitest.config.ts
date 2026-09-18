@@ -6,15 +6,8 @@ export default defineConfig({
     environment: "node",
     include: ["tests/**/*.test.ts"],
     setupFiles: ["tests/setup.ts"],
-    // Integration/e2e tests hit Algorand TestNet + a local server.
     testTimeout: 30_000,
     hookTimeout: 30_000,
-    // The e2e suites all drive the SAME dev user and therefore the same on-chain
-    // wallet: withdrawing moves its balance, the call tests hold part of it in
-    // escrow. Run files in parallel and those balances shift underneath each
-    // other mid-assertion — a race that only surfaces once the wallet is funded
-    // enough for the money tests to actually run. Correctness over wall-clock.
-    fileParallelism: false,
   },
   resolve: {
     alias: {
