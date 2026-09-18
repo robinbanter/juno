@@ -7,7 +7,8 @@ import { PhantomWalletAdapter, SolflareWalletAdapter } from "@solana/wallet-adap
 
 import { rpcEndpoint } from "@/lib/juno/cluster";
 
-import "@solana/wallet-adapter-react-ui/styles.css";
+// Vendored copy, not the upstream file — see the header of ./wallet-adapter.css.
+import "./wallet-adapter.css";
 
 /**
  * Solana wallet context for the Juno routes.
