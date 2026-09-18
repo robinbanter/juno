@@ -164,6 +164,10 @@ export function TradePanel({
   // fills a swap with minimumAmountOut = 0 at any price — verified by
   // simulation. (Disconnected visitors keep the button: it opens the wallet.)
   const needsQuote = connected && amountIn > 0 && !quote;
+  // The quoter's "Insufficient Liquidity" is an answer, not a failure: the
+  // curve cannot fill this size. Retrying would get the same answer, so the
+  // button must not offer to.
+  const curveShort = quoteError !== null && /insufficient liquidity/i.test(quoteError);
 
   // Secondary read-out under the field: the quote-token amount on a buy, the
   // dollar value on a sell.
@@ -366,7 +370,9 @@ export function TradePanel({
         {quoteError && (
           <div className="flex items-center justify-between">
             <dt className="text-j-muted">Quote</dt>
-            <dd className="text-j-danger">{quoteError}</dd>
+            <dd className="text-j-danger">
+              {curveShort ? "More than this curve can fill — try a smaller amount" : quoteError}
+            </dd>
           </div>
         )}
 
@@ -418,7 +424,9 @@ export function TradePanel({
         size="lg"
         // A failed quote leaves the button enabled so it can retry; it never
         // submits until a quote exists.
-        disabled={submitting || amountIn <= 0 || overBalance || (needsQuote && !quoteFailed)}
+        disabled={
+          submitting || amountIn <= 0 || overBalance || curveShort || (needsQuote && !quoteFailed)
+        }
         onClick={() =>
           needsQuote
             ? setQuoteAttempt((n) => n + 1)
@@ -432,7 +440,9 @@ export function TradePanel({
             ? buying
               ? "Insufficient balance"
               : `Not enough ${coin.symbol}`
-            : needsQuote
+            : curveShort
+              ? "Too large for this curve"
+              : needsQuote
               ? quoteFailed
                 ? "Couldn’t get a price — tap to retry"
                 : "Getting a price…"
