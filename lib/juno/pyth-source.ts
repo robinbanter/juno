@@ -6,7 +6,7 @@
  * kept fresh — devnet's pusher runs SOL/USDC/USDT only, and stopped updating
  * US equities on 2026-07-02 — so the source has to follow the cluster.
  *
- * `mainnet-fork` (alias `localnet-fork`) is a local validator seeded from mainnet. Its Pyth accounts
+ * `mainnet-fork` is a local validator seeded from mainnet. Its Pyth accounts
  * are clones taken when the validator started, and nothing pushes to them
  * afterwards: a cloned SOL/USD is exactly as fresh as the fork is young, then
  * goes stale for good. So on a fork the prices are read from mainnet itself

@@ -63,18 +63,14 @@ describe("cluster", () => {
     expect(meteoraPoolUrl("p")).toBe("https://app.meteora.ag/dbc/p");
   });
 
-  it("accepts localnet-fork as an alias, and the Pyth source agrees", () => {
-    withCluster("localnet-fork");
-    expect(cluster()).toBe("mainnet-fork");
-    expect(usesMainnetAddresses()).toBe(true);
-    // One selector: the Pyth source reads the cluster through clusterFrom too.
-    for (const name of ["mainnet-fork", "localnet-fork"]) {
-      expect(clusterFrom({ NEXT_PUBLIC_SOLANA_CLUSTER: name })).toBe("mainnet-fork");
-      expect(pythSource({ NEXT_PUBLIC_SOLANA_CLUSTER: name })).toMatchObject({
-        network: "mainnet-beta",
-        rpc: "https://api.mainnet-beta.solana.com",
-      });
-    }
+  it("has one selector: the Pyth source agrees with the app on a fork", () => {
+    const env = { NEXT_PUBLIC_SOLANA_CLUSTER: "mainnet-fork" };
+    expect(clusterFrom(env)).toBe("mainnet-fork");
+    // The Pyth source reads the cluster through clusterFrom too.
+    expect(pythSource(env)).toMatchObject({
+      network: "mainnet-beta",
+      rpc: "https://api.mainnet-beta.solana.com",
+    });
     expect(pythSource({ NEXT_PUBLIC_SOLANA_CLUSTER: "devnet" })).toMatchObject({ network: "devnet", rpc: null });
   });
 
