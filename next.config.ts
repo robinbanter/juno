@@ -13,6 +13,14 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ["sharp", "pg"],
   // Don't advertise the framework.
   poweredByHeader: false,
+  // The root lands on Explore, the grid of every live pool. A config redirect,
+  // not `redirect()` in app/page.tsx: the root loading.tsx streams a spinner
+  // and commits 200 before a page can redirect, which turned "/" into a 200
+  // spinner followed by a client-side hop. This is a real 307 before any
+  // rendering happens.
+  async redirects() {
+    return [{ source: "/", destination: "/explore", permanent: false }];
+  },
   async headers() {
     // Always-safe hardening (no functional impact in dev or prod).
     const base = [

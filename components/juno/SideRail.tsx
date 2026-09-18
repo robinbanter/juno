@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { Suspense } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
 import { Activity, CircleUser, Clapperboard, House, Plus, Zap } from "lucide-react";
 
 import { useWallet } from "@solana/wallet-adapter-react";
@@ -23,6 +24,33 @@ const NAV_BOTTOM = [
  * `MobileNav` takes over.
  */
 export function SideRail() {
+  // useSearchParams needs a Suspense boundary on statically rendered routes
+  // (/create). The fallback is the same rail without the query, so there is
+  // nothing to flash.
+  return (
+    <Suspense fallback={<Rail sort={null} />}>
+      <RailWithQuery />
+    </Suspense>
+  );
+}
+
+function RailWithQuery() {
+  return <Rail sort={useSearchParams().get("sort")} />;
+}
+
+/**
+ * Whether a rail item is the current page. Home and Trending share a path and
+ * differ only in `?sort`, so the query decides between them — comparing the
+ * path alone marked both active at once.
+ */
+function isActive(href: string, pathname: string, sort: string | null): boolean {
+  const [path, query] = href.split("?");
+  if (pathname !== path) return false;
+  const want = new URLSearchParams(query ?? "").get("sort");
+  return want === (sort === "trending" ? "trending" : null);
+}
+
+function Rail({ sort }: { sort: string | null }) {
   const pathname = usePathname();
   const { publicKey } = useWallet();
   // Your profile is your wallet. With none connected there is no profile to
@@ -38,7 +66,7 @@ export function SideRail() {
         <RailLink
           key={item.href}
           {...item}
-          active={pathname === item.href.split("?")[0]}
+          active={isActive(item.href, pathname, sort)}
         />
       ))}
 
@@ -48,9 +76,11 @@ export function SideRail() {
         href="/create"
         aria-label="Create"
         title="Create"
+        aria-current={pathname === "/create" ? "page" : undefined}
         className={cn(
           "my-3 flex size-11 items-center justify-center rounded-[14px] border border-j-line-strong",
           "text-j-ink transition-colors hover:bg-j-surface",
+          pathname === "/create" && "bg-j-surface",
           "focus-visible:ring-2 focus-visible:ring-j-focus focus-visible:outline-none",
         )}
       >
