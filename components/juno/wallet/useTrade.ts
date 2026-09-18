@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useWalletModal } from "@solana/wallet-adapter-react-ui";
-import { PublicKey } from "@solana/web3.js";
+import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
 
 import {
   buildSwapTransaction,
@@ -11,10 +11,17 @@ import {
   getConnection,
   invalidatePoolSnapshot,
   sendTransaction,
+  WSOL,
   type PoolSnapshot,
 } from "@/lib/juno/dbc";
 import type { Coin, TradeSide } from "@/lib/juno/types";
 import { describeError } from "./useLaunch";
+
+/**
+ * SOL held back from the spendable balance: two token-account rents (the coin
+ * account and the temporary wSOL account, ~0.002 SOL each) plus fees.
+ */
+const SOL_FEE_RESERVE = 0.01;
 
 export type TradeState =
   | { status: "idle" }
@@ -72,7 +79,13 @@ export function useTrade(coin: Coin) {
     }
     const connection = getConnection();
 
-    const [quote, base] = await Promise.all([
+    // A SOL-quoted pool is paid from native SOL: the swap wraps it in the same
+    // transaction. Reading only the wrapped-SOL token account, which almost no
+    // wallet holds, reported a funded wallet as "Balance: 0 SOL" and disabled
+    // every buy behind "Insufficient balance".
+    const quoteIsSol = coin.quote.mint === WSOL.mint;
+
+    const [quote, base, lamports] = await Promise.all([
       connection
         .getParsedTokenAccountsByOwner(publicKey, {
           mint: new PublicKey(coin.quote.mint),
@@ -83,6 +96,7 @@ export function useTrade(coin: Coin) {
           mint: new PublicKey(coin.address),
         })
         .catch(() => null),
+      quoteIsSol ? connection.getBalance(publicKey).catch(() => 0) : Promise.resolve(0),
     ]);
 
     const sum = (accounts: typeof quote) =>
@@ -92,7 +106,12 @@ export function useTrade(coin: Coin) {
         0,
       ) ?? 0;
 
-    setBalanceUsd(sum(quote));
+    // Native SOL less what the swap itself needs: the network fee, and rent
+    // for any token account it has to open. Offering that as spendable would
+    // make "Max" a transaction that fails.
+    const spendableSol = Math.max(0, lamports / LAMPORTS_PER_SOL - SOL_FEE_RESERVE);
+
+    setBalanceUsd(sum(quote) + spendableSol);
     setHolding(sum(base));
   }, [publicKey, coin.quote.mint, coin.address]);
 
