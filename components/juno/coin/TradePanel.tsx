@@ -10,8 +10,22 @@ import type { Coin, QuoteToken, TradeSide } from "@/lib/juno/types";
 import { Button } from "../ui/Button";
 import { TokenSelect } from "./TokenSelect";
 
-/** Buys are sized in dollars. */
-const BUY_PRESETS = [2, 20, 50, 100];
+/**
+ * Buy presets, in the token being spent. Stablecoins get dollar sizes; any
+ * other quote token gets its own units. These were once dollars everywhere,
+ * so on a SOL pool the "$20" button put 20 SOL (~$2k) in the field — a
+ * mislabel of roughly 100x on the button that spends money.
+ */
+const BUY_PRESETS_USD = [2, 20, 50, 100];
+const BUY_PRESETS_NATIVE = [0.1, 0.5, 1, 5];
+
+function buyPresetsFor(token: QuoteToken): number[] {
+  return STABLES.has(token.symbol) ? BUY_PRESETS_USD : BUY_PRESETS_NATIVE;
+}
+
+function presetLabel(token: QuoteToken, value: number): string {
+  return STABLES.has(token.symbol) ? `$${value}` : `${value} ${token.symbol}`;
+}
 /** Sells are sized as a share of what you hold — dollar amounts are meaningless. */
 const SELL_PRESETS = [0.25, 0.5, 0.75, 1];
 
@@ -87,13 +101,24 @@ export function TradePanel({
   className?: string;
 }) {
   const [side, setSide] = useState<TradeSide>("buy");
-  const [buyAmount, setBuyAmount] = useState("20");
   const [sellAmount, setSellAmount] = useState("");
   // Default to the pool's own quote mint. Anything else has to be routed, and
   // opening on a token the pool does not accept misstates what a buy costs.
-  const [token, setToken] = useState<QuoteToken>(
+  const [token, setTokenState] = useState<QuoteToken>(
     () => quoteTokens.find((t) => t.mint === coin.quote.mint) ?? coin.quote,
   );
+  // Pre-filled with the second preset of the token being spent: $20 of a
+  // stablecoin, 0.5 of anything else.
+  const [buyAmount, setBuyAmount] = useState(() => String(buyPresetsFor(token)[1]));
+  const buyPresets = buyPresetsFor(token);
+
+  // Changing what you pay with changes the unit of the amount field, so the
+  // amount resets to that token's default rather than carrying "20" from
+  // dollars into SOL.
+  const setToken = (next: QuoteToken) => {
+    setTokenState(next);
+    if (next.mint !== token.mint) setBuyAmount(String(buyPresetsFor(next)[1]));
+  };
   const [comment, setComment] = useState("");
   const [quote, setQuote] = useState<TradeQuoteResult | null>(null);
   const [quoting, setQuoting] = useState(false);
@@ -308,13 +333,13 @@ export function TradePanel({
 
       <div className="grid grid-cols-4 gap-2">
         {buying
-          ? BUY_PRESETS.map((preset) => (
+          ? buyPresets.map((preset) => (
               <PresetButton
                 key={preset}
                 active={amountIn === preset}
                 onClick={() => setBuyAmount(String(preset))}
               >
-                ${preset}
+                {presetLabel(token, preset)}
               </PresetButton>
             ))
           : SELL_PRESETS.map((share) => (
