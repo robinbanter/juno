@@ -22,6 +22,17 @@ import { Delta } from "@/components/juno/ui/Delta";
  */
 const TRENDING_LIMIT = 12;
 
+/**
+ * Wall-clock budget for the trending read.
+ *
+ * Measured before this existed: /explore?sort=trending took 36s cold and 16s
+ * warm, against 2s for the plain grid, because every pool's history is a
+ * sequential per-transaction walk. The budget bounds the page; reads that do
+ * not finish in time are not cancelled — the indexer de-duplicates in-flight
+ * reads and caches results, so they land for the next visit.
+ */
+const TRENDING_BUDGET_MS = 5_000;
+
 export const metadata = { title: "Explore" };
 // Every figure is read live from the DBC program on each request.
 export const dynamic = "force-dynamic";
@@ -55,6 +66,9 @@ export default async function ExplorePage({
     );
   }
   const total = coins.length + unavailable.length;
+  // Trending only: coins whose 24h volume could not be read in time. They are
+  // listed last, and the page says so rather than implying a complete ranking.
+  let unranked = 0;
   if (sort === "trending") {
     // Ranking by volume needs the volume, and that is a per-transaction walk
     // per pool — far too expensive to do on every page view. So it happens
@@ -65,9 +79,18 @@ export default async function ExplorePage({
     // some of these for free. Any pool whose read is refused keeps a null
     // volume and sorts last — unknown is not zero.
     const ranked = coins.slice(0, TRENDING_LIMIT);
+    const deadline = Date.now() + TRENDING_BUDGET_MS;
     for (const coin of ranked) {
-      coin.volume24h = volume24h(await listSwaps(coin.pool, coin.address));
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) break;
+      const history = await Promise.race([
+        listSwaps(coin.pool, coin.address),
+        new Promise<"timeout">((resolve) => setTimeout(() => resolve("timeout"), remaining)),
+      ]);
+      if (history === "timeout") break;
+      coin.volume24h = volume24h(history);
     }
+    unranked = coins.filter((coin) => coin.volume24h === null).length;
     coins = [...coins].sort((a, b) => (b.volume24h ?? -1) - (a.volume24h ?? -1));
   } else if (sort === "graduating") {
     // Closest to migration first. A pool that has already graduated is done,
@@ -109,6 +132,17 @@ export default async function ExplorePage({
         names={unavailable.map((row) => row.name)}
         retryHref={`/explore${q || sort ? `?${new URLSearchParams({ ...(q ? { q } : {}), ...(sort ? { sort } : {}) })}` : ""}`}
       />
+
+      {sort === "trending" && unranked > 0 && coins.length > 0 && (
+        <p className="mb-4 text-[13px] text-j-muted">
+          Ranked by 24h volume.{" "}
+          {unranked === coins.length
+            ? "No volume could be read in time, so this is not a ranking yet"
+            : `${unranked} of ${coins.length} coins had no readable volume in time and are listed last`}{" "}
+          — <a href="/explore?sort=trending" className="underline hover:text-j-ink">refresh</a> once the chain
+          has caught up.
+        </p>
+      )}
 
       {/* "No coins yet" only when there genuinely are none. If the registry
           has pools the RPC would not read, the notice above says so instead. */}
