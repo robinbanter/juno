@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Clapperboard } from "lucide-react";
 
-import { hydratePools } from "@/lib/juno/chain";
+import { hydratePoolsReport } from "@/lib/juno/chain";
 import { CURVE_PRESETS } from "@/lib/juno/curves";
 import { cluster } from "@/lib/juno/cluster";
 import { usd } from "@/lib/juno/format";
@@ -10,6 +10,7 @@ import type { Coin } from "@/lib/juno/types";
 import { listSwaps, volume24h } from "@/lib/juno/indexer";
 import { CurveProgressBar } from "@/components/juno/coin/CurveProgress";
 import { Volume24h } from "@/components/juno/Volume24h";
+import { UnavailableNotice } from "@/components/juno/UnavailableNotice";
 import { Avatar } from "@/components/juno/ui/Avatar";
 import { Delta } from "@/components/juno/ui/Delta";
 
@@ -33,7 +34,11 @@ export default async function ExplorePage({
   const { q, sort } = await searchParams;
   const query = q?.trim().toLowerCase() ?? "";
 
-  let coins: Coin[] = await hydratePools(await listPools());
+  const report = await hydratePoolsReport(await listPools());
+  let coins: Coin[] = report.coins;
+  // Pools the RPC refused are still matched against the query: if NVDAx is
+  // unreadable, "?q=nvda" must say so, not report zero results.
+  let unavailable = report.unavailable;
 
   if (query) {
     coins = coins.filter(
@@ -42,7 +47,14 @@ export default async function ExplorePage({
         c.symbol.toLowerCase().includes(query) ||
         c.creator.handle.toLowerCase().includes(query),
     );
+    unavailable = unavailable.filter(
+      (row) =>
+        row.name.toLowerCase().includes(query) ||
+        row.symbol.toLowerCase().includes(query) ||
+        row.creatorWallet.toLowerCase().includes(query),
+    );
   }
+  const total = coins.length + unavailable.length;
   if (sort === "trending") {
     // Ranking by volume needs the volume, and that is a per-transaction walk
     // per pool — far too expensive to do on every page view. So it happens
@@ -67,7 +79,7 @@ export default async function ExplorePage({
   }
 
   const heading = query
-    ? `${coins.length} result${coins.length === 1 ? "" : "s"} for “${q}”`
+    ? `${total} result${total === 1 ? "" : "s"} for “${q}”`
     : sort === "trending"
       ? "Trending"
       : sort === "graduating"
@@ -91,9 +103,18 @@ export default async function ExplorePage({
         )}
       </div>
 
-      {coins.length === 0 ? (
+      <UnavailableNotice
+        missing={unavailable.length}
+        total={total}
+        names={unavailable.map((row) => row.name)}
+        retryHref={`/explore${q || sort ? `?${new URLSearchParams({ ...(q ? { q } : {}), ...(sort ? { sort } : {}) })}` : ""}`}
+      />
+
+      {/* "No coins yet" only when there genuinely are none. If the registry
+          has pools the RPC would not read, the notice above says so instead. */}
+      {total === 0 ? (
         <EmptyState query={q} />
-      ) : (
+      ) : coins.length === 0 ? null : (
         <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {coins.map((coin) => (
             <li key={coin.address}>

@@ -32,17 +32,37 @@ import type { Activity, Holder } from "./types";
  * rows are then labelled in the quote token rather than converted at a rate
  * nobody published, which is the same rule `hydratePool` follows.
  */
+export type ActivityRow = Activity & { valueLabel?: string };
+
+/**
+ * Trades plus whether the read actually succeeded.
+ *
+ * `unreadable` exists because "this pool has no trades" and "the RPC would not
+ * tell us" both used to come back as `[]`, and the pages rendered both as
+ * "Nothing has traded yet" — a false statement during every rate-limit spell.
+ */
+export type ActivityReport = { rows: ActivityRow[]; unreadable: boolean };
+
+/** Trades only; an unreadable pool looks empty. Prefer `listPoolActivityReport`. */
 export async function listPoolActivity(
   poolAddress: string,
   baseMint: string,
   options: { limit?: number; rate?: number | null; quoteSymbol?: string } = {},
-): Promise<Array<Activity & { valueLabel?: string }>> {
+): Promise<ActivityRow[]> {
+  return (await listPoolActivityReport(poolAddress, baseMint, options)).rows;
+}
+
+export async function listPoolActivityReport(
+  poolAddress: string,
+  baseMint: string,
+  options: { limit?: number; rate?: number | null; quoteSymbol?: string } = {},
+): Promise<ActivityReport> {
   const { limit = 20, rate = null, quoteSymbol } = options;
 
   const history = await listSwaps(poolAddress, baseMint);
 
   if (history && history.swaps.length > 0) {
-    return history.swaps.slice(0, limit).map((swap) => ({
+    const rows: ActivityRow[] = history.swaps.slice(0, limit).map((swap) => ({
       id: swap.signature,
       side: swap.side,
       actor: {
@@ -60,6 +80,7 @@ export async function listPoolActivity(
       timestamp: new Date((swap.blockTime ?? 0) * 1000).toISOString(),
       signature: swap.signature,
     }));
+    return { rows, unreadable: false };
   }
 
   // Degraded tier: signatures only.
@@ -70,7 +91,7 @@ export async function listPoolActivity(
       "confirmed",
     );
 
-    return signatures
+    const rows: ActivityRow[] = signatures
       .filter((entry) => !entry.err)
       .map((entry) => ({
         id: entry.signature,
@@ -87,8 +108,10 @@ export async function listPoolActivity(
         timestamp: new Date((entry.blockTime ?? 0) * 1000).toISOString(),
         signature: entry.signature,
       }));
+    return { rows, unreadable: false };
   } catch {
-    return [];
+    // Both tiers refused. Not "no trades" — we do not know.
+    return { rows: [], unreadable: true };
   }
 }
 
