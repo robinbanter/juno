@@ -114,6 +114,16 @@ export function CreateForm() {
   async function onFile(file: File | undefined) {
     if (!file) return;
     setUploadError(null);
+    // The same rules the upload route enforces, checked before a byte leaves
+    // the browser: a refusal the user can read, instead of a failed request.
+    if (!/^(image|video)\//.test(file.type)) {
+      setUploadError(`${file.name} is not an image or video.`);
+      return;
+    }
+    if (file.size > MAX_UPLOAD_BYTES) {
+      setUploadError(`${file.name} is over 25MB.`);
+      return;
+    }
     setUploading(true);
     try {
       // Intrinsic dimensions drive the grid's aspect ratio, so they are read
@@ -656,6 +666,9 @@ function PresetSparkline({
 }
 
 /** Intrinsic media dimensions, read from the file before it leaves the browser. */
+/** Mirrors `MAX_BYTES` in app/api/juno/upload/route.ts. */
+const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
+
 /**
  * The first second of a video as a JPEG, drawn in the browser.
  *
