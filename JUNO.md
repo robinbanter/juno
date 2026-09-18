@@ -38,7 +38,7 @@ explorer or by running a script in this repo.
 | **Likes and follows** | MongoDB, unique-indexed so a wallet can like or follow once; verified against the real database, including concurrent toggles. Counts show for everyone; the action needs a wallet. |
 | **Comments** | MongoDB via `lib/juno/social.ts`, wired to `app/api/juno/comments` — kept out of Postgres so a comment outage cannot take the market data down. Code reviewed, not runtime-verified. |
 | **Swap history** | direction, size, execution price and trader per trade, from token-balance deltas — driving the price chart, 24h volume and trade rows |
-| **Tests** | 107 unit tests across 10 files, incl. all four presets validated by Meteora's own `validateConfigParameters`. Was 140 before the Norr purge took the tests covering deleted code — see [README.md](./README.md). |
+| **Tests** | 114 unit tests across 10 files, incl. all four presets validated by Meteora's own `validateConfigParameters`. Was 140 before the Norr purge took the tests covering deleted code — see [README.md](./README.md). |
 
 ### Not built
 
@@ -176,7 +176,8 @@ key on first run; fund it from the devnet faucet before launching.
 | `NEXT_PUBLIC_SOLANA_RPC` | Dedicated RPC. The public endpoints rate-limit hard enough to break a demo. |
 | `PINATA_JWT` | Pins media and token metadata to IPFS. Without it a mint launches with `uri: ""` and wallets render it blank. |
 | `PYTH_API_KEY` | Optional. Pyth is read on-chain without it; the key only enables a Hermes fallback for feeds the chain cannot answer. |
-| `PYTH_MAX_AGE_SECONDS` | Optional, default 600. Older prices are shown as stale, never as a number. |
+| `PYTH_MAX_AGE_SECONDS` | Optional; 600 on devnet, 180 on mainnet/`mainnet-fork`. Older prices are shown as stale, never as a number. |
+| `PYTH_RPC_URL` | Optional. On `mainnet-fork` Pyth is read from live mainnet by default (fork clones freeze at startup); set this to read elsewhere. |
 
 ---
 

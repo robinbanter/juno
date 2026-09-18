@@ -6,6 +6,7 @@ import {
 
 import {
   cluster,
+  clusterFrom,
   explorer,
   isFork,
   isMainnet,
@@ -17,6 +18,7 @@ import {
 import { CURVE_PRESET_LIST } from "@/lib/juno/curves";
 import { MAINNET_USDC, forkCloneList, testValidatorArgs } from "@/lib/juno/fork";
 import { PYTH_FEEDS } from "@/lib/juno/pyth";
+import { pythSource } from "@/lib/juno/pyth-source";
 
 const ENV = { ...process.env };
 function withCluster(value: string | undefined, rpc?: string) {
@@ -59,6 +61,21 @@ describe("cluster", () => {
     expect(usesMainnetAddresses()).toBe(true);
     expect(explorer.account("a")).toBe("https://solscan.io/account/a");
     expect(meteoraPoolUrl("p")).toBe("https://app.meteora.ag/dbc/p");
+  });
+
+  it("accepts localnet-fork as an alias, and the Pyth source agrees", () => {
+    withCluster("localnet-fork");
+    expect(cluster()).toBe("mainnet-fork");
+    expect(usesMainnetAddresses()).toBe(true);
+    // One selector: the Pyth source reads the cluster through clusterFrom too.
+    for (const name of ["mainnet-fork", "localnet-fork"]) {
+      expect(clusterFrom({ NEXT_PUBLIC_SOLANA_CLUSTER: name })).toBe("mainnet-fork");
+      expect(pythSource({ NEXT_PUBLIC_SOLANA_CLUSTER: name })).toMatchObject({
+        network: "mainnet-beta",
+        rpc: "https://api.mainnet-beta.solana.com",
+      });
+    }
+    expect(pythSource({ NEXT_PUBLIC_SOLANA_CLUSTER: "devnet" })).toMatchObject({ network: "devnet", rpc: null });
   });
 
   it("treats an unknown value as devnet, never as mainnet", () => {

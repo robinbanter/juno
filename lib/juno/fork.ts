@@ -113,7 +113,9 @@ export function forkCloneList(): CloneEntry[] {
       address: priceFeedAccount(feedId, shard).toBase58(),
       kind: "account" as const,
       label: `Pyth ${name} (shard ${shard})`,
-      neededFor: name.startsWith("Equity") ? "NAV band" : "USD pricing of the quote token",
+      // By default a fork reads Pyth from live mainnet (pyth-source.ts), so
+      // these are only read when PYTH_RPC_URL points at the fork itself.
+      neededFor: `${name.startsWith("Equity") ? "NAV band" : "USD pricing"}, only if PYTH_RPC_URL points at the fork`,
       optional: true,
     })),
   );

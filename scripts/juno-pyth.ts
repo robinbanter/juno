@@ -6,23 +6,35 @@
  * `live` with a price, `stale` with only a publish time, or `unavailable`.
  *
  *   npm run juno:pyth
+ *   npm run juno:pyth -- --clone-args   # `--clone` flags for a mainnet fork
  */
-
-import { cluster } from "../lib/juno/cluster";
-import { getConnection } from "../lib/juno/dbc";
-import { MAX_PRICE_AGE_SECONDS, PYTH_FEEDS, readPythFeeds } from "../lib/juno/pyth";
+import { PYTH_FEEDS, pythConnection, readPythFeeds } from "../lib/juno/pyth";
 import { PYTH_SHARDS, decodePriceUpdateV2, priceFeedAccount, scaled } from "../lib/juno/pyth-account";
+import { cluster } from "../lib/juno/cluster";
+import { pythSource } from "../lib/juno/pyth-source";
+
+const names = Object.keys(PYTH_FEEDS) as Array<keyof typeof PYTH_FEEDS>;
+const rows = names.flatMap((name) =>
+  PYTH_SHARDS.map((shard) => ({ name, shard, address: priceFeedAccount(PYTH_FEEDS[name], shard) })),
+);
 
 async function main() {
-  const names = Object.keys(PYTH_FEEDS) as Array<keyof typeof PYTH_FEEDS>;
+  if (process.argv.includes("--clone-args")) {
+    // Every account the reader may touch. Both shards: on mainnet the fresh
+    // equity prices are on shard 1, the fresh crypto ones on shard 0.
+    for (const row of rows) console.log(`--clone ${row.address.toBase58()}   # ${row.name} shard ${row.shard}`);
+    return;
+  }
+
+  const source = pythSource();
   const now = Math.floor(Date.now() / 1000);
-  console.log(`cluster ${cluster()}  max age ${MAX_PRICE_AGE_SECONDS}s  now ${new Date(now * 1000).toISOString()}\n`);
+  console.log(
+    `cluster ${cluster()}  pyth ${source.network} via ${source.rpc ?? "app RPC"}` +
+      `  max age ${source.maxAgeSeconds}s  now ${new Date(now * 1000).toISOString()}\n`,
+  );
 
   // Raw accounts, so every shard is visible, not just the one the app picks.
-  const rows = names.flatMap((name) =>
-    PYTH_SHARDS.map((shard) => ({ name, shard, address: priceFeedAccount(PYTH_FEEDS[name], shard) })),
-  );
-  const infos = await getConnection().getMultipleAccountsInfo(rows.map((r) => r.address));
+  const infos = await pythConnection().getMultipleAccountsInfo(rows.map((r) => r.address));
   rows.forEach((row, i) => {
     const info = infos[i];
     const label = `${row.name.padEnd(20)} shard ${row.shard}  ${row.address.toBase58().padEnd(44)}`;

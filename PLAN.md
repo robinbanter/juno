@@ -55,7 +55,7 @@ Legend: `DONE` · `IN PROGRESS` · `NOT STARTED` · `BLOCKED`
 | 0.6 | `/creator/[handle]` profile with posts/reels tabs | DONE (mock data) |
 | 0.7 | `/create` launch form with curve preset picker | DONE |
 | 0.8 | `/activity` global trade feed | DONE (mock data) |
-| 0.9 | Unit tests + production build green | DONE — 107 tests, 10 files: 66 after the Norr purge (which deleted the tests covering deleted code — was 140), +23 for the Pyth decoder/band suite, +9 for the issuer tooling, +9 for the mainnet-fork config |
+| 0.9 | Unit tests + production build green | DONE — 114 tests, 10 files: 66 after the Norr purge (which deleted the tests covering deleted code — was 140), +29 for the Pyth reader/band/source suite, +9 for the issuer tooling, +10 for the mainnet-fork config |
 
 ### Phase 1 — On-chain core
 | # | Task | Status |
@@ -118,6 +118,7 @@ Legend: `DONE` · `IN PROGRESS` · `NOT STARTED` · `BLOCKED`
 | 5.2 | Map `navBandBps` presets to a Pyth feed id | DONE — stored per pool by name. Re-verified 2026-09-18: TSLA, AMZN ids were not Pyth feeds and the MSFT id was BTC/USD; corrected, so TSLAx now resolves to the real TSLA feed |
 | 5.3 | NAV vs curve price on the coin page | DONE — `NavBandPanel`: reference ± confidence, curve price, signed deviation vs `navBandBps`, link to the price account. On devnet Pyth stopped pushing equities on 2026-07-02, so TSLAx/NVDAx/AAPLx honestly render **Stale** (verified in browser); the live path is unit-tested and needs mainnet, where all five equities are live on shard 1 |
 | 5.4 | Warn in trade panel when price leaves the NAV band | DONE — every quote's execution price (fees in) is checked against the band; outside → alert, inside → deviation row, stale/unavailable → "Not checked — Pyth feed is stale" (verified in browser on all three equity pools) |
+| 5.6 | Pyth on the `mainnet-fork` target (alias `localnet-fork`) | DONE — `lib/juno/pyth-source.ts`: fork reads live **mainnet** Pyth (same addresses; all 5 equities live on shard 1, so the band is live). Measured: `solana-test-validator --clone` copies freeze and go stale ~3 min after the fork starts. Clone list: `npm run juno:pyth -- --clone-args` (16 accounts). Live band + outside-band alert verified in browser on real TSLA/NVDA prices |
 | 5.5 | SOL/USD feed so SOL-quoted pools have honest USD figures | DONE — **live on devnet with no key** (`7UVimffx…pjLiE`, ~5 min heartbeat, 600 s staleness bound). SOL pools show USD market caps; the trade panel's SOL echo is now priced, not 1 SOL = $1 |
 
 ### Phase 6 — Stock wedge
@@ -181,18 +182,18 @@ itemised. A task counts as complete only if its status line starts with `DONE`.
 | Phase 2 — wallet | 5 | 6 | 2.6 needs a human with a funded browser wallet |
 | Phase 3 — persistence | 11 | 11 | |
 | Phase 4 — trading | 9 | 9 | |
-| Phase 5 — Pyth | 5 | 5 | on-chain reads; devnet equity feeds are stale, shown as such |
+| Phase 5 — Pyth | 6 | 6 | on-chain reads; live equity NAV on mainnet/fork, stale-and-said-so on devnet |
 | Phase 6 — stock wedge | 4 | 4 | |
 | Phase 7 — graduation | 3 | 3 | |
-| **Phases 0–7 subtotal** | **58** | **59** | **98.3%** |
+| **Phases 0–7 subtotal** | **59** | **60** | **98.3%** |
 | Block 3 — swap indexer | 4 | 4 | built and verified on two devnet pools |
 | Block 4 — social | 3 | 3 | comments, likes and follows all persisted |
 | Block 5 — legacy purge | 1 | 1 | done; build green |
 | Block 7 — issuer tooling | 4 | 5 | I.5 needs a human with the creator's browser wallet |
 | Block 8 — mainnet-fork rehearsal | 1 | 1 | full issuance lifecycle on cloned mainnet state |
-| **Engineering total** | **71** | **73** | **97.3%** |
+| **Engineering total** | **72** | **74** | **97.3%** |
 
-**Engineering: 71 / 73 = 97.3%.** The open items are 2.6 and I.5 (browser-wallet
+**Engineering: 72 / 74 = 97.3%.** The open items are 2.6 and I.5 (browser-wallet
 signatures, need a human). 5.3 and 5.4 were unblocked by reading Pyth on-chain instead
 of via Hermes.
 Caveat that matters for the demo: on devnet the equity feeds are months stale, so the
@@ -222,7 +223,7 @@ Verified on chain, in Postgres, and by running the test suite:
   `EhvtVimk…MYy7L` (`4HatkGNZ…bMVTZtc`). `juno:inspect` reports `graduated true`.
 - **Creator fees claimed**: 0.009653 SOL (`3X4g3aDg…9HdAN`).
 - **IPFS**: token metadata and three reel videos pinned and resolving.
-- **107 unit tests across 10 files passing**, including Meteora's own
+- **114 unit tests across 10 files passing**, including Meteora's own
   `validateConfigParameters` over all four presets.
 
 ---

@@ -13,7 +13,7 @@ Node        20+
 Build       npm ci && npm run build
 Output      Next.js 16 App Router, standalone server (not a static export)
 Start       npm start
-Tests       npm test   →  10 files, 107 tests
+Tests       npm test   →  10 files, 114 tests
 ```
 
 `npm run build` is green. Six of the 20 routes prerender as static (`/`,
@@ -54,7 +54,8 @@ documented there apart from `NODE_ENV`, which the framework sets.
 |---|---|
 | `MONGODB_URI` / `MONGODB_DB` | Comments, likes and follows. The routes throw; nothing else is affected, and the counts render as zero rather than breaking the page. |
 | `PYTH_API_KEY` | Nothing is lost: Pyth prices are read from Solana accounts. The key only enables a Hermes fallback for feeds the chain cannot answer. |
-| `PYTH_MAX_AGE_SECONDS` | Defaults to 600. A price older than this is shown as stale, never as a number. |
+| `PYTH_MAX_AGE_SECONDS` | Defaults to 600 on devnet, 180 on mainnet and `mainnet-fork`. A price older than this is shown as stale, never as a number. |
+| `PYTH_RPC_URL` | Where Pyth accounts are read. Default: the app's RPC on devnet/mainnet; **live mainnet on `mainnet-fork`**, because a fork's cloned Pyth accounts never update. Set it to the fork's RPC to read the clones instead. |
 | `NEXT_PUBLIC_IPFS_GATEWAY` | Gateway baked into pinned metadata for wallets and explorers that cannot reach this app's own `/api/ipfs/<cid>` route. |
 | `ALERT_WEBHOOK_URL` | Fatal errors are still logged; this is only how a human gets paged. |
 | `DATABASE_URL_UNPOOLED` / `DATABASE_DIRECT_URL` | Migrations fall back to `DATABASE_URL`. On Neon, `npm run db:push` through the pooler can fail; set one of these if it does. |
@@ -147,7 +148,9 @@ constants, so it cannot drift):
   `7F6dnUcR…yNESd` (option 0), `2nHK1kju…ha1z6k` (1), `Hv8Lmzmn…8RXcjp` (2).
 - **USDC mint** `EPjFWdd5…Dt1v`.
 - **Pyth price accounts** for SOL/USDC/USDT and AAPL/NVDA/TSLA/MSFT/AMZN on
-  shards 0 and 1.
+  shards 0 and 1 — only read when `PYTH_RPC_URL` points at the fork. By default
+  a fork reads Pyth from live mainnet (`lib/juno/pyth-source.ts`), because
+  cloned price accounts freeze when the validator starts.
 
 Verified on a fork (validator on port 8917): a `content` launch, fill to 100%,
 creator claim (0.439 SOL), and migration into DAMM v2 pool `5BeBWkeH…iTUgwvu` all
@@ -157,10 +160,11 @@ the cloned shard-1 account. `/api/health` reported `cluster: mainnet-fork`.
 
 Two limits:
 
-- **Pyth goes stale.** A clone is a snapshot. `solana-test-validator` never
-  refreshes it, so the NAV band shows *Stale* about ten minutes (the 600 s max
-  age) after the fork starts. Restart the fork just before a demo, or use a
-  fork tool that re-fetches mainnet accounts on demand.
+- **Pyth clones go stale; the default avoids them.** A cloned price account is a
+  snapshot that `solana-test-validator` never refreshes. So on `mainnet-fork`
+  Pyth is read from live mainnet by default (read-only; 180 s max age), which
+  keeps the NAV band live. Point `PYTH_RPC_URL` at the fork only to read the
+  clones deliberately, and expect *Stale* a few minutes after startup.
 - **No USDC to trade with.** Only Circle can mint USDC, so a USDC-quoted pool
   launches but cannot be bought into until the trader has a USDC token account.
   Inject one at startup (`--account <ata> <json>` with a crafted SPL token

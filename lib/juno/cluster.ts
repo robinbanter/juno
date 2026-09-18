@@ -17,9 +17,23 @@
 
 export type Cluster = "devnet" | "mainnet-beta" | "mainnet-fork";
 
+/**
+ * The one place `NEXT_PUBLIC_SOLANA_CLUSTER` is interpreted. Everything that
+ * depends on the cluster — addresses, RPC, explorer links, the Pyth source —
+ * goes through here, so no two modules can disagree about which cluster this
+ * is. `localnet-fork` is accepted as an alias of `mainnet-fork` (both names
+ * were in use for the same target). Anything unrecognised is devnet, never
+ * mainnet.
+ */
+export function clusterFrom(env: Record<string, string | undefined>): Cluster {
+  const value = env.NEXT_PUBLIC_SOLANA_CLUSTER?.trim();
+  if (value === "mainnet-beta") return "mainnet-beta";
+  if (value === "mainnet-fork" || value === "localnet-fork") return "mainnet-fork";
+  return "devnet";
+}
+
 export function cluster(): Cluster {
-  const value = process.env.NEXT_PUBLIC_SOLANA_CLUSTER;
-  return value === "mainnet-beta" || value === "mainnet-fork" ? value : "devnet";
+  return clusterFrom(process.env);
 }
 
 /** The real mainnet — where transactions cost real money. */
