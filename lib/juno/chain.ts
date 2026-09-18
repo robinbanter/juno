@@ -163,23 +163,67 @@ export async function hydratePool(
 }
 
 /**
- * Hydrate many for a list view, dropping any whose pool is missing here.
+ * The result of hydrating a list, including the pools that could not be read.
+ *
+ * `unavailable` is the whole point. A pool whose chain read the RPC refused is
+ * not a pool that does not exist, and a list view that silently drops it tells
+ * a visitor something false: a creator with eight coins shows "2 Posts", and
+ * when every read fails the grid falls through to "No coins yet — launch the
+ * first one". Pages use this to say how many coins are missing and why.
+ */
+export type HydrationReport = {
+  coins: Coin[];
+  /** In the registry, but the RPC refused the live read — even after a retry. */
+  unavailable: JunoPoolRow[];
+};
+
+/**
+ * Hydrate many for a list view.
+ *
+ * Two outcomes are kept apart:
+ *   - `hydratePool` returns null -> not on this cluster; genuinely dropped
+ *   - `hydratePool` throws       -> the RPC refused; reported as unavailable
  *
  * Bounded concurrency rather than `Promise.all`: firing every pool read
- * simultaneously is the burst the public devnet RPC answers with 429s, and a
- * grid of four pools does not need to be four times as rude as one.
+ * simultaneously is the burst the public devnet RPC answers with 429s. Pools
+ * that fail get one sequential retry after a pause, since most refusals are
+ * transient and a single retry recovers the majority of them.
  */
-export async function hydratePools(rows: JunoPoolRow[], width = 2): Promise<Coin[]> {
-  const out: Array<Coin | null> = new Array(rows.length).fill(null);
+export async function hydratePoolsReport(
+  rows: JunoPoolRow[],
+  width = 2,
+): Promise<HydrationReport> {
+  const FAILED = Symbol("failed");
+  const out: Array<Coin | null | typeof FAILED> = new Array(rows.length).fill(null);
   let cursor = 0;
 
   async function worker() {
     while (cursor < rows.length) {
       const index = cursor++;
-      out[index] = await hydratePool(rows[index]).catch(() => null);
+      out[index] = await hydratePool(rows[index]).catch(() => FAILED);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(width, rows.length) }, worker));
+
+  const failed = out.map((v, i) => (v === FAILED ? i : -1)).filter((i) => i >= 0);
+  if (failed.length > 0) {
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    for (const index of failed) {
+      out[index] = await hydratePool(rows[index]).catch(() => FAILED);
     }
   }
 
-  await Promise.all(Array.from({ length: Math.min(width, rows.length) }, worker));
-  return out.filter((coin): coin is Coin => coin !== null);
+  return {
+    coins: out.filter((v): v is Coin => v !== null && v !== FAILED),
+    unavailable: rows.filter((_, i) => out[i] === FAILED),
+  };
+}
+
+/**
+ * Hydrate many, coins only. Kept for callers that have no way to show what is
+ * missing — prefer `hydratePoolsReport` anywhere a count or empty state is
+ * rendered, because this silently omits pools the RPC refused.
+ */
+export async function hydratePools(rows: JunoPoolRow[], width = 2): Promise<Coin[]> {
+  return (await hydratePoolsReport(rows, width)).coins;
 }

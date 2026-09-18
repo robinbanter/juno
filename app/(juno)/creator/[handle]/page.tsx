@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 
-import { hydratePools } from "@/lib/juno/chain";
+import { hydratePoolsReport } from "@/lib/juno/chain";
+import { UnavailableNotice } from "@/components/juno/UnavailableNotice";
 import { identicon } from "@/lib/juno/identicon";
 import { shortAddress } from "@/lib/juno/format";
 import { listPoolsByCreator } from "@/lib/juno/registry";
@@ -32,7 +33,7 @@ export default async function CreatorPage({
   if (!BASE58.test(handle)) notFound();
 
   const rows = await listPoolsByCreator(handle);
-  const coins = await hydratePools(rows);
+  const { coins, unavailable } = await hydratePoolsReport(rows);
 
   // Real counts in the initial HTML. A Mongo outage degrades to zeros rather
   // than failing the page — the profile's substance is the pools, not this.
@@ -51,7 +52,10 @@ export default async function CreatorPage({
     bio: undefined,
     followers: follows.followers,
     following: follows.following,
-    posts: coins.length,
+    // The registry is the truth about how many coins this wallet launched.
+    // Counting only the ones whose chain read succeeded made "8 coins" read as
+    // "2 Posts" whenever the RPC was busy.
+    posts: rows.length,
     // Sum of what this creator has issued — a real figure, not a creator coin.
     marketCap: coins.reduce((sum, coin) => sum + coin.marketCap, 0),
     // Mixed-quote portfolios cannot be summed into one unit honestly; label
@@ -65,6 +69,18 @@ export default async function CreatorPage({
 
   return (
     <div className="mx-auto w-full max-w-[600px] px-0 pt-4 sm:px-4">
+      {unavailable.length > 0 && (
+        <div className="px-4 sm:px-0">
+          {/* The market cap above sums only the coins that could be read, so
+              the notice has to say which ones it leaves out. */}
+          <UnavailableNotice
+            missing={unavailable.length}
+            total={rows.length}
+            names={unavailable.map((row) => row.name)}
+            retryHref={`/creator/${handle}`}
+          />
+        </div>
+      )}
       <ProfileView creator={creator} coins={coins} />
     </div>
   );

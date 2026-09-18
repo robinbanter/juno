@@ -111,6 +111,7 @@ Verified by running things, not by reading imports.
 | **Every number that moves** | price, curve progress, migration threshold, holders, transactions — read from the DBC program per request, never cached into the registry |
 | **Wallet** | Phantom / Solflare via `@solana/wallet-adapter` |
 | **Quotes** | priced by `pool.swapQuote` against live account state |
+| **Likes and follows** | Persisted in MongoDB (`lib/juno/social.ts`, `app/api/juno/likes`, `app/api/juno/follows`), keyed with unique indexes so a wallet can like a coin or follow a creator exactly once. Verified against the real database, including six simultaneous toggles that never pushed a count past the number of distinct wallets. Counts render for everyone; the action needs a connected wallet, and there is no optimistic increment. |
 | **Swap history** | Direction, size, execution price and trader reconstructed per trade from token-balance deltas — driving a real price chart, real 24h volume, and real trade rows |
 | **Tests** | **107 unit tests across 10 files**, passing — including all four presets asserted against Meteora's own `validateConfigParameters`, and both deprecated paths (DAMM v1, `RateLimiter`) asserted unused |
 
@@ -125,8 +126,6 @@ on-chain *and* in the registry, it does not appear in the app.
 | **Pyth NAV band on devnet** | Built: Pyth is read from its `PriceUpdateV2` accounts on Solana — no key, no Hermes — and the coin page and trade panel check the curve against `navBandBps`. But **Pyth stopped pushing US equities on devnet on 2026-07-02**, so the equity pools show **Stale** with the last publish date rather than a months-old number. On mainnet all five equity feeds are live (shard 1). SOL/USD is live on devnet, which is what prices SOL-quoted pools in dollars. `npm run juno:pyth` prints every feed. |
 | **Consistent swap history** | The indexer is built and verified (see below), but the public devnet RPC enforces a per-method quota that a dozen transaction reads can exhaust. When it refuses, the chart, 24h volume and trade direction all fall back to the honest empty state. A dedicated `NEXT_PUBLIC_SOLANA_RPC` is what makes this consistent. |
 | **Comments** | Genuinely implemented — `lib/juno/social.ts` is a MongoDB-backed layer wired to `app/api/juno/comments`. Code-present and reviewed, **not runtime-verified here**: no live round trip was run against the database. |
-| **Likes** | **Not persisted.** `ReelCard` keeps `liked` in local component state and nothing populates `coin.likes`, so a like does not survive a reload. |
-| **Follows** | Not built. `followers` is hardcoded to `0`. |
 | **Browser-wallet launch** | The create flow signs and sends through the same code path the CLI does, and that path is verified on devnet — but the Phantom-in-a-browser run has not been done by a human. |
 | **Dedicated RPC** | Running on the public devnet endpoint, which rate-limits hard. `NEXT_PUBLIC_SOLANA_RPC` is wired and unset. |
 
@@ -278,7 +277,7 @@ Routes: `/explore` · `/reels` · `/coin/[address]` · `/creator/[wallet]` · `/
 | `NEXT_PUBLIC_SOLANA_RPC` | recommended | A dedicated RPC. The public endpoints rate-limit hard enough to break a demo. |
 | `PINATA_JWT` | for launching | Pins media and token metadata to IPFS. Without it a mint launches with `uri: ""` and every wallet renders it blank. |
 | `NEXT_PUBLIC_IPFS_GATEWAY` | no | Gateway baked into pinned metadata for wallets and explorers |
-| `MONGODB_URI` / `MONGODB_DB` | no | Comments. Unset, the comments route throws; nothing else is affected. |
+| `MONGODB_URI` / `MONGODB_DB` | no | Comments, likes and follows. Unset, those routes throw and the counts render as zero; nothing else is affected. |
 | `PYTH_API_KEY` | no | Pyth is read on-chain without it; the key only adds a Hermes fallback |
 
 The CLI scripts read the same `.env.local` via `dotenv-cli` and sign with a local key
@@ -337,7 +336,7 @@ npm run juno:graduate -- --mint <baseMint> --yes
 | Chain client | `@solana/web3.js` v1 |
 | Registry | **Neon Postgres via Drizzle ORM** — `juno_pools`, identity and provenance only |
 | Media & metadata | **Pinata / IPFS**, proxied through `/api/ipfs/<cid>` with gateway failover |
-| Comments | **MongoDB**, deliberately not the same store as the market data |
+| Comments, likes, follows | **MongoDB**, deliberately not the same store as the market data |
 
 `lib/juno/dbc.ts` is the only module that touches the DBC program. Components receive
 plain numbers in UI units; that module owns the BN arithmetic, the decimals and the
@@ -354,8 +353,9 @@ The DAMM v2 pool address is *derived*, not stored — `deriveDammV2PoolAddress` 
 migration fee config, base mint and quote mint, and the fee config follows from the
 curve preset.
 
-Comments live in MongoDB rather than alongside the registry on purpose: the pool
-registry is relational and small, while comments are append-heavy, per-coin and
+Social data — comments, likes and follows — lives in MongoDB rather than alongside
+the registry on purpose: the pool registry is relational and small, while social
+data is append-heavy, per-coin and
 schema-loose, and keeping the two apart means a comment outage can never take the
 market data down with it. Nothing in that store is authoritative about money — trades
 live on chain.
@@ -388,7 +388,7 @@ Disclosed as the submission rules require.
 | [Tailwind CSS](https://tailwindcss.com) 4 | Styling | MIT |
 | [Drizzle ORM](https://orm.drizzle.team) + `drizzle-kit` | Postgres schema and queries | Apache-2.0 |
 | [`pg`](https://github.com/brianc/node-postgres) | Postgres driver | MIT |
-| [`mongodb`](https://github.com/mongodb/node-mongodb-native) | Comments and likes | Apache-2.0 |
+| [`mongodb`](https://github.com/mongodb/node-mongodb-native) | Comments, likes and follows | Apache-2.0 |
 | [`bn.js`](https://github.com/indutny/bn.js) / [`decimal.js`](https://github.com/MikeMcl/decimal.js) | Curve and price arithmetic | MIT |
 | [`bs58`](https://github.com/cryptocoinjs/bs58) | Base58 keys and signatures | MIT |
 | [lucide-react](https://lucide.dev) | Icons | ISC |
