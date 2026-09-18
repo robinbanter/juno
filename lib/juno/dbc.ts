@@ -29,12 +29,13 @@ import {
   Keypair,
   PublicKey,
   Transaction,
+  VersionedTransaction,
   type Commitment,
   type ParsedAccountData,
 } from "@solana/web3.js";
 import BN from "bn.js";
 
-import { isMainnet, rpcEndpoint } from "./cluster";
+import { rpcEndpoint, usesMainnetAddresses } from "./cluster";
 import { buildPresetParams, type BuildPresetOptions } from "./curves";
 import type { CurveState, QuoteToken, TradeSide } from "./types";
 
@@ -82,9 +83,12 @@ export const WSOL: QuoteToken = {
   decimals: 9,
 };
 
-/** Circle USDC. Different mint per cluster — quoting the wrong one fails. */
+/**
+ * Circle USDC. Different mint per cluster — quoting the wrong one fails. A
+ * mainnet fork uses the mainnet mint, cloned into the local validator.
+ */
 export const USDC: QuoteToken = {
-  mint: isMainnet()
+  mint: usesMainnetAddresses()
     ? "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
     : "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
   symbol: "USDC",
@@ -546,6 +550,61 @@ export async function planLaunch(params: LaunchRequest): Promise<LaunchPlan> {
     config: configKeypair.publicKey,
     baseMint: baseMintKeypair.publicKey,
     pool: deriveDbcPoolAddress(quoteMint, baseMintKeypair.publicKey, configKeypair.publicKey),
+  };
+}
+
+/** A `signTransaction` for a local keypair — how the CLI scripts sign. */
+export function keypairSigner(keypair: Keypair) {
+  return async (tx: Transaction) => {
+    tx.partialSign(keypair);
+    return tx;
+  };
+}
+
+export type SimulationResult = {
+  ok: boolean;
+  err: unknown;
+  logs: string[];
+  unitsConsumed: number | null;
+};
+
+/**
+ * Dry-run a transaction the SDK built, exactly as it would be sent, without
+ * the payer's signature.
+ *
+ * The same finishing steps `sendTransaction` applies (fee payer, blockhash,
+ * co-signers) happen here, then the cluster executes it with signature
+ * verification off. That proves a builder produces a transaction the program
+ * accepts, for a wallet whose key is not available — a browser wallet, say.
+ */
+export async function simulateTransaction(params: {
+  transaction: Transaction;
+  payer: PublicKey;
+  signers?: Keypair[];
+}): Promise<SimulationResult> {
+  const connection = getConnection();
+  const { transaction, payer, signers = [] } = params;
+
+  const { blockhash } = await connection.getLatestBlockhash(COMMITMENT);
+  transaction.feePayer = payer;
+  transaction.recentBlockhash = blockhash;
+  if (signers.length > 0) transaction.partialSign(...signers);
+
+  const message = transaction.compileMessage();
+  const versioned = new VersionedTransaction(message);
+  for (const { publicKey, signature } of transaction.signatures) {
+    if (signature) versioned.addSignature(publicKey, signature);
+  }
+
+  const { value } = await connection.simulateTransaction(versioned, {
+    sigVerify: false,
+    commitment: COMMITMENT,
+  });
+  return {
+    ok: value.err === null,
+    err: value.err,
+    logs: value.logs ?? [],
+    unitsConsumed: value.unitsConsumed ?? null,
   };
 }
 

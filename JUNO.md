@@ -24,10 +24,11 @@ explorer or by running a script in this repo.
 
 | | |
 |---|---|
-| **DBC pools created by this code** | **7 on devnet**, all four presets exercised — highlights below, full table in [README.md](./README.md) |
+| **DBC pools created by this code** | **8 on devnet**, all four presets exercised — highlights below, full table in [README.md](./README.md) |
 | **Real swaps through the app's own path** | a buy *and* a sell, links below; the curve moved both ways |
 | **A full lifecycle** | launch → trade → curve to 100% → **migrated to DAMM v2** |
-| **Creator fees claimed** | 0.009653 SOL, on-chain |
+| **Creator fees claimed** | 0.009653 SOL, then 0.000504652 and 0.05382363 SOL, on-chain |
+| **Issuer tooling** | creator Manage view at `/coin/<mint>/manage` — monitor, claim, migrate — sharing `lib/juno/issuer.ts` with the CLI; browser-built transactions simulate clean, real wallet signature still needs a human |
 | **Token metadata** | pinned to IPFS, URI written to the mint |
 | **Curve configs** | 4 presets, 16 liquidity-weighted segments each |
 | **Persistence** | Neon Postgres (`juno_pools`), writes verified through the API |
@@ -37,13 +38,13 @@ explorer or by running a script in this repo.
 | **Likes and follows** | MongoDB, unique-indexed so a wallet can like or follow once; verified against the real database, including concurrent toggles. Counts show for everyone; the action needs a wallet. |
 | **Comments** | MongoDB via `lib/juno/social.ts`, wired to `app/api/juno/comments` — kept out of Postgres so a comment outage cannot take the market data down. Code reviewed, not runtime-verified. |
 | **Swap history** | direction, size, execution price and trader per trade, from token-balance deltas — driving the price chart, 24h volume and trade rows |
-| **Tests** | 66 unit tests across 7 files, incl. all four presets validated by Meteora's own `validateConfigParameters`. Was 140 before the Norr purge took the tests covering deleted code — see [README.md](./README.md). |
+| **Tests** | 107 unit tests across 10 files, incl. all four presets validated by Meteora's own `validateConfigParameters`. Was 140 before the Norr purge took the tests covering deleted code — see [README.md](./README.md). |
 
 ### Not built
 
 | | Why |
 |---|---|
-| **Pyth NAV band** | Code is written (`lib/juno/pyth.ts`) but Hermes moved its price endpoints behind an API key, and none exists in this repo. The UI shows no NAV rather than a fabricated one. |
+| **Pyth NAV band on devnet** | Built and wired — Pyth is read straight from its `PriceUpdateV2` accounts on Solana, no key. But Pyth stopped pushing US equities on devnet on 2026-07-02, so the equity pools render **Stale** with the last publish date instead of a number. The same code shows a live band on mainnet, where AAPL/NVDA/TSLA/MSFT/AMZN update every few seconds on shard 1. SOL/USD, USDC/USD and USDT/USD are live on devnet. |
 | **Mainnet pool** | Devnet only so far. |
 | **Consistent swap history** | The indexer is built (`lib/juno/indexer.ts`) and verified on two devnet pools, but the public devnet RPC enforces a per-method quota. When it refuses, the chart, 24h volume and trade rows fall back to the honest empty state. A dedicated `NEXT_PUBLIC_SOLANA_RPC` is what makes it consistent. See [README.md](./README.md). |
 
@@ -157,8 +158,9 @@ npm run juno:trade    -- --mint <baseMint> --side buy  --amount 0.5  --yes
 npm run juno:trade    -- --mint <baseMint> --side sell --amount 5000 --yes
 npm run juno:trade    -- --mint <baseMint> --side buy --amount 0.01 --partial --yes
 npm run juno:swaps    -- --mint <baseMint>
-npm run juno:claim    -- --mint <baseMint> --yes
-npm run juno:graduate -- --mint <baseMint> --preset content --yes
+npm run juno:fork                                   # accounts a mainnet fork must clone
+npm run juno:claim    -- --mint <baseMint> --simulate   # or --yes to send
+npm run juno:graduate -- --mint <baseMint> --simulate   # or --yes; fee tier read from chain
 ```
 
 Each runs the same code path the UI uses, signed by a local key at
@@ -170,10 +172,11 @@ key on first run; fund it from the devnet faucet before launching.
 | Variable | Purpose |
 |---|---|
 | `DATABASE_URL` | Postgres for the pool registry |
-| `NEXT_PUBLIC_SOLANA_CLUSTER` | `devnet` or `mainnet-beta` |
+| `NEXT_PUBLIC_SOLANA_CLUSTER` | `devnet`, `mainnet-beta`, or `mainnet-fork` (mainnet addresses on a local validator — see [DEPLOY.md](./DEPLOY.md)) |
 | `NEXT_PUBLIC_SOLANA_RPC` | Dedicated RPC. The public endpoints rate-limit hard enough to break a demo. |
 | `PINATA_JWT` | Pins media and token metadata to IPFS. Without it a mint launches with `uri: ""` and wallets render it blank. |
-| `PYTH_API_KEY` | Optional. Without it, no NAV band is shown. |
+| `PYTH_API_KEY` | Optional. Pyth is read on-chain without it; the key only enables a Hermes fallback for feeds the chain cannot answer. |
+| `PYTH_MAX_AGE_SECONDS` | Optional, default 600. Older prices are shown as stale, never as a number. |
 
 ---
 

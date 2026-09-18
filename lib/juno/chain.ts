@@ -12,6 +12,7 @@ import {
 import { quoteTokenUsdPrice } from "./pyth";
 import { curveShape } from "./curve-shape";
 import { feeSchedule, tokenomics } from "./economics";
+import { dammTarget } from "./issuer";
 import { identicon } from "./identicon";
 import type { JunoPoolRow } from "./registry";
 import type { Coin, CoinFormat, CurvePresetId, Creator, QuoteToken } from "./types";
@@ -141,7 +142,15 @@ export async function hydratePool(
     priceUsd,
     curve: snapshot.curve,
     curvePreset: row.curvePreset as CurvePresetId,
-    graduatedPool: snapshot.curve.graduated ? row.poolAddress : undefined,
+    // Derived from the config's own migration fee tier — the DAMM v2 pool is
+    // a PDA of that tier's config and the two mints.
+    graduatedPool: snapshot.curve.graduated
+      ? dammTarget({
+          migrationFeeOption: Number(snapshot.config.migrationFeeOption),
+          baseMint: row.baseMint,
+          quoteMint: row.quoteMint,
+        })?.pool.toBase58()
+      : undefined,
     fee: options.detailed
       ? feeSchedule({
           config: snapshot.config,

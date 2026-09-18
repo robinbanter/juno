@@ -15,7 +15,7 @@ import { Keypair, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
 
-import { cluster, explorer, meteoraPoolUrl, rpcEndpoint } from "../lib/juno/cluster";
+import { cluster, explorer, isMainnet, meteoraPoolUrl, rpcEndpoint } from "../lib/juno/cluster";
 import { getConnection, planLaunch, sendLaunch, USDC, WSOL } from "../lib/juno/dbc";
 import { CURVE_PRESETS } from "../lib/juno/curves";
 import { pinTokenMetadata } from "../lib/juno/pinata";
@@ -72,12 +72,14 @@ async function main() {
   console.log(`balance   ${(balance / LAMPORTS_PER_SOL).toFixed(4)} SOL`);
 
   if (balance < 0.1 * LAMPORTS_PER_SOL) {
-    if (cluster() !== "devnet") {
+    // Devnet's faucet and a local fork's validator both airdrop; mainnet
+    // does not, and must never be asked to.
+    if (isMainnet()) {
       throw new Error(
         `Launcher needs SOL. Fund ${payer.publicKey.toBase58()} and re-run.`,
       );
     }
-    console.log("Requesting devnet airdrop…");
+    console.log(`Requesting ${cluster()} airdrop…`);
     try {
       const sig = await connection.requestAirdrop(payer.publicKey, LAMPORTS_PER_SOL);
       await connection.confirmTransaction(sig, "confirmed");

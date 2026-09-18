@@ -9,13 +9,16 @@ import { cluster, explorer, meteoraPoolUrl } from "@/lib/juno/cluster";
 import { GraduatedNotice } from "@/components/juno/coin/GraduatedNotice";
 import { QUOTE_TOKENS } from "@/lib/juno/dbc";
 import { listPoolActivityReport, listPoolHolders } from "@/lib/juno/activity";
-import { quoteTokenUsdPrice } from "@/lib/juno/pyth";
+import { CURVE_PRESETS } from "@/lib/juno/curves";
+import type { NavContext } from "@/lib/juno/nav";
+import { feedIdFor, quoteTokenUsdPrice, readPythFeed } from "@/lib/juno/pyth";
 import { getPool } from "@/lib/juno/registry";
 import { likeState, listComments } from "@/lib/juno/social";
 import { CoinMedia } from "@/components/juno/coin/CoinMedia";
 import { CoinSummary } from "@/components/juno/coin/CoinSummary";
 import { CoinTabs } from "@/components/juno/coin/CoinTabs";
 import { CreatorPanel } from "@/components/juno/coin/CreatorPanel";
+import { NavBandPanel } from "@/components/juno/coin/NavBandPanel";
 import { TradePanelClient } from "./TradePanelClient";
 
 export const dynamic = "force-dynamic";
@@ -50,13 +53,25 @@ export default async function CoinPage({
   const coin = hydrated.coin;
   if (!coin) notFound();
 
+  // Null when SOL/USD is not live on-chain. Trade values then stay in quote
+  // units instead of being converted at a rate nobody published — the same
+  // rule `hydratePool` applies to market caps. Cached, so this does not
+  // re-read the account `hydratePool` just read.
+  const quoteUsd = await quoteTokenUsdPrice(row.quoteMint).catch(() => null);
+
+  // The NAV band applies to pools launched against a Pyth feed on a preset
+  // that defines a band. Everything else simply has no panel.
+  const navFeedId = feedIdFor(row.navFeedId);
+  const bandBps = CURVE_PRESETS[coin.curvePreset]?.navBandBps;
+  const nav: NavContext | null =
+    navFeedId && bandBps !== undefined
+      ? { feedName: row.navFeedId!, bandBps, reading: await readPythFeed(navFeedId), quoteUsd }
+      : null;
+
   const [activityReport, holders, comments, likes] = await Promise.all([
     listPoolActivityReport(row.poolAddress, row.baseMint, {
       quoteSymbol: coin.quote.symbol,
-      // Null without a Pyth key, which is the normal case in this repo. Trade
-      // values then stay in quote units instead of being converted at a rate
-      // nobody published — the same rule `hydratePool` applies to market caps.
-      rate: await quoteTokenUsdPrice(row.quoteMint).catch(() => null),
+      rate: quoteUsd,
     }),
     listPoolHolders(row.baseMint),
     listComments(row.baseMint, cluster()).catch(() => []),
@@ -75,12 +90,29 @@ export default async function CoinPage({
 
         <aside className="w-full shrink-0 lg:max-w-[420px]">
           <CoinSummary coin={{ ...coin, likes: likes.count }} />
+          {nav && (
+            <NavBandPanel
+              nav={nav}
+              // `priceUsd` is only in dollars when `hydratePool` had a live
+              // quote rate; otherwise it is in quote units and must not be
+              // compared against a dollar NAV.
+              curvePriceUsd={coin.marketCapCurrency === "USD" ? coin.priceUsd : null}
+              quoteSymbol={coin.quote.symbol}
+              className="mt-4"
+            />
+          )}
           {/* A migrated curve cannot be swapped — the program rejects it.
               Trading continues in the DAMM v2 pool it graduated into. */}
           {coin.curve.graduated ? (
             <GraduatedNotice coin={coin} className="mt-4" />
           ) : (
-            <TradePanelClient coin={coin} quoteTokens={QUOTE_TOKENS} className="mt-4" />
+            <TradePanelClient
+              coin={coin}
+              quoteTokens={QUOTE_TOKENS}
+              quoteUsd={quoteUsd}
+              nav={nav}
+              className="mt-4"
+            />
           )}
           <CreatorPanel coin={coin} />
 

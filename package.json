@@ -19,7 +19,9 @@
     "juno:trade": "dotenv -e .env.local -- tsx scripts/juno-trade.ts",
     "juno:claim": "dotenv -e .env.local -- tsx scripts/juno-claim.ts",
     "juno:graduate": "dotenv -e .env.local -- tsx scripts/juno-graduate.ts",
-    "juno:swaps": "dotenv -e .env.local -- tsx scripts/juno-swaps.ts"
+    "juno:swaps": "dotenv -e .env.local -- tsx scripts/juno-swaps.ts",
+    "juno:fork": "tsx scripts/juno-fork.ts",
+    "juno:pyth": "dotenv -e .env.local -- tsx scripts/juno-pyth.ts"
   },
   "dependencies": {
     "@meteora-ag/dynamic-bonding-curve-sdk": "^1.5.12",

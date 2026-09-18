@@ -13,7 +13,7 @@ Node        20+
 Build       npm ci && npm run build
 Output      Next.js 16 App Router, standalone server (not a static export)
 Start       npm start
-Tests       npm test   →  7 files, 66 tests
+Tests       npm test   →  10 files, 107 tests
 ```
 
 `npm run build` is green. Six of the 20 routes prerender as static (`/`,
@@ -38,7 +38,7 @@ documented there apart from `NODE_ENV`, which the framework sets.
 | Variable | Notes |
 |---|---|
 | `DATABASE_URL` | Postgres (Neon). Holds `juno_pools` — identity and provenance only. Run `npm run db:push` once against it before first boot. |
-| `NEXT_PUBLIC_SOLANA_CLUSTER` | `devnet` or `mainnet-beta`. Switches the RPC default, the USDC mint, and whether explorer links carry `?cluster=devnet`. |
+| `NEXT_PUBLIC_SOLANA_CLUSTER` | `devnet`, `mainnet-beta`, or `mainnet-fork` (see *Rehearsing on a mainnet fork*). Switches the RPC default, the USDC mint, and whether explorer links carry `?cluster=devnet`. |
 
 ### Strongly recommended
 
@@ -53,7 +53,8 @@ documented there apart from `NODE_ENV`, which the framework sets.
 | Variable | Absent behaviour |
 |---|---|
 | `MONGODB_URI` / `MONGODB_DB` | Comments, likes and follows. The routes throw; nothing else is affected, and the counts render as zero rather than breaking the page. |
-| `PYTH_API_KEY` | No NAV band is shown — deliberately, rather than a fabricated one — and SOL-quoted pools are labelled in SOL instead of USD. |
+| `PYTH_API_KEY` | Nothing is lost: Pyth prices are read from Solana accounts. The key only enables a Hermes fallback for feeds the chain cannot answer. |
+| `PYTH_MAX_AGE_SECONDS` | Defaults to 600. A price older than this is shown as stale, never as a number. |
 | `NEXT_PUBLIC_IPFS_GATEWAY` | Gateway baked into pinned metadata for wallets and explorers that cannot reach this app's own `/api/ipfs/<cid>` route. |
 | `ALERT_WEBHOOK_URL` | Fatal errors are still logged; this is only how a human gets paged. |
 | `DATABASE_URL_UNPOOLED` / `DATABASE_DIRECT_URL` | Migrations fall back to `DATABASE_URL`. On Neon, `npm run db:push` through the pooler can fail; set one of these if it does. |
@@ -113,7 +114,60 @@ complete in code — `lib/juno/cluster.ts` picks the RPC and explorer links,
 nothing else changes. There are no hardcoded devnet assumptions outside that
 module; this was checked by grep across the whole source tree.
 
-Two things to understand before doing it:
+### Rehearsing on a mainnet fork
+
+`NEXT_PUBLIC_SOLANA_CLUSTER=mainnet-fork` runs the whole STOCKLANA flow on real
+mainnet state without spending anything. It uses **mainnet addresses** (Circle
+USDC `EPjFWdd5…Dt1v`, mainnet Pyth accounts) against a **local RPC**
+(`http://127.0.0.1:8899` unless `NEXT_PUBLIC_SOLANA_RPC` says otherwise).
+Explorer links go to the Solana Explorer with `cluster=custom`, since Solscan
+cannot see a local validator, and registry rows are scoped to `mainnet-fork`, so
+fork pools never appear on a real mainnet deployment. Airdrops are allowed;
+`juno:launch` still refuses to airdrop on `mainnet-beta`.
+
+```bash
+npm run juno:fork                  # 25 accounts, each checked read-only on mainnet
+npm run -s juno:fork -- --args > /tmp/fork-args.txt
+args=("${(@f)$(cat /tmp/fork-args.txt)}")          # zsh; bash: mapfile -t args < /tmp/fork-args.txt
+solana-test-validator --reset "${args[@]}"
+```
+
+What gets cloned, and why (`lib/juno/fork.ts` derives it from the code's own
+constants, so it cannot drift):
+
+- **Programs:** DBC `dbcij3LW…MaqN`, DAMM v2 `cpamdpZC…1sGG`, Metaplex Token
+  Metadata `metaqbxx…18x1s`.
+- **Funded PDAs:** the DAMM v2 pool authority `HLnpSz9h…TLcC` and the DBC pool
+  authority `FhVo3mqL…HLuM`. These are easy to miss. On mainnet they are
+  system accounts holding SOL, and the DAMM v2 authority pays the rent for the
+  pool that graduation creates. Without it, migration fails inside
+  `InitializePool` with `Transfer: insufficient lamports 0, need 2770080`,
+  which was found by running the flow, not by reading the SDK.
+- **DAMM v2 configs** for the three fee tiers the presets graduate into:
+  `7F6dnUcR…yNESd` (option 0), `2nHK1kju…ha1z6k` (1), `Hv8Lmzmn…8RXcjp` (2).
+- **USDC mint** `EPjFWdd5…Dt1v`.
+- **Pyth price accounts** for SOL/USDC/USDT and AAPL/NVDA/TSLA/MSFT/AMZN on
+  shards 0 and 1.
+
+Verified on a fork (validator on port 8917): a `content` launch, fill to 100%,
+creator claim (0.439 SOL), and migration into DAMM v2 pool `5BeBWkeH…iTUgwvu` all
+succeeded. A USDC-quoted `ipo-book` issuance tagged `Equity.US.AAPL/USD`
+launched against mainnet USDC. `juno:pyth` read mainnet AAPL at $336.25 from
+the cloned shard-1 account. `/api/health` reported `cluster: mainnet-fork`.
+
+Two limits:
+
+- **Pyth goes stale.** A clone is a snapshot. `solana-test-validator` never
+  refreshes it, so the NAV band shows *Stale* about ten minutes (the 600 s max
+  age) after the fork starts. Restart the fork just before a demo, or use a
+  fork tool that re-fetches mainnet accounts on demand.
+- **No USDC to trade with.** Only Circle can mint USDC, so a USDC-quoted pool
+  launches but cannot be bought into until the trader has a USDC token account.
+  Inject one at startup (`--account <ata> <json>` with a crafted SPL token
+  account), or use a fork tool with a set-token-balance cheatcode. SOL-quoted
+  pools need nothing extra.
+
+Two things to understand before going to mainnet itself:
 
 - **The registry is cluster-scoped, not cluster-shared.** `juno_pools` stores a
   `cluster` column and every query filters on it, so devnet pools will simply

@@ -26,18 +26,7 @@ export function EconomicsPanel({
 }
 
 function FeeDecay({ fee }: { fee: FeeSchedule }) {
-  const max = Math.max(...fee.points.map((p) => p.bps), 1);
   const done = fee.secondsRemaining === 0;
-
-  // The decay curve, drawn from the same scheduler the program runs.
-  const path = fee.points
-    .map((p, i) => {
-      const x = (p.period / fee.totalPeriods) * 100;
-      const y = 100 - (p.bps / max) * 100;
-      return `${i === 0 ? "M" : "L"}${x.toFixed(2)},${y.toFixed(2)}`;
-    })
-    .join(" ");
-  const markerX = (fee.period / fee.totalPeriods) * 100;
 
   return (
     <section>
@@ -48,24 +37,7 @@ function FeeDecay({ fee }: { fee: FeeSchedule }) {
         </span>
       </div>
 
-      <svg
-        viewBox="0 0 100 100"
-        preserveAspectRatio="none"
-        className="mt-2 h-[52px] w-full"
-        role="img"
-        aria-label={`Fee decays from ${fee.startBps / 100}% to ${fee.endBps / 100}%, currently ${fee.currentBps / 100}%`}
-      >
-        <path d={path} fill="none" stroke="var(--j-muted)" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
-        <line
-          x1={markerX}
-          y1="0"
-          x2={markerX}
-          y2="100"
-          stroke="var(--j-brand)"
-          strokeWidth="1.5"
-          vectorEffect="non-scaling-stroke"
-        />
-      </svg>
+      <FeeDecayChart fee={fee} className="mt-2 h-[52px]" />
 
       <p className="mt-1 text-[12px] leading-snug text-j-muted">
         {(fee.startBps / 100).toFixed(2)}% at launch, decaying {fee.mode}ly to{" "}
@@ -79,6 +51,43 @@ function FeeDecay({ fee }: { fee: FeeSchedule }) {
         )}
       </p>
     </section>
+  );
+}
+
+/**
+ * The decay curve, drawn from the same scheduler the program runs, with a
+ * marker at the current period.
+ */
+export function FeeDecayChart({ fee, className }: { fee: FeeSchedule; className?: string }) {
+  const max = Math.max(...fee.points.map((p) => p.bps), 1);
+  const path = fee.points
+    .map((p, i) => {
+      const x = (p.period / fee.totalPeriods) * 100;
+      const y = 100 - (p.bps / max) * 100;
+      return `${i === 0 ? "M" : "L"}${x.toFixed(2)},${y.toFixed(2)}`;
+    })
+    .join(" ");
+  const markerX = (fee.period / fee.totalPeriods) * 100;
+
+  return (
+    <svg
+      viewBox="0 0 100 100"
+      preserveAspectRatio="none"
+      className={cn("w-full", className)}
+      role="img"
+      aria-label={`Fee decays from ${fee.startBps / 100}% to ${fee.endBps / 100}%, currently ${fee.currentBps / 100}%`}
+    >
+      <path d={path} fill="none" stroke="var(--j-muted)" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
+      <line
+        x1={markerX}
+        y1="0"
+        x2={markerX}
+        y2="100"
+        stroke="var(--j-brand)"
+        strokeWidth="1.5"
+        vectorEffect="non-scaling-stroke"
+      />
+    </svg>
   );
 }
 

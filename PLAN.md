@@ -55,7 +55,7 @@ Legend: `DONE` · `IN PROGRESS` · `NOT STARTED` · `BLOCKED`
 | 0.6 | `/creator/[handle]` profile with posts/reels tabs | DONE (mock data) |
 | 0.7 | `/create` launch form with curve preset picker | DONE |
 | 0.8 | `/activity` global trade feed | DONE (mock data) |
-| 0.9 | Unit tests + production build green | DONE — 66 tests, 7 files; was 140 before the Norr purge deleted the tests covering deleted code |
+| 0.9 | Unit tests + production build green | DONE — 107 tests, 10 files: 66 after the Norr purge (which deleted the tests covering deleted code — was 140), +23 for the Pyth decoder/band suite, +9 for the issuer tooling, +9 for the mainnet-fork config |
 
 ### Phase 1 — On-chain core
 | # | Task | Status |
@@ -114,11 +114,11 @@ Legend: `DONE` · `IN PROGRESS` · `NOT STARTED` · `BLOCKED`
 ### Phase 5 — Pyth (2nd sponsor track)
 | # | Task | Status |
 |---|---|---|
-| 5.1 | `lib/juno/pyth.ts` — Hermes client, equity + crypto feeds | DONE (code) |
-| 5.2 | Map `navBandBps` presets to a Pyth feed id | DONE — feed ids verified, stored per pool |
-| 5.3 | NAV vs curve price on the coin page | BLOCKED — Hermes price API needs a key; none in repo |
-| 5.4 | Warn in trade panel when price leaves the NAV band | BLOCKED — same credential |
-| 5.5 | SOL/USD feed so SOL-quoted pools have honest USD figures | DONE — degrades to SOL-denominated labelling when no key |
+| 5.1 | `lib/juno/pyth.ts` — Pyth client, equity + crypto feeds | DONE — reads `PriceUpdateV2` accounts on Solana (no key); Hermes only as a fallback when `PYTH_API_KEY` is set. `npm run juno:pyth` prints every feed off devnet |
+| 5.2 | Map `navBandBps` presets to a Pyth feed id | DONE — stored per pool by name. Re-verified 2026-09-18: TSLA, AMZN ids were not Pyth feeds and the MSFT id was BTC/USD; corrected, so TSLAx now resolves to the real TSLA feed |
+| 5.3 | NAV vs curve price on the coin page | DONE — `NavBandPanel`: reference ± confidence, curve price, signed deviation vs `navBandBps`, link to the price account. On devnet Pyth stopped pushing equities on 2026-07-02, so TSLAx/NVDAx/AAPLx honestly render **Stale** (verified in browser); the live path is unit-tested and needs mainnet, where all five equities are live on shard 1 |
+| 5.4 | Warn in trade panel when price leaves the NAV band | DONE — every quote's execution price (fees in) is checked against the band; outside → alert, inside → deviation row, stale/unavailable → "Not checked — Pyth feed is stale" (verified in browser on all three equity pools) |
+| 5.5 | SOL/USD feed so SOL-quoted pools have honest USD figures | DONE — **live on devnet with no key** (`7UVimffx…pjLiE`, ~5 min heartbeat, 600 s staleness bound). SOL pools show USD market caps; the trade panel's SOL echo is now priced, not 1 SOL = $1 |
 
 ### Phase 6 — Stock wedge
 | # | Task | Status |
@@ -143,7 +143,7 @@ Legend: `DONE` · `IN PROGRESS` · `NOT STARTED` · `BLOCKED`
 | 8.3 | Set `NEXT_PUBLIC_SOLANA_RPC` to a dedicated endpoint | BLOCKED — no RPC key in env |
 | 8.4 | Pitch video ≤3 min | NOT STARTED (human) |
 | 8.5 | Technical video ≤5 min | NOT STARTED (human) |
-| 8.6 | One mainnet pool | BLOCKED — needs mainnet SOL + user approval |
+| 8.6 | One mainnet pool | BLOCKED — needs mainnet SOL + user approval. Rehearsed end to end on a mainnet fork (Block 8), so the remaining step is the real launch |
 | 8.7 | Submit on hackathons.solana.com | NOT STARTED (human) |
 
 ---
@@ -181,17 +181,24 @@ itemised. A task counts as complete only if its status line starts with `DONE`.
 | Phase 2 — wallet | 5 | 6 | 2.6 needs a human with a funded browser wallet |
 | Phase 3 — persistence | 11 | 11 | |
 | Phase 4 — trading | 9 | 9 | |
-| Phase 5 — Pyth | 3 | 5 | 5.3, 5.4 blocked on a Hermes key |
+| Phase 5 — Pyth | 5 | 5 | on-chain reads; devnet equity feeds are stale, shown as such |
 | Phase 6 — stock wedge | 4 | 4 | |
 | Phase 7 — graduation | 3 | 3 | |
-| **Phases 0–7 subtotal** | **56** | **59** | **94.9%** |
+| **Phases 0–7 subtotal** | **58** | **59** | **98.3%** |
 | Block 3 — swap indexer | 4 | 4 | built and verified on two devnet pools |
 | Block 4 — social | 3 | 3 | comments, likes and follows all persisted |
 | Block 5 — legacy purge | 1 | 1 | done; build green |
-| **Engineering total** | **64** | **67** | **95.5%** |
+| Block 7 — issuer tooling | 4 | 5 | I.5 needs a human with the creator's browser wallet |
+| Block 8 — mainnet-fork rehearsal | 1 | 1 | full issuance lifecycle on cloned mainnet state |
+| **Engineering total** | **71** | **73** | **97.3%** |
 
-**Engineering: 64 / 67 = 95.5%.** The three open items are 2.6 (browser wallet,
-needs a human), 5.3 and 5.4 (Pyth NAV band, needs a Hermes key).
+**Engineering: 71 / 73 = 97.3%.** The open items are 2.6 and I.5 (browser-wallet
+signatures, need a human). 5.3 and 5.4 were unblocked by reading Pyth on-chain instead
+of via Hermes.
+Caveat that matters for the demo: on devnet the equity feeds are months stale, so the
+band renders "Stale" rather than a number, and the existing equity pools are priced
+~$0.000005/token against a ~$300 underlying — the band only becomes meaningful once
+issuance anchors the opening price to NAV (see the Pyth report).
 
 **Submission readiness is much lower, and is the real risk.** Phase 8 is **1 / 7 =
 14%**. The one done item is the README. Still open: deploy to a public URL (8.2), a
@@ -206,7 +213,7 @@ see a repo, a URL and a video, and two of those three do not exist yet.
 
 Verified on chain, in Postgres, and by running the test suite:
 
-- **7 live devnet DBC pools**, all in `juno_pools`, all four presets exercised. All 7
+- **8 live devnet DBC pools**, all in `juno_pools`, all four presets exercised. All 8
   creation signatures confirmed `err: null` against `api.devnet.solana.com`.
 - **A real buy**: NVDAx 0.5 SOL (`59DBxUgP…QJwdGzV`), curve 0.0000% → 0.0117%.
 - **A real sell**: 5,000 NVDAx (`xWxpJFtZ…CRYQJg9`, slot 499958074), curve back to
@@ -215,7 +222,7 @@ Verified on chain, in Postgres, and by running the test suite:
   `EhvtVimk…MYy7L` (`4HatkGNZ…bMVTZtc`). `juno:inspect` reports `graduated true`.
 - **Creator fees claimed**: 0.009653 SOL (`3X4g3aDg…9HdAN`).
 - **IPFS**: token metadata and three reel videos pinned and resolving.
-- **66 unit tests across 7 files passing**, including Meteora's own
+- **107 unit tests across 10 files passing**, including Meteora's own
   `validateConfigParameters` over all four presets.
 
 ---
@@ -312,6 +319,27 @@ Synthetic rows created while testing were deleted afterwards. What remains is on
 like per coin from the deployer wallet, which is a real wallet that really launched
 those pools.
 
+#### Block 8: Mainnet-fork rehearsal — 1 / 1
+Owner: juno-7. Run STOCKLANA issuance against real mainnet addresses on a local validator,
+behind cluster-aware config. How to run it: DEPLOY.md, *Rehearsing on a mainnet fork*.
+
+| # | Task | Status |
+|---|---|---|
+| F.1 | `mainnet-fork` cluster + `juno:fork` clone list, proven by running the flow | DONE — `lib/juno/cluster.ts` separates `usesMainnetAddresses()` (USDC, Pyth) from the endpoint (local RPC) and explorer (Solana Explorer, `cluster=custom`); `isMainnet()` stays true only on real mainnet, so the launch script still refuses a mainnet airdrop. `lib/juno/fork.ts` lists 25 accounts, all confirmed present on mainnet by a read-only `getMultipleAccountsInfo`. On `solana-test-validator`: `content` launch → fill to 100% → claim 0.439014696 SOL → migrate into DAMM v2 `5BeBWkeH…iTUgwvu` (exists); a USDC-quoted `ipo-book` issuance with `Equity.US.AAPL/USD` on mainnet USDC; `juno:pyth` reads mainnet AAPL $336.25 from the clone; `/api/health` → `cluster: mainnet-fork`. The first run failed to migrate (`Transfer: insufficient lamports 0`) because the funded DAMM v2 pool authority PDA was not cloned; the list now includes it and the DBC pool authority |
+
+#### Block 7: Issuer tooling — configure and monitor DBC pools from the app — 4 / 5
+Owner: juno-7. The Meteora brief asks for "tooling that helps issuers configure and
+monitor DBC pools". Before this, claiming and graduating only really worked from CLI
+scripts signed by `.juno/launcher.json`. Full log: `/tmp/juno-issuer-report.md`.
+
+| # | Task | Status |
+|---|---|---|
+| I.1 | One shared code path: `lib/juno/issuer.ts`; `juno:inspect` / `juno:claim` / `juno:graduate` become thin wrappers over it, with a `--simulate` dry run | DONE — the scripts and the Manage view call the same `readIssuerState`, `claimCreatorFees` and `graduatePool`. `juno:graduate` no longer takes `--preset`: the DAMM v2 fee tier is read from the pool's `migrationFeeOption`, because the old `content` default was the wrong tier for three of the four presets |
+| I.2 | Pool monitor at `/coin/<mint>/manage` | DONE — curve progress vs `migrationQuoteThreshold`, quote reserve, price, fee decay (opening / now / floor + live countdown), preset matched **from the on-chain config**, the 16 liquidity weights, and the curve chart. Browser-verified on GRADTN while it was still decaying (5.00% → 1.50% now → 0.60% floor, "6m 13s until the floor") and on AAPLx (USDC, `ipo-book`). Console and network clean apart from dev-mode warnings |
+| I.3 | Claim creator fees from the UI, same path as `juno:claim` | DONE — CLI sends through the refactored path: NVDAx 0.000504652 SOL (`2Cc6mq3g…7ckGR`, lamports +499,652 net of fee) and GRAD 0.05382363 SOL (`5sQqxR6Q…Sqw7`, remaining 0). The browser-built claim transaction (617 bytes) simulates `err: null`, 34,945 CU, `ClaimCreatorTradingFee` |
+| I.4 | Migrate to DAMM v2 from the UI once at 100%, then link to the DAMM v2 pool | DONE — new `thin-name` pool GRADTN (`8Y4XdeMd…hB9mx`) filled to 100% (`5N9E8HeE…PvndB`) and migrated through `graduatePool` (`2hSPTWnq…RYQmen`, `err: null`) into DAMM v2 pool `9UE389Y8…w1Ha` (owner `cpamdp…`, tier option 1). The browser-built migrate transaction simulates `err: null`, 137,744 CU, before the real one was sent. The Manage view, GraduatedNotice and the Details tab now link the DAMM v2 pool; the Details tab showed the DBC pool address under that label before |
+| I.5 | A human signs a UI claim/migrate with the creator's browser wallet | OPEN — automation used a watch-only Wallet Standard wallet (public key only). The transaction reaches the wallet, simulates clean, and the wallet refuses to sign. Every Juno pool's creator is the launcher key, which is not in a browser wallet: import `.juno/launcher.json` into Phantom (devnet), or launch a pool from `/create` with your own wallet |
+
 #### Block 5: Purge dead non-Solana code (Norr / Algorand / x402 / Privy / Clerk / Stripe) — DONE
 Taken over by juno-4 after juno-3 stalled in `needs_input` for 40 minutes without
 committing. Commits `efce235`, `24e646b`, `1e985f3`.
@@ -359,7 +387,7 @@ but it is Juno code rather than Norr surface.
 - [ ] 8.2 deploy, 8.4 pitch video, 8.5 technical video, 8.6 mainnet pool, 8.7 submit.
 
 #### Legitimate blockers (do NOT fake or bypass)
-- `PYTH_API_KEY` — Hermes needs auth. The UI shows no NAV rather than a fabricated one.
+- ~~`PYTH_API_KEY`~~ — no longer a blocker: Pyth is read on-chain. Optional Hermes fallback only.
 - `NEXT_PUBLIC_SOLANA_RPC` — running on the public devnet endpoint, which rate-limits.
 - Mainnet SOL (8.6) — real funds, needs explicit authorization.
 - 8.4, 8.5, 8.7 and 2.6 need a human.

@@ -98,12 +98,13 @@ Verified by running things, not by reading imports.
 
 | | |
 |---|---|
-| **DBC pools created by this code** | **7**, all devnet, all seven creation signatures confirmed `err: null` — listed below |
+| **DBC pools created by this code** | **8**, all devnet, all eight creation signatures confirmed `err: null` — listed below |
 | **Presets exercised on chain** | all four (`content`, `thin-name`, `ipo-book`, `tight-nav`) |
 | **A real buy** | 0.5 SOL into NVDAx; curve progress 0.0000% → 0.0117% |
 | **A real sell** | 5,000 NVDAx back to the pool; curve progress now reads **0.0114%** |
-| **A full lifecycle** | launch → 8 buys → curve at **100.0000%** → **migrated to DAMM v2** |
-| **Creator fees claimed** | 0.009653 SOL, `claimCreatorTradingFee`, balance to zero |
+| **A full lifecycle** | launch → 8 buys → curve at **100.0000%** → **migrated to DAMM v2** — and a second, `thin-name`, through the issuer tooling (`lib/juno/issuer.ts`) |
+| **Creator fees claimed** | 0.009653 SOL, `claimCreatorTradingFee`, balance to zero; then 0.000504652 and 0.05382363 SOL through `lib/juno/issuer.ts` |
+| **Issuer tooling** | `/coin/<mint>/manage`: live curve progress, quote reserve vs `migrationQuoteThreshold`, price, fee decay (opening / now / floor, countdown), preset matched from the on-chain config, the 16 liquidity weights, claimable fees + Claim, Migrate to DAMM v2. Same functions as `juno:inspect` / `juno:claim` / `juno:graduate`. The browser-built claim and migrate transactions simulate clean on devnet; a real browser-wallet signature has not been done by a human |
 | **Token metadata** | pinned to IPFS via Pinata, URI written to the mint at creation |
 | **Reel media** | real video pinned to IPFS, served through `/api/ipfs/<cid>` with server-side gateway failover |
 | **Registry** | Neon Postgres (`juno_pools`) — identity and provenance only |
@@ -112,7 +113,7 @@ Verified by running things, not by reading imports.
 | **Quotes** | priced by `pool.swapQuote` against live account state |
 | **Likes and follows** | Persisted in MongoDB (`lib/juno/social.ts`, `app/api/juno/likes`, `app/api/juno/follows`), keyed with unique indexes so a wallet can like a coin or follow a creator exactly once. Verified against the real database, including six simultaneous toggles that never pushed a count past the number of distinct wallets. Counts render for everyone; the action needs a connected wallet, and there is no optimistic increment. |
 | **Swap history** | Direction, size, execution price and trader reconstructed per trade from token-balance deltas — driving a real price chart, real 24h volume, and real trade rows |
-| **Tests** | **66 unit tests across 7 files**, passing — including all four presets asserted against Meteora's own `validateConfigParameters`, and both deprecated paths (DAMM v1, `RateLimiter`) asserted unused |
+| **Tests** | **107 unit tests across 10 files**, passing — including all four presets asserted against Meteora's own `validateConfigParameters`, and both deprecated paths (DAMM v1, `RateLimiter`) asserted unused |
 
 There is **no mock data layer**. `lib/juno/mock.ts` was deleted; if a pool is not
 on-chain *and* in the registry, it does not appear in the app.
@@ -122,7 +123,7 @@ on-chain *and* in the registry, it does not appear in the app.
 | | Why |
 |---|---|
 | **Mainnet pool** | Devnet only. Needs real SOL and explicit sign-off. |
-| **Pyth NAV band** | The code exists (`lib/juno/pyth.ts`) and feed ids are stored per pool, but Hermes moved its price endpoints behind an API key and none exists in this repo. **The UI shows no NAV rather than a fabricated one.** |
+| **Pyth NAV band on devnet** | Built: Pyth is read from its `PriceUpdateV2` accounts on Solana — no key, no Hermes — and the coin page and trade panel check the curve against `navBandBps`. But **Pyth stopped pushing US equities on devnet on 2026-07-02**, so the equity pools show **Stale** with the last publish date rather than a months-old number. On mainnet all five equity feeds are live (shard 1). SOL/USD is live on devnet, which is what prices SOL-quoted pools in dollars. `npm run juno:pyth` prints every feed. |
 | **Consistent swap history** | The indexer is built and verified (see below), but the public devnet RPC enforces a per-method quota that a dozen transaction reads can exhaust. When it refuses, the chart, 24h volume and trade direction all fall back to the honest empty state. A dedicated `NEXT_PUBLIC_SOLANA_RPC` is what makes this consistent. |
 | **Comments** | Genuinely implemented — `lib/juno/social.ts` is a MongoDB-backed layer wired to `app/api/juno/comments`. Code-present and reviewed, **not runtime-verified here**: no live round trip was run against the database. |
 | **Browser-wallet launch** | The create flow signs and sends through the same code path the CLI does, and that path is verified on devnet — but the Phantom-in-a-browser run has not been done by a human. |
@@ -137,7 +138,7 @@ Program, identical on mainnet and devnet:
 
 Deployer: [`9CHr5g24EdzUKg9GZFUvEuAvHAjZGCsF1Z3zVPudWYoE`](https://solscan.io/account/9CHr5g24EdzUKg9GZFUvEuAvHAjZGCsF1Z3zVPudWYoE?cluster=devnet)
 
-### The seven pools
+### The eight pools
 
 | Coin | Preset | Format | Quote | Pool | Creation tx |
 |---|---|---|---|---|---|
@@ -148,6 +149,7 @@ Deployer: [`9CHr5g24EdzUKg9GZFUvEuAvHAjZGCsF1Z3zVPudWYoE`](https://solscan.io/ac
 | **Night Market, District Nine** | `content` | reel | SOL | [`3kXH227N…rGM44`](https://solscan.io/account/3kXH227Niyztfd89asv1eprC9f6Y5p8YgaVvHmLrGM44?cluster=devnet) | [`5gNCvd5v…buugCi`](https://solscan.io/tx/5gNCvd5vULwcw6HQtx5Fe4hkGSKGkJMgfGkRhBBNQN5TmJkFWX2obmqgG44uyQSqEax5kZ9zsMLzqzz5vQbuugCi?cluster=devnet) |
 | **Foundry, 4am** | `content` | reel | SOL | [`FiLgdmSn…CSsX3Z`](https://solscan.io/account/FiLgdmSnVaC8ynuhFhDi9x5QxNnggkfY4FwsQyCSsX3Z?cluster=devnet) | [`5evn1DtK…K56H24`](https://solscan.io/tx/5evn1DtKV4AYfeGLMs6Vp9rdoNWBVH7wyNB5xdjzVDeaMo1DKTGV5HBM1DV4QYXUqRrH5ZgHF4WTrvcJTaK56H24?cluster=devnet) |
 | **Transit Spine** | `thin-name` | reel | SOL | [`ACFyGPsL…qkJWAz`](https://solscan.io/account/ACFyGPsLKmhTBQ6XhoSfytzJr1tkSqkU1UdM97qkJWAz?cluster=devnet) | [`2k5iabQY…bEaxne`](https://solscan.io/tx/2k5iabQYVQeBbKFfCC5bGBGnMpXCze5xJKPCrzjriHiixoxtEzFv7YS1TTuBYWTGKv7fjzXU2LbXiNpjscbEaxne?cluster=devnet) |
+| **Juno Graduation Rehearsal** | `thin-name` | post | SOL | [`8Y4XdeMd…hB9mx`](https://solscan.io/account/8Y4XdeMd2DDr3ymjYgR2DtsM7YML346R3MDK2L5hB9mx?cluster=devnet) | [`2EMDbyUY…qkP7A4b`](https://solscan.io/tx/2EMDbyUYxSwXxgE9xApbezLr38ZDW9mrERcv5w2MtRTADZhWbBw4BrsHViN5QZhgfkJYV2fZ31uHkNBdqGkP7A4b?cluster=devnet) |
 
 ### AAPLx — the first pool, `ipo-book`
 
@@ -252,16 +254,16 @@ npm run dev                        # next dev --webpack
 
 ```bash
 npm test                 # everything
-npm run test:unit        # 66 tests, ~1s — the curve presets live here
+npm run test:unit        # 107 tests, ~1s — the curve presets live here
 npm run build            # production build — green
 ```
 
 The suite used to be 140. It is smaller because the Norr tests went with the Norr
 code: deleting 237 files of a forked Algorand app took the 13 test files covering it,
 and `juno-routes` went too once its subject — keeping Norr's age gate off Juno's
-routes — stopped existing. Nothing that guards live code was removed. Of the 66,
-**43 are Juno's own** (curves 13, format 13, indexer 17) and 23 cover shared
-infrastructure.
+routes — stopped existing. Nothing that guards live code was removed. Of the 107,
+**84 are Juno's own** (curves 13, format 13, indexer 17, Pyth decoder + NAV band 23,
+issuer tooling 9, mainnet-fork config 9) and 23 cover shared infrastructure.
 
 Routes: `/explore` · `/reels` · `/coin/[address]` · `/creator/[wallet]` · `/create` ·
 `/activity`
@@ -271,12 +273,13 @@ Routes: `/explore` · `/reels` · `/coin/[address]` · `/creator/[wallet]` · `/
 | Variable | Required | Purpose |
 |---|---|---|
 | `DATABASE_URL` | yes | Postgres (Neon) for the `juno_pools` registry |
-| `NEXT_PUBLIC_SOLANA_CLUSTER` | yes | `devnet` or `mainnet-beta` |
+| `NEXT_PUBLIC_SOLANA_CLUSTER` | yes | `devnet`, `mainnet-beta`, or `mainnet-fork` (mainnet addresses on a local validator — see [DEPLOY.md](./DEPLOY.md)) |
 | `NEXT_PUBLIC_SOLANA_RPC` | recommended | A dedicated RPC. The public endpoints rate-limit hard enough to break a demo. |
 | `PINATA_JWT` | for launching | Pins media and token metadata to IPFS. Without it a mint launches with `uri: ""` and every wallet renders it blank. |
 | `NEXT_PUBLIC_IPFS_GATEWAY` | no | Gateway baked into pinned metadata for wallets and explorers |
 | `MONGODB_URI` / `MONGODB_DB` | no | Comments, likes and follows. Unset, those routes throw and the counts render as zero; nothing else is affected. |
-| `PYTH_API_KEY` | no | Without it, **no NAV band is shown** — see the honesty table above |
+| `SESSION_SECRET` | for social | Signs wallet sessions (32+ chars). Without it likes, comments and follows are refused with 503 — they are keyed by wallet, and only a signed-in wallet may act as itself. |
+| `PYTH_API_KEY` | no | Pyth is read on-chain without it; the key only adds a Hermes fallback |
 
 The CLI scripts read the same `.env.local` via `dotenv-cli` and sign with a local key
 instead of a browser wallet.
@@ -295,7 +298,8 @@ leaves your machine. Add `--mainnet` to `juno:launch` only once devnet has worke
 npm run juno:launch   -- --preset ipo-book --name "AAPLx Issuance" --symbol AAPLXI \
                          --quote usdc --nav "Equity.US.AAPL/USD" --yes
 
-# read a pool straight off the program: price, curve progress, threshold, a live quote
+# read a pool straight off the program — the CLI face of the Manage view: price,
+# curve progress, fee decay, matched preset, claimable fees, DAMM v2 target, a live quote
 npm run juno:inspect  -- --mint <baseMint>
 
 # trade against the curve
@@ -308,11 +312,16 @@ npm run juno:trade    -- --mint <baseMint> --side buy --amount 0.01 --partial --
 # parsed swap history: direction, size, execution price, volume, chart points
 npm run juno:swaps    -- --mint <baseMint>
 
-# claim accrued creator trading fees
+# mainnet accounts a local fork must clone, checked read-only against mainnet
+npm run juno:fork
+
+# claim accrued creator trading fees (--simulate dry-runs the exact transaction)
+npm run juno:claim    -- --mint <baseMint> --simulate
 npm run juno:claim    -- --mint <baseMint> --yes
 
-# migrate a completed curve into DAMM v2
-npm run juno:graduate -- --mint <baseMint> --preset content --yes
+# migrate a completed curve into DAMM v2 — the fee tier is read off the pool's config
+npm run juno:graduate -- --mint <baseMint> --simulate
+npm run juno:graduate -- --mint <baseMint> --yes
 ```
 
 ---

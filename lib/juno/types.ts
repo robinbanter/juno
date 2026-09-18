@@ -113,7 +113,7 @@ export type Coin = {
   /** Social counters, shown on the reel rail. */
   likes?: number;
   commentCount?: number;
-  /** Present once the pool has graduated into DAMM v2. */
+  /** The DAMM v2 pool address, present once the pool has graduated into it. */
   graduatedPool?: string;
   /**
    * The pool's actual sixteen-segment curve, for plotting. Only loaded on the

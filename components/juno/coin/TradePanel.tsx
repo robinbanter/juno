@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { Info } from "lucide-react";
+import { AlertTriangle, Info } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { quoteAmount, tokenAmount, usd } from "@/lib/juno/format";
+import { percent, quoteAmount, tokenAmount, usd } from "@/lib/juno/format";
+import { quoteAgainstNav, type NavContext } from "@/lib/juno/nav";
 import type { Coin, QuoteToken, TradeSide } from "@/lib/juno/types";
 import { Button } from "../ui/Button";
 import { TokenSelect } from "./TokenSelect";
@@ -34,6 +35,7 @@ export function TradePanel({
   holding = 0,
   connected = false,
   quotePricesUsd,
+  nav = null,
   networkFeeUsd,
   onQuote,
   onSubmit,
@@ -54,6 +56,11 @@ export function TradePanel({
   connected?: boolean;
   /** USD price per unit of each quote token, keyed by mint. */
   quotePricesUsd?: Record<string, number>;
+  /**
+   * The pool's Pyth reference and band. When present, every quote is checked
+   * against it and a fill outside the band is called out before signing.
+   */
+  nav?: NavContext | null;
   /** Undefined renders the fee as still loading. */
   networkFeeUsd?: number;
   /**
@@ -94,6 +101,8 @@ export function TradePanel({
   // "not asked yet", so the button can say what happened and offer a retry.
   const [quoteFailed, setQuoteFailed] = useState(false);
   const [quoteAttempt, setQuoteAttempt] = useState(0);
+  /** Why the last quote failed — e.g. more than the curve has left to sell. */
+  const [quoteError, setQuoteError] = useState<string | null>(null);
 
   const buying = side === "buy";
   const raw = buying ? buyAmount : sellAmount;
@@ -121,6 +130,7 @@ export function TradePanel({
     setQuoteFailed(false);
     if (!onQuote || amountIn <= 0) {
       setQuoting(false);
+      setQuoteError(null);
       return;
     }
     const id = ++requestRef.current;
@@ -131,11 +141,17 @@ export function TradePanel({
         if (id === requestRef.current) {
           setQuote(result);
           setQuoteFailed(result === null);
+          setQuoteError(null);
         }
-      } catch {
-        // Previously uncaught: an RPC 429 inside the quoter surfaced as an
-        // unhandled promise rejection on every coin page view.
-        if (id === requestRef.current) setQuoteFailed(true);
+      } catch (error) {
+        // The quoter throws when the trade cannot fill at all ("Insufficient
+        // Liquidity"), or when the RPC refuses. Say which, rather than leaving
+        // an unhandled rejection or the last good quote on screen.
+        if (id === requestRef.current) {
+          setQuote(null);
+          setQuoteFailed(true);
+          setQuoteError(error instanceof Error ? error.message : "Could not price this trade");
+        }
       } finally {
         if (id === requestRef.current) setQuoting(false);
       }
@@ -160,13 +176,35 @@ export function TradePanel({
     return coin.priceUsd > 0 ? `≈ ${usd(amountIn * coin.priceUsd)}` : "—";
   }, [amountIn, buying, quotePrice, coin.priceUsd]);
 
-  const estimated =
-    quote?.amountOut ??
+  // A trade the quoter refused has no honest "you receive" figure.
+  const estimated = quoteError
+    ? Number.NaN
+    : quote?.amountOut ??
     (buying
       ? coin.priceUsd > 0
         ? amountIn / coin.priceUsd
         : 0
       : amountIn * coin.priceUsd);
+
+  // The quoter always prices in the pool's own quote token, so the band check
+  // only holds for buys paid in it — and for every sell.
+  const inPoolQuote = !buying || token.mint === coin.quote.mint;
+  const navCheck =
+    nav && quote && inPoolQuote
+      ? quoteAgainstNav({ nav, side, amountIn, amountOut: quote.amountOut })
+      : null;
+  const navUnchecked =
+    nav && amountIn > 0
+      ? nav.reading.status === "stale"
+        ? "Pyth feed is stale"
+        : nav.reading.status === "unavailable"
+          ? "no Pyth price on this cluster"
+          : nav.quoteUsd === null
+            ? `no live USD rate for ${coin.quote.symbol}`
+            : !inPoolQuote
+              ? `quote is not in ${coin.quote.symbol}`
+              : null
+      : null;
 
   function setAmount(next: string) {
     if (next !== "" && !/^\d*\.?\d*$/.test(next)) return;
@@ -325,7 +363,46 @@ export function TradePanel({
             </dd>
           </div>
         )}
+        {quoteError && (
+          <div className="flex items-center justify-between">
+            <dt className="text-j-muted">Quote</dt>
+            <dd className="text-j-danger">{quoteError}</dd>
+          </div>
+        )}
+
+        {navCheck && navCheck.withinBand && (
+          <div className="flex items-center justify-between">
+            <dt className="text-j-muted">vs Pyth NAV</dt>
+            <dd className="tabular-nums">
+              {percent(navCheck.deviation)}{" "}
+              <span className="text-j-faint">within ±{nav!.bandBps / 100}%</span>
+            </dd>
+          </div>
+        )}
+
+        {navUnchecked && (
+          <div className="flex items-center justify-between">
+            <dt className="text-j-muted">NAV band</dt>
+            <dd className="text-j-faint">Not checked — {navUnchecked}</dd>
+          </div>
+        )}
       </dl>
+
+      {navCheck && !navCheck.withinBand && (
+        <p
+          role="alert"
+          className="flex gap-2 rounded-j border border-j-danger/40 bg-j-danger/10 px-3 py-2 text-[13px] leading-snug text-j-danger"
+        >
+          <AlertTriangle size={15} className="mt-0.5 shrink-0" aria-hidden="true" />
+          <span>
+            This {side} fills at {usd(navCheck.executionUsd)} per {coin.symbol},{" "}
+            {percent(navCheck.deviation, Math.abs(navCheck.deviation) >= 10 ? 0 : 2)}{" "}
+            {navCheck.deviation > 0 ? "above" : "below"} the Pyth NAV of{" "}
+            {nav!.reading.status === "live" ? usd(nav!.reading.priceUsd) : "—"} — outside the ±
+            {nav!.bandBps / 100}% band.
+          </span>
+        </p>
+      )}
 
       <input
         value={comment}
