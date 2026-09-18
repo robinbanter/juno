@@ -99,6 +99,8 @@ export type TokenMetadataInput = {
   /** Gateway URL of the already-pinned media. */
   imageUrl?: string;
   mediaMimeType?: string;
+  /** For a video: a still frame, which is what `image` must point at. */
+  posterUrl?: string;
   externalUrl?: string;
   /** Curve preset and NAV feed, so the config travels with the token. */
   attributes?: Array<{ trait_type: string; value: string }>;
@@ -107,18 +109,26 @@ export type TokenMetadataInput = {
 export async function pinTokenMetadata(input: TokenMetadataInput): Promise<PinResult> {
   const category = input.mediaMimeType?.startsWith("video") ? "video" : "image";
 
+  // Metaplex: `image` is always a still, and a video goes in `animation_url`.
+  // Wallets render `image` with an <img>, so a video there shows as broken.
   const metadata = {
     name: input.name,
     symbol: input.symbol,
     description: input.description ?? "",
-    image: input.imageUrl ?? "",
+    image: category === "video" ? (input.posterUrl ?? "") : (input.imageUrl ?? ""),
+    ...(category === "video" && input.imageUrl ? { animation_url: input.imageUrl } : {}),
     external_url: input.externalUrl ?? "",
     attributes: input.attributes ?? [],
     properties: {
       category,
-      files: input.imageUrl
-        ? [{ uri: input.imageUrl, type: input.mediaMimeType ?? "image/png" }]
-        : [],
+      files: [
+        ...(input.imageUrl
+          ? [{ uri: input.imageUrl, type: input.mediaMimeType ?? "image/png" }]
+          : []),
+        ...(category === "video" && input.posterUrl
+          ? [{ uri: input.posterUrl, type: "image/jpeg" }]
+          : []),
+      ],
     },
   };
 

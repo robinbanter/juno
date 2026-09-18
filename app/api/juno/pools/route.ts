@@ -109,6 +109,9 @@ export async function POST(request: Request) {
     navFeedId: str("navFeedId") || null,
     mediaUrl: str("mediaUrl") || null,
     posterUrl: str("posterUrl") || null,
+    // IPFS URLs carry no extension, so this is the only record of whether the
+    // media is a video. Anything that is not an image or video type is dropped.
+    mediaMime: /^(image|video)\/[\w.+-]+$/.test(str("mediaMime")) ? str("mediaMime") : null,
     mediaWidth: num("mediaWidth"),
     mediaHeight: num("mediaHeight"),
     createSignature,

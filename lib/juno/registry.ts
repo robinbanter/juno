@@ -30,6 +30,7 @@ export type LaunchRecord = {
   curvePreset: CurvePresetId;
   mediaUrl?: string | null;
   posterUrl?: string | null;
+  mediaMime?: string | null;
   mediaWidth?: number | null;
   mediaHeight?: number | null;
   navFeedId?: string | null;

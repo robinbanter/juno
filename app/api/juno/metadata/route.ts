@@ -55,6 +55,7 @@ export async function POST(request: Request) {
       description: str("description"),
       imageUrl: str("imageUrl") || undefined,
       mediaMimeType: str("mimeType") || undefined,
+      posterUrl: str("posterUrl") || undefined,
       externalUrl: str("externalUrl") || undefined,
       attributes,
     });

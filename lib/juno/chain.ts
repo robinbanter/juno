@@ -96,12 +96,24 @@ export async function hydratePool(
     ? bnToUi(fees.current.creatorQuoteFee, snapshot.quoteDecimals) * rate
     : 0;
 
+  // The stored MIME type decides image vs video: IPFS URLs carry no file
+  // extension, so the extension test only covers media hosted elsewhere.
+  const isVideo = row.mediaMime
+    ? row.mediaMime.startsWith("video/")
+    : /\.(mp4|webm|mov)$/i.test(row.mediaUrl ?? "");
+  // A poster is rendered as an <img>. A video's own URL there is a broken
+  // image, so a video without a separate still falls back to the identicon.
+  const poster =
+    row.posterUrl && !(isVideo && row.posterUrl === row.mediaUrl)
+      ? row.posterUrl
+      : isVideo
+        ? identicon(row.baseMint)
+        : (row.mediaUrl ?? identicon(row.baseMint));
+
   const media = {
-    kind: (row.mediaUrl?.match(/\.(mp4|webm|mov)$/i) ? "video" : "image") as
-      | "image"
-      | "video",
+    kind: (isVideo ? "video" : "image") as "image" | "video",
     url: row.mediaUrl ?? identicon(row.baseMint),
-    posterUrl: row.posterUrl ?? row.mediaUrl ?? identicon(row.baseMint),
+    posterUrl: poster,
     width: row.mediaWidth ?? (row.format === "reel" ? 720 : 1000),
     height: row.mediaHeight ?? (row.format === "reel" ? 1280 : 1000),
   };

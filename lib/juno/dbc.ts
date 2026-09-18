@@ -103,13 +103,18 @@ let cachedConnection: Connection | null = null;
 export function getConnection(): Connection {
   cachedConnection ??= new Connection(rpcEndpoint(), {
     commitment: COMMITMENT,
-    // The public devnet endpoint refuses some calls outright —
-    // `getTokenLargestAccounts` among them. web3.js answers a 429 by retrying
-    // four times with backoff and logging each attempt, which turns one
-    // already-handled failure into a wall of console noise and eight seconds
-    // of latency. Every caller that can 429 already degrades honestly, so fail
-    // fast and let them.
-    disableRetryOnRateLimit: true,
+    // On the server, fail fast. The public devnet endpoint meters every
+    // method, and web3.js answers a 429 by retrying with backoff for seconds.
+    // A page render has no business waiting on that when every server read
+    // already degrades honestly.
+    //
+    // In the browser, keep the retries. Browser calls are user actions:
+    // quoting, launching, trading. There, a single transient 429 aborting a
+    // launch the user just asked for was measured, not hypothetical: it
+    // stopped the first browser-wallet launch midway. A few hundred
+    // milliseconds of backoff is the right trade for someone waiting on their
+    // own transaction.
+    disableRetryOnRateLimit: typeof window === "undefined",
   });
   return cachedConnection;
 }
@@ -580,17 +585,60 @@ export async function sendTransaction(params: {
 
   params.onSent?.(signature);
 
-  const result = await connection.confirmTransaction(
-    { signature, blockhash, lastValidBlockHeight },
-    COMMITMENT,
-  );
-  if (result.value.err) {
-    throw new Error(
-      `Transaction ${signature} failed: ${JSON.stringify(result.value.err)}`,
-    );
-  }
-
+  await confirmSignature(signature, lastValidBlockHeight);
   return signature;
+}
+
+/**
+ * Wait for a signature to reach `COMMITMENT`, by polling its status over HTTP.
+ *
+ * Not `connection.confirmTransaction`. That waits on a websocket subscription
+ * and otherwise only polls the block height to detect expiry, so with no
+ * working websocket (an HTTP-only RPC, a proxy that drops upgrades, a flaky
+ * public socket) a transaction that landed in two seconds sits unconfirmed
+ * until its blockhash expires, and is then reported as failed. That was
+ * observed: a launch's config transaction finalized on devnet while the UI
+ * was still waiting. Status polls answer the actual question directly.
+ */
+async function confirmSignature(
+  signature: string,
+  lastValidBlockHeight: number,
+): Promise<void> {
+  const connection = getConnection();
+  for (let attempt = 0; ; attempt++) {
+    if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, 1_500));
+
+    const status = await connection
+      .getSignatureStatuses([signature])
+      .then((response) => response.value[0])
+      .catch(() => undefined); // a refused poll is not an answer; ask again
+
+    if (status?.err) {
+      throw new Error(`Transaction ${signature} failed: ${JSON.stringify(status.err)}`);
+    }
+    if (
+      status?.confirmationStatus === "confirmed" ||
+      status?.confirmationStatus === "finalized"
+    ) {
+      return;
+    }
+
+    // Only give up once the blockhash has expired and the signature is still
+    // unknown: past that height it can no longer land.
+    if (attempt % 4 === 3) {
+      const height = await connection.getBlockHeight(COMMITMENT).catch(() => null);
+      if (height !== null && height > lastValidBlockHeight) {
+        const final = await connection
+          .getSignatureStatuses([signature], { searchTransactionHistory: true })
+          .then((response) => response.value[0])
+          .catch(() => null);
+        if (final && !final.err) return;
+        throw new Error(
+          `Transaction ${signature} expired before confirming. It did not land, and nothing was charged.`,
+        );
+      }
+    }
+  }
 }
 
 /**

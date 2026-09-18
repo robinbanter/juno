@@ -97,6 +97,8 @@ export function CreateForm() {
   const { state, launch, reset } = useLaunch();
   const [media, setMedia] = useState<{
     url: string;
+    /** A still image for grids and thumbnails; for a video, its first frame. */
+    posterUrl: string | null;
     mimeType: string;
     width: number;
     height: number;
@@ -122,8 +124,27 @@ export function CreateForm() {
       const response = await fetch("/api/juno/upload", { method: "POST", body: form });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error ?? "Upload failed");
+
+      // A video cannot stand in for its own thumbnail: grids and the trade
+      // panel render the poster as an <img>, and an <img> of an mp4 is a
+      // broken image. Pin a real frame alongside it.
+      let posterUrl: string | null = file.type.startsWith("video") ? null : body.url;
+      if (file.type.startsWith("video")) {
+        const frame = await videoPoster(file).catch(() => null);
+        if (frame) {
+          const posterForm = new FormData();
+          posterForm.append("file", frame, "poster.jpg");
+          const posterResponse = await fetch("/api/juno/upload", {
+            method: "POST",
+            body: posterForm,
+          });
+          if (posterResponse.ok) posterUrl = (await posterResponse.json()).url;
+        }
+      }
+
       setMedia({
         url: body.url,
+        posterUrl,
         mimeType: body.mimeType,
         width: dimensions.width,
         height: dimensions.height,
@@ -174,11 +195,15 @@ export function CreateForm() {
       className="mt-6 flex flex-col gap-7"
       onSubmit={(e) => {
         e.preventDefault();
-        if (!valid) return;
+        // The metadata URI is baked into the mint at creation and the presets
+        // renounce update authority, so launching mid-upload would ship a coin
+        // that can never get its image.
+        if (!valid || uploading) return;
         void launch({
           quote,
           format,
           mediaUrl: media?.url ?? null,
+          posterUrl: media?.posterUrl ?? null,
           mimeType: media?.mimeType ?? null,
           mediaWidth: media?.width || null,
           mediaHeight: media?.height || null,
@@ -500,8 +525,10 @@ export function CreateForm() {
       </div>
 
       <div>
-        <Button type="submit" variant="buy" size="lg" className="w-full" disabled={!valid || busy}>
-          {state.status === "building"
+        <Button type="submit" variant="buy" size="lg" className="w-full" disabled={!valid || busy || uploading}>
+          {uploading
+            ? "Uploading media…"
+            : state.status === "building"
             ? "Building transactions…"
             : state.status === "signing"
               ? `${state.label} (${state.step}/${state.total})`
@@ -629,6 +656,47 @@ function PresetSparkline({
 }
 
 /** Intrinsic media dimensions, read from the file before it leaves the browser. */
+/**
+ * The first second of a video as a JPEG, drawn in the browser.
+ *
+ * Seeks a little way in rather than to 0: many encoders open on a black frame.
+ */
+function videoPoster(file: File): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const video = document.createElement("video");
+    video.muted = true;
+    video.playsInline = true;
+    video.preload = "auto";
+    const fail = (message: string) => {
+      URL.revokeObjectURL(url);
+      reject(new Error(message));
+    };
+    video.onerror = () => fail("Unreadable video");
+    video.onloadeddata = () => {
+      video.currentTime = Math.min(1, (video.duration || 0) / 2);
+    };
+    video.onseeked = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const context = canvas.getContext("2d");
+      if (!context || canvas.width === 0) return fail("No frame");
+      context.drawImage(video, 0, 0);
+      canvas.toBlob(
+        (blob) => {
+          URL.revokeObjectURL(url);
+          if (blob) resolve(blob);
+          else reject(new Error("No frame"));
+        },
+        "image/jpeg",
+        0.85,
+      );
+    };
+    video.src = url;
+  });
+}
+
 function readDimensions(file: File): Promise<{ width: number; height: number }> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
