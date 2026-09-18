@@ -13,7 +13,7 @@ Node        20+
 Build       npm ci && npm run build
 Output      Next.js 16 App Router, standalone server (not a static export)
 Start       npm start
-Tests       npm test   →  12 files, 126 tests
+Tests       npm test   →  12 files, 127 tests
 ```
 
 `npm run build` is green. Six of the 20 routes prerender as static (`/`,
