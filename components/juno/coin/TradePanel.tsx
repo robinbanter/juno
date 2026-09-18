@@ -90,6 +90,10 @@ export function TradePanel({
   const [comment, setComment] = useState("");
   const [quote, setQuote] = useState<TradeQuoteResult | null>(null);
   const [quoting, setQuoting] = useState(false);
+  // The quoter threw or returned nothing (usually an RPC 429). Distinct from
+  // "not asked yet", so the button can say what happened and offer a retry.
+  const [quoteFailed, setQuoteFailed] = useState(false);
+  const [quoteAttempt, setQuoteAttempt] = useState(0);
 
   const buying = side === "buy";
   const raw = buying ? buyAmount : sellAmount;
@@ -105,10 +109,18 @@ export function TradePanel({
     quotePricesUsd?.[token.mint] ?? (STABLES.has(token.symbol) ? 1 : 0);
 
   // Quote requests race; only the newest is allowed to land.
+  //
+  // The quote is cleared the moment any input changes, not when the new one
+  // arrives. The quote carries `minimumAmountOut` — the only slippage guard a
+  // swap has — and keeping the previous one on screen meant typing 20, then
+  // 200, then clicking within the debounce sent 200 with a minimum computed
+  // for 20: a guard roughly ten times too weak.
   const requestRef = useRef(0);
   useEffect(() => {
+    setQuote(null);
+    setQuoteFailed(false);
     if (!onQuote || amountIn <= 0) {
-      setQuote(null);
+      setQuoting(false);
       return;
     }
     const id = ++requestRef.current;
@@ -116,13 +128,26 @@ export function TradePanel({
     const timer = setTimeout(async () => {
       try {
         const result = await onQuote({ side, amountIn, token });
-        if (id === requestRef.current) setQuote(result);
+        if (id === requestRef.current) {
+          setQuote(result);
+          setQuoteFailed(result === null);
+        }
+      } catch {
+        // Previously uncaught: an RPC 429 inside the quoter surfaced as an
+        // unhandled promise rejection on every coin page view.
+        if (id === requestRef.current) setQuoteFailed(true);
       } finally {
         if (id === requestRef.current) setQuoting(false);
       }
     }, 250);
     return () => clearTimeout(timer);
-  }, [onQuote, side, amountIn, token]);
+  }, [onQuote, side, amountIn, token, quoteAttempt]);
+
+  // A connected wallet can only trade against a fresh quote for exactly these
+  // inputs. Without one there is no minimum-out to send, and the DBC program
+  // fills a swap with minimumAmountOut = 0 at any price — verified by
+  // simulation. (Disconnected visitors keep the button: it opens the wallet.)
+  const needsQuote = connected && amountIn > 0 && !quote;
 
   // Secondary read-out under the field: the quote-token amount on a buy, the
   // dollar value on a sell.
@@ -314,8 +339,14 @@ export function TradePanel({
       <Button
         variant={buying ? "buy" : "sell"}
         size="lg"
-        disabled={submitting || amountIn <= 0 || overBalance}
-        onClick={() => onSubmit?.({ side, amountIn, token, comment, quote })}
+        // A failed quote leaves the button enabled so it can retry; it never
+        // submits until a quote exists.
+        disabled={submitting || amountIn <= 0 || overBalance || (needsQuote && !quoteFailed)}
+        onClick={() =>
+          needsQuote
+            ? setQuoteAttempt((n) => n + 1)
+            : onSubmit?.({ side, amountIn, token, comment, quote })
+        }
         className="w-full"
       >
         {submitting
@@ -324,9 +355,13 @@ export function TradePanel({
             ? buying
               ? "Insufficient balance"
               : `Not enough ${coin.symbol}`
-            : buying
-              ? "Buy"
-              : "Sell"}
+            : needsQuote
+              ? quoteFailed
+                ? "Couldn’t get a price — tap to retry"
+                : "Getting a price…"
+              : buying
+                ? "Buy"
+                : "Sell"}
       </Button>
     </div>
   );
