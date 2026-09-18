@@ -11,25 +11,26 @@ export const dynamic = "force-dynamic";
 export default async function ActivityPage() {
   const pools = await listPools(20);
 
-  // One RPC page per pool, merged newest-first. Fine at this scale; an
-  // indexer is the answer once there are more pools than fit in one screen.
-  const perPool = await Promise.all(
-    pools.map(async (pool) => {
-      const report = await listPoolActivityReport(pool.poolAddress, pool.baseMint, {
-        limit: 10,
-        quoteSymbol: pool.quoteMint === WSOL.mint ? "SOL" : "USDC",
-      });
-      return {
-        pool,
-        unreadable: report.unreadable,
-        rows: report.rows.map((row) => ({
-          ...row,
-          coinName: pool.name,
-          coinAddress: pool.baseMint,
-        })),
-      };
-    }),
-  );
+  // One signature read per pool, one pool at a time. Decoded trades come from
+  // `juno_pool_txs`, so after the first pass this is one cheap call per pool —
+  // but fired in parallel they are N calls to one method in the same instant,
+  // which is exactly the burst the public endpoint's per-method quota refuses.
+  const perPool = [];
+  for (const pool of pools) {
+    const report = await listPoolActivityReport(pool.poolAddress, pool.baseMint, {
+      limit: 10,
+      quoteSymbol: pool.quoteMint === WSOL.mint ? "SOL" : "USDC",
+    });
+    perPool.push({
+      pool,
+      unreadable: report.unreadable,
+      rows: report.rows.map((row) => ({
+        ...row,
+        coinName: pool.name,
+        coinAddress: pool.baseMint,
+      })),
+    });
+  }
 
   const feed = perPool
     .flatMap((p) => p.rows)

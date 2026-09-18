@@ -83,6 +83,10 @@ export async function listPoolActivityReport(
     return { rows, unreadable: false };
   }
 
+  // A read that succeeded and found no swaps is the answer: this pool has not
+  // traded. Falling through would list its creation transaction as activity.
+  if (history) return { rows: [], unreadable: false };
+
   // Degraded tier: signatures only.
   try {
     const signatures = await getConnection().getSignaturesForAddress(
