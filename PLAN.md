@@ -55,7 +55,7 @@ Legend: `DONE` · `IN PROGRESS` · `NOT STARTED` · `BLOCKED`
 | 0.6 | `/creator/[handle]` profile with posts/reels tabs | DONE (mock data) |
 | 0.7 | `/create` launch form with curve preset picker | DONE |
 | 0.8 | `/activity` global trade feed | DONE (mock data) |
-| 0.9 | Unit tests + production build green | DONE — 66 tests, 7 files; was 140 before the Norr purge deleted the tests covering deleted code |
+| 0.9 | Unit tests + production build green | DONE — 89 tests, 8 files (66 before the Pyth decoder/band suite); was 140 before the Norr purge deleted the tests covering deleted code |
 
 ### Phase 1 — On-chain core
 | # | Task | Status |
@@ -114,11 +114,11 @@ Legend: `DONE` · `IN PROGRESS` · `NOT STARTED` · `BLOCKED`
 ### Phase 5 — Pyth (2nd sponsor track)
 | # | Task | Status |
 |---|---|---|
-| 5.1 | `lib/juno/pyth.ts` — Hermes client, equity + crypto feeds | DONE (code) |
-| 5.2 | Map `navBandBps` presets to a Pyth feed id | DONE — feed ids verified, stored per pool |
-| 5.3 | NAV vs curve price on the coin page | BLOCKED — Hermes price API needs a key; none in repo |
-| 5.4 | Warn in trade panel when price leaves the NAV band | BLOCKED — same credential |
-| 5.5 | SOL/USD feed so SOL-quoted pools have honest USD figures | DONE — degrades to SOL-denominated labelling when no key |
+| 5.1 | `lib/juno/pyth.ts` — Pyth client, equity + crypto feeds | DONE — reads `PriceUpdateV2` accounts on Solana (no key); Hermes only as a fallback when `PYTH_API_KEY` is set. `npm run juno:pyth` prints every feed off devnet |
+| 5.2 | Map `navBandBps` presets to a Pyth feed id | DONE — stored per pool by name. Re-verified 2026-09-18: TSLA, AMZN ids were not Pyth feeds and the MSFT id was BTC/USD; corrected, so TSLAx now resolves to the real TSLA feed |
+| 5.3 | NAV vs curve price on the coin page | DONE — `NavBandPanel`: reference ± confidence, curve price, signed deviation vs `navBandBps`, link to the price account. On devnet Pyth stopped pushing equities on 2026-07-02, so TSLAx/NVDAx/AAPLx honestly render **Stale** (verified in browser); the live path is unit-tested and needs mainnet, where all five equities are live on shard 1 |
+| 5.4 | Warn in trade panel when price leaves the NAV band | DONE — every quote's execution price (fees in) is checked against the band; outside → alert, inside → deviation row, stale/unavailable → "Not checked — Pyth feed is stale" (verified in browser on all three equity pools) |
+| 5.5 | SOL/USD feed so SOL-quoted pools have honest USD figures | DONE — **live on devnet with no key** (`7UVimffx…pjLiE`, ~5 min heartbeat, 600 s staleness bound). SOL pools show USD market caps; the trade panel's SOL echo is now priced, not 1 SOL = $1 |
 
 ### Phase 6 — Stock wedge
 | # | Task | Status |
@@ -181,17 +181,21 @@ itemised. A task counts as complete only if its status line starts with `DONE`.
 | Phase 2 — wallet | 5 | 6 | 2.6 needs a human with a funded browser wallet |
 | Phase 3 — persistence | 11 | 11 | |
 | Phase 4 — trading | 9 | 9 | |
-| Phase 5 — Pyth | 3 | 5 | 5.3, 5.4 blocked on a Hermes key |
+| Phase 5 — Pyth | 5 | 5 | on-chain reads; devnet equity feeds are stale, shown as such |
 | Phase 6 — stock wedge | 4 | 4 | |
 | Phase 7 — graduation | 3 | 3 | |
-| **Phases 0–7 subtotal** | **56** | **59** | **94.9%** |
+| **Phases 0–7 subtotal** | **58** | **59** | **98.3%** |
 | Block 3 — swap indexer | 4 | 4 | built and verified on two devnet pools |
 | Block 4 — social | 3 | 3 | comments, likes and follows all persisted |
 | Block 5 — legacy purge | 1 | 1 | done; build green |
-| **Engineering total** | **64** | **67** | **95.5%** |
+| **Engineering total** | **66** | **67** | **98.5%** |
 
-**Engineering: 64 / 67 = 95.5%.** The three open items are 2.6 (browser wallet,
-needs a human), 5.3 and 5.4 (Pyth NAV band, needs a Hermes key).
+**Engineering: 66 / 67 = 98.5%.** The one open item is 2.6 (browser wallet, needs a
+human). 5.3 and 5.4 were unblocked by reading Pyth on-chain instead of via Hermes.
+Caveat that matters for the demo: on devnet the equity feeds are months stale, so the
+band renders "Stale" rather than a number, and the existing equity pools are priced
+~$0.000005/token against a ~$300 underlying — the band only becomes meaningful once
+issuance anchors the opening price to NAV (see the Pyth report).
 
 **Submission readiness is much lower, and is the real risk.** Phase 8 is **1 / 7 =
 14%**. The one done item is the README. Still open: deploy to a public URL (8.2), a
@@ -215,7 +219,7 @@ Verified on chain, in Postgres, and by running the test suite:
   `EhvtVimk…MYy7L` (`4HatkGNZ…bMVTZtc`). `juno:inspect` reports `graduated true`.
 - **Creator fees claimed**: 0.009653 SOL (`3X4g3aDg…9HdAN`).
 - **IPFS**: token metadata and three reel videos pinned and resolving.
-- **66 unit tests across 7 files passing**, including Meteora's own
+- **89 unit tests across 8 files passing**, including Meteora's own
   `validateConfigParameters` over all four presets.
 
 ---
@@ -359,7 +363,7 @@ but it is Juno code rather than Norr surface.
 - [ ] 8.2 deploy, 8.4 pitch video, 8.5 technical video, 8.6 mainnet pool, 8.7 submit.
 
 #### Legitimate blockers (do NOT fake or bypass)
-- `PYTH_API_KEY` — Hermes needs auth. The UI shows no NAV rather than a fabricated one.
+- ~~`PYTH_API_KEY`~~ — no longer a blocker: Pyth is read on-chain. Optional Hermes fallback only.
 - `NEXT_PUBLIC_SOLANA_RPC` — running on the public devnet endpoint, which rate-limits.
 - Mainnet SOL (8.6) — real funds, needs explicit authorization.
 - 8.4, 8.5, 8.7 and 2.6 need a human.

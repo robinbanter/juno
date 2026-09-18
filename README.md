@@ -111,7 +111,7 @@ Verified by running things, not by reading imports.
 | **Wallet** | Phantom / Solflare via `@solana/wallet-adapter` |
 | **Quotes** | priced by `pool.swapQuote` against live account state |
 | **Swap history** | Direction, size, execution price and trader reconstructed per trade from token-balance deltas — driving a real price chart, real 24h volume, and real trade rows |
-| **Tests** | **66 unit tests across 7 files**, passing — including all four presets asserted against Meteora's own `validateConfigParameters`, and both deprecated paths (DAMM v1, `RateLimiter`) asserted unused |
+| **Tests** | **89 unit tests across 8 files**, passing — including all four presets asserted against Meteora's own `validateConfigParameters`, and both deprecated paths (DAMM v1, `RateLimiter`) asserted unused |
 
 There is **no mock data layer**. `lib/juno/mock.ts` was deleted; if a pool is not
 on-chain *and* in the registry, it does not appear in the app.
@@ -121,7 +121,7 @@ on-chain *and* in the registry, it does not appear in the app.
 | | Why |
 |---|---|
 | **Mainnet pool** | Devnet only. Needs real SOL and explicit sign-off. |
-| **Pyth NAV band** | The code exists (`lib/juno/pyth.ts`) and feed ids are stored per pool, but Hermes moved its price endpoints behind an API key and none exists in this repo. **The UI shows no NAV rather than a fabricated one.** |
+| **Pyth NAV band on devnet** | Built: Pyth is read from its `PriceUpdateV2` accounts on Solana — no key, no Hermes — and the coin page and trade panel check the curve against `navBandBps`. But **Pyth stopped pushing US equities on devnet on 2026-07-02**, so the equity pools show **Stale** with the last publish date rather than a months-old number. On mainnet all five equity feeds are live (shard 1). SOL/USD is live on devnet, which is what prices SOL-quoted pools in dollars. `npm run juno:pyth` prints every feed. |
 | **Consistent swap history** | The indexer is built and verified (see below), but the public devnet RPC enforces a per-method quota that a dozen transaction reads can exhaust. When it refuses, the chart, 24h volume and trade direction all fall back to the honest empty state. A dedicated `NEXT_PUBLIC_SOLANA_RPC` is what makes this consistent. |
 | **Comments** | Genuinely implemented — `lib/juno/social.ts` is a MongoDB-backed layer wired to `app/api/juno/comments`. Code-present and reviewed, **not runtime-verified here**: no live round trip was run against the database. |
 | **Likes** | **Not persisted.** `ReelCard` keeps `liked` in local component state and nothing populates `coin.likes`, so a like does not survive a reload. |
@@ -253,16 +253,16 @@ npm run dev                        # next dev --webpack
 
 ```bash
 npm test                 # everything
-npm run test:unit        # 66 tests, ~1s — the curve presets live here
+npm run test:unit        # 89 tests, ~1s — the curve presets live here
 npm run build            # production build — green
 ```
 
 The suite used to be 140. It is smaller because the Norr tests went with the Norr
 code: deleting 237 files of a forked Algorand app took the 13 test files covering it,
 and `juno-routes` went too once its subject — keeping Norr's age gate off Juno's
-routes — stopped existing. Nothing that guards live code was removed. Of the 66,
-**43 are Juno's own** (curves 13, format 13, indexer 17) and 23 cover shared
-infrastructure.
+routes — stopped existing. Nothing that guards live code was removed. Of the 89,
+**66 are Juno's own** (curves 13, format 13, indexer 17, Pyth decoder + NAV band 23)
+and 23 cover shared infrastructure.
 
 Routes: `/explore` · `/reels` · `/coin/[address]` · `/creator/[wallet]` · `/create` ·
 `/activity`
@@ -277,7 +277,7 @@ Routes: `/explore` · `/reels` · `/coin/[address]` · `/creator/[wallet]` · `/
 | `PINATA_JWT` | for launching | Pins media and token metadata to IPFS. Without it a mint launches with `uri: ""` and every wallet renders it blank. |
 | `NEXT_PUBLIC_IPFS_GATEWAY` | no | Gateway baked into pinned metadata for wallets and explorers |
 | `MONGODB_URI` / `MONGODB_DB` | no | Comments. Unset, the comments route throws; nothing else is affected. |
-| `PYTH_API_KEY` | no | Without it, **no NAV band is shown** — see the honesty table above |
+| `PYTH_API_KEY` | no | Pyth is read on-chain without it; the key only adds a Hermes fallback |
 
 The CLI scripts read the same `.env.local` via `dotenv-cli` and sign with a local key
 instead of a browser wallet.

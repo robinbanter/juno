@@ -13,7 +13,7 @@ Node        20+
 Build       npm ci && npm run build
 Output      Next.js 16 App Router, standalone server (not a static export)
 Start       npm start
-Tests       npm test   →  7 files, 66 tests
+Tests       npm test   →  8 files, 89 tests
 ```
 
 `npm run build` is green. Six of the 20 routes prerender as static (`/`,
@@ -53,7 +53,8 @@ documented there apart from `NODE_ENV`, which the framework sets.
 | Variable | Absent behaviour |
 |---|---|
 | `MONGODB_URI` / `MONGODB_DB` | Comments, likes and follows. The routes throw; nothing else is affected, and the counts render as zero rather than breaking the page. |
-| `PYTH_API_KEY` | No NAV band is shown — deliberately, rather than a fabricated one — and SOL-quoted pools are labelled in SOL instead of USD. |
+| `PYTH_API_KEY` | Nothing is lost: Pyth prices are read from Solana accounts. The key only enables a Hermes fallback for feeds the chain cannot answer. |
+| `PYTH_MAX_AGE_SECONDS` | Defaults to 600. A price older than this is shown as stale, never as a number. |
 | `NEXT_PUBLIC_IPFS_GATEWAY` | Gateway baked into pinned metadata for wallets and explorers that cannot reach this app's own `/api/ipfs/<cid>` route. |
 | `ALERT_WEBHOOK_URL` | Fatal errors are still logged; this is only how a human gets paged. |
 | `DATABASE_URL_UNPOOLED` / `DATABASE_DIRECT_URL` | Migrations fall back to `DATABASE_URL`. On Neon, `npm run db:push` through the pooler can fail; set one of these if it does. |
