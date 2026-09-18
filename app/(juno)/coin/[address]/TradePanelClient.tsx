@@ -5,6 +5,7 @@ import { ExternalLink } from "lucide-react";
 
 import { explorer } from "@/lib/juno/cluster";
 import { quoteTrade } from "@/lib/juno/dbc";
+import type { NavContext } from "@/lib/juno/nav";
 import type { Coin, QuoteToken, TradeSide } from "@/lib/juno/types";
 import { TradePanel, type TradeQuoteResult } from "@/components/juno/coin/TradePanel";
 import { useTrade } from "@/components/juno/wallet/useTrade";
@@ -18,10 +19,16 @@ import { useTrade } from "@/components/juno/wallet/useTrade";
 export function TradePanelClient({
   coin,
   quoteTokens,
+  quoteUsd,
+  nav,
   className,
 }: {
   coin: Coin;
   quoteTokens: QuoteToken[];
+  /** USD per unit of the pool's quote token, from Pyth; null when not live. */
+  quoteUsd: number | null;
+  /** Present for pools launched against a Pyth feed with a band. */
+  nav: NavContext | null;
   className?: string;
 }) {
   const { ensureSnapshot, balanceUsd, holding, state, swap, reset, connected } = useTrade(coin);
@@ -53,7 +60,10 @@ export function TradePanelClient({
         connected={connected}
         balanceUsd={balanceUsd}
         holding={holding}
-        quotePricesUsd={{ [coin.quote.mint]: 1 }}
+        // Only a live rate is passed. Without one a SOL amount has no dollar
+        // echo, rather than being shown as though one SOL were one dollar.
+        quotePricesUsd={quoteUsd === null ? {} : { [coin.quote.mint]: quoteUsd }}
+        nav={nav}
         onQuote={onQuote}
         submitting={busy}
         onSubmit={({ side, amountIn, quote }) =>
