@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Check, Coins, Copy, DollarSign, Flame, MoreHorizontal, Share } from "lucide-react";
+import { Check, Coins, Copy, DollarSign, Flame, Share } from "lucide-react";
 
 import { CURVE_PRESETS } from "@/lib/juno/curves";
 import { compact, usd } from "@/lib/juno/format";
@@ -37,12 +37,7 @@ export function CoinSummary({ coin }: { coin: Coin }) {
             </span>
           )}
           <LikeButton coinMint={coin.address} initialCount={coin.likes ?? 0} />
-          <IconButton label="Share" className="size-9 border-0">
-            <Share size={17} strokeWidth={1.75} />
-          </IconButton>
-          <IconButton label="More options" className="size-9 border-0">
-            <MoreHorizontal size={17} strokeWidth={1.75} />
-          </IconButton>
+          <ShareButton name={coin.name} />
         </div>
       </div>
 
@@ -106,6 +101,37 @@ export function CoinSummary({ coin }: { coin: Coin }) {
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * The system share sheet where there is one (phones), otherwise the page link
+ * to the clipboard — with a visible "copied" so the click visibly did
+ * something.
+ */
+function ShareButton({ name }: { name: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <IconButton
+      label={copied ? "Link copied" : "Share"}
+      className="size-9 border-0"
+      onClick={async () => {
+        const url = window.location.href;
+        try {
+          if (navigator.share) {
+            await navigator.share({ title: `${name} on Juno`, url });
+            return;
+          }
+          await navigator.clipboard.writeText(url);
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1500);
+        } catch {
+          // Dismissing the share sheet rejects; that is not an error.
+        }
+      }}
+    >
+      {copied ? <Check size={17} className="text-j-pos" /> : <Share size={17} strokeWidth={1.75} />}
+    </IconButton>
   );
 }
 
