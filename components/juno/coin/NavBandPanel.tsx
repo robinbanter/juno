@@ -1,9 +1,9 @@
 import { ExternalLink } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { explorer } from "@/lib/juno/cluster";
 import { percent, since, usd } from "@/lib/juno/format";
 import { navBand, type NavContext } from "@/lib/juno/nav";
+import { pythAccountUrl } from "@/lib/juno/pyth-source";
 
 /**
  * The pool's curve price against its Pyth reference, with the preset's band.
@@ -87,7 +87,9 @@ export function NavBandPanel({
           {reading.status === "live" && <span>Published {since(reading.publishedAt)} ago</span>}
           {reading.account && (
             <a
-              href={explorer.account(reading.account)}
+              // The network the price was read from — mainnet on a fork, not
+              // the app's own cluster.
+              href={pythAccountUrl(reading.account)}
               target="_blank"
               rel="noreferrer noopener"
               className="flex items-center gap-1 hover:text-j-ink"

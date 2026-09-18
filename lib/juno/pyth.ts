@@ -1,3 +1,5 @@
+import { Connection } from "@solana/web3.js";
+
 import { getConnection } from "./dbc";
 import type { NavReading } from "./nav";
 import {
@@ -8,6 +10,7 @@ import {
   scaled,
   type PriceUpdate,
 } from "./pyth-account";
+import { pythSource } from "./pyth-source";
 
 /**
  * Pyth price feeds.
@@ -50,14 +53,25 @@ export const PYTH_FEEDS = {
 export type PythFeedName = keyof typeof PYTH_FEEDS;
 
 /**
- * How old a price may be and still be shown as a price. Sponsored feeds are
- * pushed on a heartbeat (one minute by default on mainnet) or a deviation
- * trigger, whichever is first. Devnet's runs slower: SOL/USD was measured
- * publishing every 313–315 s on 2026-09-18, so the default is about twice that.
- * Past this, the UI says "stale" rather than printing a number that may be
- * minutes or months out of date.
+ * How old a price may be and still be shown as a price — 600 s on devnet,
+ * 180 s on mainnet and a mainnet fork (see `pyth-source.ts`), or
+ * `PYTH_MAX_AGE_SECONDS`. Past this, the UI says "stale" rather than printing
+ * a number that may be minutes or months out of date.
  */
-export const MAX_PRICE_AGE_SECONDS = Number(process.env.PYTH_MAX_AGE_SECONDS) || 600;
+export const MAX_PRICE_AGE_SECONDS = pythSource().maxAgeSeconds;
+
+let cachedPythConnection: Connection | null = null;
+
+/**
+ * The app's own connection, unless the cluster reads Pyth elsewhere — a
+ * mainnet fork reads live mainnet, because its cloned accounts never update.
+ */
+export function pythConnection(): Connection {
+  const { rpc } = pythSource();
+  if (!rpc) return getConnection();
+  cachedPythConnection ??= new Connection(rpc, { commitment: "confirmed", disableRetryOnRateLimit: true });
+  return cachedPythConnection;
+}
 
 export function feedIdFor(name: string | null | undefined): string | null {
   if (!name) return null;
@@ -122,7 +136,7 @@ async function readOnChain(feedIds: string[]): Promise<Record<string, NavReading
   const out: Record<string, NavReading> = {};
   let infos;
   try {
-    infos = await getConnection().getMultipleAccountsInfo(addresses);
+    infos = await pythConnection().getMultipleAccountsInfo(addresses);
   } catch {
     for (const id of feedIds) {
       out[id] = { status: "unavailable", feedId: id, reason: RPC_FAILED };

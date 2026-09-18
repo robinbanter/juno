@@ -9,6 +9,7 @@ import {
 } from "@/lib/juno/pyth-account";
 import { PYTH_FEEDS, feedIdFor, freshestUpdate, toReading, ttlFor } from "@/lib/juno/pyth";
 import { executionPrice, navBand, quoteAgainstNav, type NavContext } from "@/lib/juno/nav";
+import { pythAccountUrl, pythSource } from "@/lib/juno/pyth-source";
 
 /*
  * Real account data, read from Solana devnet with `getAccountInfo` on
@@ -155,6 +156,53 @@ describe("freshestUpdate / toReading", () => {
       sol,
     ]);
     expect(found?.address).toBe(SOL_USD_DEVNET.address);
+  });
+});
+
+describe("pythSource", () => {
+  it("reads devnet Pyth through the app's own RPC on devnet", () => {
+    expect(pythSource({ NEXT_PUBLIC_SOLANA_CLUSTER: "devnet" })).toEqual({
+      network: "devnet",
+      rpc: null,
+      maxAgeSeconds: 600,
+    });
+    // Unset means devnet, matching `cluster()`.
+    expect(pythSource({}).network).toBe("devnet");
+  });
+
+  it("reads mainnet Pyth through the app's own RPC on mainnet", () => {
+    expect(pythSource({ NEXT_PUBLIC_SOLANA_CLUSTER: "mainnet-beta" })).toEqual({
+      network: "mainnet-beta",
+      rpc: null,
+      maxAgeSeconds: 180,
+    });
+  });
+
+  it("reads live mainnet on a fork, because cloned accounts never update", () => {
+    expect(pythSource({ NEXT_PUBLIC_SOLANA_CLUSTER: "localnet-fork" })).toEqual({
+      network: "mainnet-beta",
+      rpc: "https://api.mainnet-beta.solana.com",
+      maxAgeSeconds: 180,
+    });
+  });
+
+  it("lets PYTH_RPC_URL and PYTH_MAX_AGE_SECONDS override", () => {
+    const source = pythSource({
+      NEXT_PUBLIC_SOLANA_CLUSTER: "localnet-fork",
+      PYTH_RPC_URL: "http://127.0.0.1:8899",
+      PYTH_MAX_AGE_SECONDS: "90",
+    });
+    expect(source).toEqual({ network: "mainnet-beta", rpc: "http://127.0.0.1:8899", maxAgeSeconds: 90 });
+  });
+
+  it("links the price account on the network it was read from", () => {
+    const address = SOL_USD_DEVNET.address;
+    expect(pythAccountUrl(address, pythSource({ NEXT_PUBLIC_SOLANA_CLUSTER: "devnet" }))).toBe(
+      `https://solscan.io/account/${address}?cluster=devnet`,
+    );
+    expect(pythAccountUrl(address, pythSource({ NEXT_PUBLIC_SOLANA_CLUSTER: "localnet-fork" }))).toBe(
+      `https://solscan.io/account/${address}`,
+    );
   });
 });
 
