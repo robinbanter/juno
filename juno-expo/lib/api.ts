@@ -313,9 +313,21 @@ export const juno = {
     // Submitting waits for confirmation, which is slower than a read.
     api.post<{ signature: string }>("/api/juno/tx/submit", input, 90_000),
 
-  /** Media is served through the app's own IPFS gateway, which fails over. */
-  media: (url: string | null | undefined): string | null =>
-    !url ? null : url.startsWith("http") ? url : `${API_URL}${url}`,
+  /**
+   * A URL the native `<Image>` can actually load, or null.
+   *
+   * Null is not just "absent" here — it also covers media the platform cannot
+   * render, and the caller is expected to draw its own glyph instead. The
+   * server falls back to an identicon encoded as `data:image/svg+xml`, which
+   * renders fine in a browser and makes iOS throw "URI parsing error" out of
+   * RCTImageManager, taking the whole screen down with a redbox. SVG data URIs
+   * are therefore filtered out here rather than at each of the four call sites.
+   */
+  media: (url: string | null | undefined): string | null => {
+    if (!url) return null;
+    if (url.startsWith("data:image/svg")) return null;
+    return url.startsWith("http") ? url : `${API_URL}${url}`;
+  },
 
   explorer: (kind: "tx" | "account" | "token", id: string, cluster = "devnet") =>
     `https://solscan.io/${kind}/${id}${cluster === "devnet" ? "?cluster=devnet" : ""}`,

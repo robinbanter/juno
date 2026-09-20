@@ -1,35 +1,36 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Linking, Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { Linking, Modal } from "react-native";
+import styled from "styled-components/native";
 
-import { Button, Card, Pill } from "./ui";
+import { Button, Caption, Col, Label, Pill, Row } from "./kit";
 import { juno, type Coin } from "../lib/api";
 import { money, tokens } from "../lib/useApi";
 import { useWallet } from "../lib/wallet";
-import { colors, radius, shadow, spacing, type } from "../theme/tokens";
+import { theme } from "../theme";
 
 /**
  * Buy and sell, with a numpad.
  *
- * A system keyboard is the wrong control for this. It covers half the screen —
- * including the quote the person is deciding on — it offers characters an
- * amount cannot contain, and on iOS the decimal key depends on locale. A
- * purpose-built pad keeps the number, the quote and the button visible at once,
- * which is the whole decision in one view.
+ * A system keyboard is the wrong control here. It covers half the screen —
+ * including the quote the person is deciding on — offers characters an amount
+ * cannot contain, and moves its decimal key by locale. A purpose-built pad
+ * keeps the number, the quote and the button visible at once, which is the
+ * whole decision in one view.
  *
  * ## The quote is fetched, not computed
  *
- * The amount could be multiplied by the last price to show an estimate, and
- * that estimate would be wrong in exactly the way that matters: a bonding curve
- * moves as it fills, so a large order does not clear at the spot price. The
- * server quotes against the live curve and returns the transaction built
- * against that same quote, so what is shown is what will be signed.
+ * The amount could be multiplied by the last price, and that estimate would be
+ * wrong in exactly the way that matters: a bonding curve moves as it fills, so
+ * a large order does not clear at spot. The server quotes against the live
+ * curve and returns the transaction built against that same quote, so what is
+ * shown is what gets signed.
  *
  * Debounced, because a quote is an RPC round trip and typing "125" should not
  * cost three of them.
  */
 
-const QUICK_BUY = [0.05, 0.1, 0.25, 0.5];
-const QUICK_SELL_PCT = [0.25, 0.5, 0.75, 1];
+const QUICK_BUY = [0.1, 0.25, 0.5, 1];
+const QUICK_SELL = [0.25, 0.5, 0.75, 1];
 
 type Stage = "entry" | "confirming" | "done";
 
@@ -56,7 +57,6 @@ export function TradeSheet({
   const valid = Number.isFinite(value) && value > 0;
   const unit = side === "buy" ? coin.quote.symbol : coin.symbol;
 
-  /* The quote, debounced. */
   useEffect(() => {
     if (!valid || !wallet.address) {
       setQuote(null);
@@ -98,7 +98,6 @@ export function TradeSheet({
       if (key === ".") return current.includes(".") ? current : current === "" ? "0." : `${current}.`;
       // No leading zeros: "05" is not an amount anyone meant to type.
       const next = current === "0" ? key : current + key;
-      // Guard the decimal tail so a tap cannot build an unrepresentable number.
       const [, decimals = ""] = next.split(".");
       if (decimals.length > 9) return current;
       return next;
@@ -136,168 +135,227 @@ export function TradeSheet({
 
   return (
     <Modal visible animationType="slide" transparent onRequestClose={onClose}>
-      <Pressable style={styles.scrim} onPress={onClose} />
+      <Scrim onPress={onClose} />
 
-      <View style={styles.sheet}>
-        <View style={styles.grabber} />
+      <Sheet>
+        <Grabber />
 
-        <View style={styles.head}>
-          <Text style={styles.title}>
-            {side === "buy" ? "Buy" : "Sell"} ${coin.symbol}
-          </Text>
-          <Pressable onPress={onClose} hitSlop={12} accessibilityRole="button">
-            <Text style={styles.close}>✕</Text>
-          </Pressable>
-        </View>
+        <Row justify="space-between">
+          <Row gap={16}>
+            <HeadTab $on={side === "buy"}>Buy</HeadTab>
+            <HeadTab $on={side === "sell"}>Sell</HeadTab>
+          </Row>
+          <Close onPress={onClose} accessibilityRole="button" accessibilityLabel="Close">
+            <CloseMark>✕</CloseMark>
+          </Close>
+        </Row>
 
         {stage === "done" && signature ? (
-          <View style={styles.done}>
-            <Text style={styles.doneTitle}>Done</Text>
-            <Text style={styles.doneDetail}>
+          <Done>
+            <DoneTitle>Done</DoneTitle>
+            <Label muted style={{ textAlign: "center" }}>
               {side === "buy" ? "Bought" : "Sold"} {receiving ?? ""} — confirmed on Solana.
-            </Text>
-            <Pressable onPress={() => Linking.openURL(juno.explorer("tx", signature))}>
-              <Text style={styles.doneLink}>View the transaction ↗</Text>
-            </Pressable>
-            <Button label="Done" onPress={onDone} style={{ marginTop: spacing.lg }} />
-          </View>
+            </Label>
+            <LinkTap onPress={() => Linking.openURL(juno.explorer("tx", signature))}>
+              <LinkText>View the transaction ↗</LinkText>
+            </LinkTap>
+            <Button label="Done" onPress={onDone} style={{ marginTop: 16, alignSelf: "stretch" }} />
+          </Done>
         ) : (
           <>
-            <View style={styles.amountBlock}>
-              <Text style={styles.amount}>
-                {amount || "0"} <Text style={styles.unit}>{unit}</Text>
-              </Text>
-              <Text style={styles.receiving}>
+            <Amount>
+              <AmountRow>
+                <AmountValue>{amount || "0"}</AmountValue>
+                <AmountUnit>{unit}</AmountUnit>
+              </AmountRow>
+              <Caption>
                 {quoting
                   ? "Quoting against the curve…"
                   : receiving
-                    ? `You receive ~${receiving}`
+                    ? `You'll receive ${receiving}`
                     : valid
                       ? " "
                       : "Enter an amount"}
-              </Text>
-              {quote && quote.quote.priceImpact > 0.02 && (
+              </Caption>
+              {quote && quote.quote.priceImpact > 0.02 ? (
                 <Pill
                   label={`Price impact ${(quote.quote.priceImpact * 100).toFixed(1)}%`}
                   tone="neg"
                 />
-              )}
-            </View>
+              ) : null}
+            </Amount>
 
-            <View style={styles.quick}>
-              {(side === "buy" ? QUICK_BUY : QUICK_SELL_PCT).map((preset) => (
-                <Pressable
-                  key={preset}
-                  style={styles.quickChip}
-                  onPress={() => setAmount(String(preset))}
-                >
-                  <Text style={styles.quickLabel}>
-                    {side === "buy" ? `${preset}` : `${preset * 100}%`}
-                  </Text>
-                </Pressable>
+            <Row gap={8}>
+              {(side === "buy" ? QUICK_BUY : QUICK_SELL).map((preset) => (
+                <Quick key={preset} onPress={() => setAmount(String(preset))}>
+                  <QuickLabel>
+                    {side === "buy" ? preset : `${preset * 100}%`}
+                  </QuickLabel>
+                </Quick>
               ))}
-            </View>
-
-            {error && <Text style={styles.error}>{error}</Text>}
-
-            <Numpad onPress={press} />
+            </Row>
 
             <Button
-              label={
-                stage === "confirming"
-                  ? "Confirming…"
-                  : side === "buy"
-                    ? "Buy"
-                    : "Sell"
-              }
-              variant={side === "buy" ? "buy" : "sell"}
+              label={stage === "confirming" ? "Confirming…" : side === "buy" ? "Buy" : "Sell"}
+              variant={side === "buy" ? "lime" : "sell"}
+              tall
               onPress={confirm}
               loading={stage === "confirming" || wallet.signing}
               disabled={!quote || quoting}
             />
+
+            {error ? <ErrorText>{error}</ErrorText> : null}
+
+            <Pad>
+              {["1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "0", "back"].map((key) => (
+                <Key
+                  key={key}
+                  onPress={() => press(key)}
+                  accessibilityRole="button"
+                  accessibilityLabel={key === "back" ? "Delete" : key}
+                >
+                  <KeyLabel>{key === "back" ? "⌫" : key}</KeyLabel>
+                </Key>
+              ))}
+            </Pad>
           </>
         )}
-      </View>
+      </Sheet>
     </Modal>
   );
 }
 
-function Numpad({ onPress }: { onPress: (key: string) => void }) {
-  const keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "0", "back"];
-  return (
-    <View style={styles.pad}>
-      {keys.map((key) => (
-        <Pressable
-          key={key}
-          onPress={() => onPress(key)}
-          accessibilityRole="button"
-          accessibilityLabel={key === "back" ? "Delete" : key}
-          style={({ pressed }) => [styles.key, pressed && styles.keyPressed]}
-        >
-          <Text style={styles.keyLabel}>{key === "back" ? "⌫" : key}</Text>
-        </Pressable>
-      ))}
-    </View>
-  );
-}
+const Scrim = styled.Pressable`
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(18, 21, 14, 0.45);
+`;
 
-const styles = StyleSheet.create({
-  scrim: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "rgba(20,26,18,0.45)",
-  },
-  sheet: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
-    padding: spacing.lg,
-    paddingBottom: spacing.xxl,
-    gap: spacing.md,
-    ...shadow.raised,
-  },
-  grabber: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: colors.line,
-    alignSelf: "center",
-  },
-  head: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  title: { ...type.heading, color: colors.ink },
-  close: { ...type.heading, color: colors.muted },
-  amountBlock: { alignItems: "center", gap: 6, paddingVertical: spacing.sm },
-  amount: { ...type.display, color: colors.ink },
-  unit: { ...type.heading, color: colors.muted },
-  receiving: { ...type.label, color: colors.muted, minHeight: 18 },
-  quick: { flexDirection: "row", gap: spacing.sm },
-  quickChip: {
-    flex: 1,
-    paddingVertical: spacing.md,
-    borderRadius: radius.md,
-    backgroundColor: colors.surfaceSunken,
-    alignItems: "center",
-  },
-  quickLabel: { ...type.label, color: colors.ink },
-  pad: { flexDirection: "row", flexWrap: "wrap" },
-  key: {
-    width: "33.33%",
-    height: 56,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  keyPressed: { backgroundColor: colors.surfaceSunken, borderRadius: radius.md },
-  keyLabel: { fontSize: 24, fontWeight: "500", color: colors.ink },
-  error: { ...type.label, color: colors.neg, textAlign: "center" },
-  done: { alignItems: "center", gap: spacing.sm, paddingVertical: spacing.xl },
-  doneTitle: { ...type.title, color: colors.pos },
-  doneDetail: { ...type.body, color: colors.ink, textAlign: "center" },
-  doneLink: { ...type.label, color: colors.focus, marginTop: spacing.sm },
-});
+const Sheet = styled.View`
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: ${(p) => p.theme.colors.surface};
+  border-top-left-radius: ${(p) => p.theme.radius.xl}px;
+  border-top-right-radius: ${(p) => p.theme.radius.xl}px;
+  padding: ${(p) => p.theme.space(4)}px;
+  padding-bottom: ${(p) => p.theme.space(8)}px;
+  gap: ${(p) => p.theme.space(3)}px;
+`;
+
+const Grabber = styled.View`
+  width: 40px;
+  height: 4px;
+  border-radius: 2px;
+  background-color: ${(p) => p.theme.colors.line};
+  align-self: center;
+`;
+
+const HeadTab = styled.Text<{ $on: boolean }>`
+  font-size: 19px;
+  font-weight: ${(p) => (p.$on ? 800 : 500)};
+  color: ${(p) => (p.$on ? p.theme.colors.text : p.theme.colors.faint)};
+`;
+
+const Close = styled.Pressable`
+  width: 32px;
+  height: 32px;
+  border-radius: 16px;
+  background-color: ${(p) => p.theme.colors.surfaceAlt};
+  align-items: center;
+  justify-content: center;
+`;
+
+const CloseMark = styled.Text`
+  font-size: 15px;
+  color: ${(p) => p.theme.colors.muted};
+`;
+
+const Amount = styled.View`
+  align-items: center;
+  gap: 6px;
+  padding-vertical: ${(p) => p.theme.space(3)}px;
+`;
+
+const AmountRow = styled.View`
+  flex-direction: row;
+  align-items: baseline;
+  gap: 8px;
+`;
+
+const AmountValue = styled.Text`
+  font-size: 46px;
+  font-weight: 800;
+  letter-spacing: -1.4px;
+  color: ${(p) => p.theme.colors.text};
+`;
+
+const AmountUnit = styled.Text`
+  font-size: 22px;
+  font-weight: 600;
+  color: ${(p) => p.theme.colors.faint};
+`;
+
+const Quick = styled.Pressable`
+  flex: 1;
+  padding-vertical: ${(p) => p.theme.space(3)}px;
+  border-radius: ${(p) => p.theme.radius.pill}px;
+  background-color: ${(p) => p.theme.colors.surfaceAlt};
+  align-items: center;
+`;
+
+const QuickLabel = styled.Text`
+  font-size: 13px;
+  font-weight: 600;
+  color: ${(p) => p.theme.colors.text};
+`;
+
+const Pad = styled.View`
+  flex-direction: row;
+  flex-wrap: wrap;
+`;
+
+const Key = styled.Pressable`
+  width: 33.33%;
+  height: 54px;
+  align-items: center;
+  justify-content: center;
+`;
+
+const KeyLabel = styled.Text`
+  font-size: 25px;
+  font-weight: 500;
+  color: ${(p) => p.theme.colors.text};
+`;
+
+const ErrorText = styled.Text`
+  font-size: 13px;
+  color: ${(p) => p.theme.colors.neg};
+  text-align: center;
+`;
+
+const Done = styled.View`
+  align-items: center;
+  gap: ${(p) => p.theme.space(2)}px;
+  padding-vertical: ${(p) => p.theme.space(6)}px;
+  align-self: stretch;
+`;
+
+const DoneTitle = styled.Text`
+  font-size: 26px;
+  font-weight: 800;
+  color: ${(p) => p.theme.colors.pos};
+`;
+
+const LinkTap = styled.Pressable``;
+
+const LinkText = styled.Text`
+  font-size: 13px;
+  font-weight: 600;
+  color: ${(p) => p.theme.colors.focus};
+  margin-top: 6px;
+`;

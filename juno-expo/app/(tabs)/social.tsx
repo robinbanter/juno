@@ -1,19 +1,35 @@
 import { useRouter } from "expo-router";
-import { FlatList, Image, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
+import { FlatList, RefreshControl } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import styled from "styled-components/native";
 
-import { Card, Delta, Pill, Placeholder, Skeleton } from "../../components/ui";
+import { Identicon } from "../../components/art";
+import {
+  Avatar,
+  Body,
+  Caption,
+  Card,
+  Col,
+  Heading,
+  Label,
+  Mono,
+  Pill,
+  Placeholder,
+  Row,
+  Skeleton,
+  Title,
+} from "../../components/kit";
 import { juno, type FeedItem } from "../../lib/api";
 import { money, since, tokens, useApi } from "../../lib/useApi";
-import { colors, radius, spacing, type } from "../../theme/tokens";
+import { theme } from "../../theme";
 
 /**
  * The social feed: real trades and creator posts, interleaved.
  *
  * The two kinds of item have opposite natures and the screen does not pretend
- * otherwise. A trade is a fact about the chain — it carries a signature and can
- * be checked by anyone. A post is something a person wrote. Mixing them is what
- * makes this a social app rather than a block explorer, but a reader can always
+ * otherwise. A trade is a fact about the chain — it carries a signature and
+ * anyone can check it. A post is something a person wrote. Mixing them is what
+ * makes this a social app rather than a block explorer, and a reader can always
  * tell which is which.
  */
 export default function SocialScreen() {
@@ -21,158 +37,169 @@ export default function SocialScreen() {
   const feed = useApi(() => juno.feed(40), []);
 
   return (
-    <SafeAreaView style={styles.screen} edges={["top"]}>
-      <View style={styles.header}>
-        <Text style={styles.wordmark}>juno</Text>
-        <Text style={styles.subtitle}>Every post is a market</Text>
-      </View>
+    <Page edges={["top"]}>
+      <Header>
+        <Col gap={2}>
+          <Title>juno</Title>
+          <Label muted>Every post is a market</Label>
+        </Col>
+      </Header>
 
       {feed.loading ? (
-        <View style={styles.list}>
+        <Loading>
           {[0, 1, 2].map((i) => (
-            <Card key={i} style={styles.item}>
-              <Skeleton height={14} width="45%" />
-              <Skeleton height={12} width="90%" style={{ marginTop: spacing.md }} />
-              <Skeleton height={12} width="70%" style={{ marginTop: spacing.sm }} />
+            <Card key={i}>
+              <Skeleton h={14} w="45%" />
+              <Skeleton h={12} w="90%" style={{ marginTop: 14 }} />
+              <Skeleton h={12} w="70%" style={{ marginTop: 8 }} />
             </Card>
           ))}
-        </View>
+        </Loading>
       ) : feed.error ? (
-        <Placeholder
-          title="Could not load the feed"
-          detail={feed.error}
-        />
+        <Placeholder title="Could not load the feed" detail={feed.error} />
       ) : (
         <FlatList
           data={feed.data?.items ?? []}
           keyExtractor={(item) => `${item.kind}:${item.id}`}
-          contentContainerStyle={styles.list}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 130, gap: 12 }}
           showsVerticalScrollIndicator={false}
           refreshControl={
-            <RefreshControl refreshing={feed.refreshing} onRefresh={feed.refresh} tintColor={colors.muted} />
+            <RefreshControl
+              refreshing={feed.refreshing}
+              onRefresh={feed.refresh}
+              tintColor={theme.colors.muted}
+            />
           }
           ListEmptyComponent={
             <Placeholder
               title="Nothing here yet"
-              detail="Trades and posts will appear as they happen."
+              detail="Trades and posts appear as they happen."
             />
           }
           renderItem={({ item }) => (
-            <FeedRow
-              item={item}
-              onOpenCoin={(mint) => router.push(`/coin/${mint}`)}
-            />
+            <FeedRow item={item} onOpen={(mint) => router.push(`/coin/${mint}`)} />
           )}
         />
       )}
-    </SafeAreaView>
+    </Page>
   );
 }
 
 function FeedRow({
   item,
-  onOpenCoin,
+  onOpen,
 }: {
   item: FeedItem;
-  onOpenCoin: (mint: string) => void;
+  onOpen: (mint: string) => void;
 }) {
   if (item.kind === "trade") {
     const buying = item.side === "buy";
     return (
-      <Pressable onPress={() => onOpenCoin(item.coin.address)}>
-        <Card style={styles.item}>
-          <View style={styles.row}>
-            <Image source={{ uri: item.actor.avatarUrl }} style={styles.avatar} />
-            <Text style={styles.handle} numberOfLines={1}>
+      <Tap onPress={() => onOpen(item.coin.address)}>
+        <Card>
+          <Row gap={8}>
+            <Identicon seed={item.actor.handle} />
+            <Label numberOfLines={1} style={{ fontWeight: "700", maxWidth: 110 }}>
               {item.actor.handle}
-            </Text>
-            <Text style={styles.verb}>{buying ? "bought" : "sold"}</Text>
-            <Text style={styles.ticker} numberOfLines={1}>
+            </Label>
+            <Label muted>{buying ? "bought" : "sold"}</Label>
+            <Label style={{ fontWeight: "700" }} numberOfLines={1}>
               ${item.coin.symbol || item.coin.name}
-            </Text>
-            <View style={{ flex: 1 }} />
-            <Text style={styles.when}>{since(item.timestamp)}</Text>
-          </View>
+            </Label>
+            <Grow />
+            <Caption>{since(item.timestamp)}</Caption>
+          </Row>
 
-          <View style={styles.tradeBody}>
+          <Row gap={12} style={{ marginTop: 12 }}>
             {juno.media(item.coin.mediaUrl) ? (
-              <Image
-                source={{ uri: juno.media(item.coin.mediaUrl)! }}
-                style={styles.thumb}
-              />
+              <Thumb source={{ uri: juno.media(item.coin.mediaUrl)! }} />
             ) : (
-              <View style={[styles.thumb, styles.thumbEmpty]} />
+              <ThumbEmpty />
             )}
-
-            <View style={styles.tradeFacts}>
-              <Text style={styles.coinName} numberOfLines={1}>
+            <Col gap={4} style={{ flex: 1 }}>
+              <Heading numberOfLines={1} style={{ fontSize: 16 }}>
                 {item.coin.name}
-              </Text>
-              <Text style={styles.tradeSize}>
+              </Heading>
+              <Mono muted>
                 {tokens(item.amount)} for {money(item.valueUsd)}
-              </Text>
+              </Mono>
               <Pill label={buying ? "Buy" : "Sell"} tone={buying ? "pos" : "neg"} />
-            </View>
-          </View>
+            </Col>
+          </Row>
         </Card>
-      </Pressable>
+      </Tap>
     );
   }
 
   return (
-    <Card style={styles.item}>
-      <View style={styles.row}>
-        <Image source={{ uri: item.author.avatarUrl }} style={styles.avatar} />
-        <Text style={styles.handle} numberOfLines={1}>
+    <Card>
+      <Row gap={8}>
+        <Identicon seed={item.author.wallet} />
+        <Label numberOfLines={1} style={{ fontWeight: "700" }}>
           {item.author.handle}
-        </Text>
-        <View style={{ flex: 1 }} />
-        <Text style={styles.when}>{since(item.timestamp)}</Text>
-      </View>
+        </Label>
+        <Grow />
+        <Caption>{since(item.timestamp)}</Caption>
+      </Row>
 
-      <Text style={styles.postBody}>{item.body}</Text>
+      <Body style={{ marginTop: 12 }}>{item.body}</Body>
 
-      {item.coin && (
-        <Pressable onPress={() => onOpenCoin(item.coin!.address)} style={styles.coinChip}>
-          <Text style={styles.coinChipText}>${item.coin.symbol}</Text>
-          <Text style={styles.coinChipName} numberOfLines={1}>
+      {item.coin ? (
+        <CoinChip onPress={() => onOpen(item.coin!.address)}>
+          <Label style={{ fontWeight: "700" }}>${item.coin.symbol}</Label>
+          <Label muted numberOfLines={1} style={{ flex: 1 }}>
             {item.coin.name}
-          </Text>
-        </Pressable>
-      )}
+          </Label>
+        </CoinChip>
+      ) : null}
     </Card>
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.bg },
-  header: { paddingHorizontal: spacing.lg, paddingBottom: spacing.md },
-  wordmark: { ...type.title, color: colors.ink },
-  subtitle: { ...type.label, color: colors.muted, marginTop: 2 },
-  list: { paddingHorizontal: spacing.lg, paddingBottom: 120, gap: spacing.md },
-  item: { gap: spacing.md },
-  row: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
-  avatar: { width: 26, height: 26, borderRadius: 13, backgroundColor: colors.surfaceSunken },
-  handle: { ...type.bodyStrong, color: colors.ink, maxWidth: 110 },
-  verb: { ...type.body, color: colors.muted },
-  ticker: { ...type.bodyStrong, color: colors.ink, maxWidth: 110 },
-  when: { ...type.caption, color: colors.faint },
-  tradeBody: { flexDirection: "row", gap: spacing.md, alignItems: "center" },
-  thumb: { width: 64, height: 64, borderRadius: radius.md, backgroundColor: colors.surfaceSunken },
-  thumbEmpty: { borderWidth: 1, borderColor: colors.line },
-  tradeFacts: { flex: 1, gap: 4 },
-  coinName: { ...type.bodyStrong, color: colors.ink },
-  tradeSize: { ...type.label, color: colors.muted, fontVariant: ["tabular-nums"] },
-  postBody: { ...type.body, color: colors.ink, lineHeight: 22 },
-  coinChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    backgroundColor: colors.surfaceSunken,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.md,
-  },
-  coinChipText: { ...type.bodyStrong, color: colors.ink },
-  coinChipName: { ...type.label, color: colors.muted, flex: 1 },
-});
+const Page = styled(SafeAreaView)`
+  flex: 1;
+  background-color: ${(p) => p.theme.colors.bg};
+`;
+
+const Header = styled.View`
+  padding-horizontal: ${(p) => p.theme.space(4)}px;
+  padding-bottom: ${(p) => p.theme.space(3)}px;
+`;
+
+const Loading = styled.View`
+  padding-horizontal: ${(p) => p.theme.space(4)}px;
+  gap: ${(p) => p.theme.space(3)}px;
+`;
+
+const Tap = styled.Pressable``;
+
+const Grow = styled.View`
+  flex: 1;
+`;
+
+const Thumb = styled.Image`
+  width: 64px;
+  height: 64px;
+  border-radius: ${(p) => p.theme.radius.md}px;
+  background-color: ${(p) => p.theme.colors.surfaceAlt};
+`;
+
+const ThumbEmpty = styled.View`
+  width: 64px;
+  height: 64px;
+  border-radius: ${(p) => p.theme.radius.md}px;
+  background-color: ${(p) => p.theme.colors.surfaceAlt};
+  border-width: 1px;
+  border-color: ${(p) => p.theme.colors.line};
+`;
+
+const CoinChip = styled.Pressable`
+  flex-direction: row;
+  align-items: center;
+  gap: ${(p) => p.theme.space(2)}px;
+  background-color: ${(p) => p.theme.colors.surfaceAlt};
+  padding-horizontal: ${(p) => p.theme.space(3)}px;
+  padding-vertical: ${(p) => p.theme.space(2)}px;
+  border-radius: ${(p) => p.theme.radius.md}px;
+  margin-top: ${(p) => p.theme.space(3)}px;
+`;

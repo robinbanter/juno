@@ -1,25 +1,53 @@
-import { RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useState } from "react";
+import { RefreshControl, ScrollView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
+import styled from "styled-components/native";
 
 import { PortfolioArt } from "../../components/art";
-import { Button, Card, Delta, Placeholder, Pill, Skeleton } from "../../components/ui";
+import {
+  Body,
+  Button,
+  Caption,
+  Card,
+  Col,
+  Delta,
+  DeltaBadge,
+  Display,
+  Heading,
+  Label,
+  Mono,
+  Pill,
+  Placeholder,
+  Row,
+  Skeleton,
+  Stat,
+  Tabs,
+  Title,
+} from "../../components/kit";
 import { juno } from "../../lib/api";
 import { money, tokens, useApi } from "../../lib/useApi";
 import { useWallet } from "../../lib/wallet";
-import { colors, radius, spacing, type } from "../../theme/tokens";
+import { theme } from "../../theme";
+
+type Tab = "holdings" | "activity" | "about";
+
+const TABS = [
+  { id: "holdings" as const, label: "Holdings" },
+  { id: "activity" as const, label: "Activity" },
+  { id: "about" as const, label: "About" },
+];
 
 /**
  * Portfolio.
  *
  * Holdings are read from chain. Cost is not on-chain anywhere, so it is derived
  * from this wallet's own decoded trades — which means a position acquired some
- * other way has a balance but no cost, and is shown with a dash rather than a
- * fabricated zero. A zero cost would imply the entire holding is profit.
+ * other way has a balance but no cost, and shows a dash rather than a
+ * fabricated zero. A zero cost would imply the whole holding is profit.
  */
 export default function ProfileScreen() {
   const wallet = useWallet();
-  const router = useRouter();
+  const [tab, setTab] = useState<Tab>("holdings");
   const portfolio = useApi(
     async () => (wallet.address ? juno.portfolio(wallet.address) : null),
     [wallet.address],
@@ -27,133 +55,163 @@ export default function ProfileScreen() {
 
   if (!wallet.ready) {
     return (
-      <SafeAreaView style={styles.screen} edges={["top"]}>
-        <View style={styles.body}>
-          <Skeleton height={120} />
-        </View>
-      </SafeAreaView>
+      <Page edges={["top"]}>
+        <Body style={{ padding: 16 }}>
+          <Skeleton h={140} />
+        </Body>
+      </Page>
     );
   }
 
   if (!wallet.address) {
     return (
-      <SafeAreaView style={styles.screen} edges={["top"]}>
+      <Page edges={["top"]}>
         <Placeholder
           title="No wallet yet"
-          detail="Create one to trade and to launch your own coins. It takes no sign-up."
-          action={<Button label="Create wallet" onPress={() => wallet.connect().then(portfolio.refresh)} />}
+          detail="Create one to trade and to launch your own coins. No sign-up."
+          action={
+            <Button
+              label="Create wallet"
+              onPress={() => wallet.connect().then(portfolio.refresh)}
+            />
+          }
         />
-      </SafeAreaView>
+      </Page>
     );
   }
 
   const data = portfolio.data;
+  const currency = data?.currency === "mixed" ? "USD" : (data?.currency ?? "USD");
 
   return (
-    <SafeAreaView style={styles.screen} edges={["top"]}>
+    <Page edges={["top"]}>
       <ScrollView
-        contentContainerStyle={styles.body}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 130, gap: 12 }}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={portfolio.refreshing} onRefresh={portfolio.refresh} tintColor={colors.muted} />
+          <RefreshControl
+            refreshing={portfolio.refreshing}
+            onRefresh={portfolio.refresh}
+            tintColor={theme.colors.muted}
+          />
         }
       >
-        <Text style={styles.title}>Portfolio</Text>
-
-        <Card style={styles.hero}>
-          <PortfolioArt size={130} />
-          <Text style={styles.heroLabel}>Total value</Text>
+        {/* The hero, taken from the portfolio reference: one big value, a
+            signed badge under it, and a 3D object rather than a chart — a chart
+            would imply a performance history a new wallet has not got. */}
+        <Hero>
+          <PortfolioArt size={116} />
+          <Caption>Total value</Caption>
           {portfolio.loading ? (
-            <Skeleton height={38} width="60%" />
+            <Skeleton h={40} w="60%" />
           ) : (
-            <Text style={styles.heroValue}>
-              {money(data?.totalValue ?? 0, data?.currency === "mixed" ? "USD" : (data?.currency ?? "USD"), {
-                compact: false,
-              })}
-            </Text>
+            <Display>{money(data?.totalValue ?? 0, currency, { compact: false })}</Display>
           )}
-          <Delta pct={data?.totalPnlPct ?? null} style={styles.heroDelta} />
+          <DeltaBadge pct={data?.totalPnlPct ?? null} />
 
-          {/* A partial read means some pool's history could not be fully
-              walked, so the cost figures are incomplete. Saying so beats
-              presenting a short basis as final. */}
-          {data?.partial && (
-            <Text style={styles.caveat}>
-              Some trade history could not be read, so cost figures may be incomplete.
-            </Text>
-          )}
-        </Card>
+          <Row gap={0} style={{ marginTop: 18, alignSelf: "stretch" }}>
+            <Stat
+              value={String(data?.positions.length ?? 0)}
+              label="Positions"
+            />
+            <Stat
+              value={
+                data?.totalPnl === null || data?.totalPnl === undefined
+                  ? "—"
+                  : money(data.totalPnl, currency)
+              }
+              label="P&L"
+              tone={
+                data?.totalPnl === null || data?.totalPnl === undefined
+                  ? undefined
+                  : data.totalPnl >= 0
+                    ? "pos"
+                    : "neg"
+              }
+            />
+            <Stat
+              value={`${wallet.address.slice(0, 4)}…${wallet.address.slice(-4)}`}
+              label="Wallet"
+            />
+          </Row>
+        </Hero>
 
-        <View style={styles.walletRow}>
-          <Text style={styles.walletLabel}>Wallet</Text>
-          <Text style={styles.walletValue} numberOfLines={1}>
-            {wallet.address.slice(0, 4)}…{wallet.address.slice(-4)}
-          </Text>
-          <Pill label={wallet.mode === "local" ? "Device key · devnet" : "Embedded"} />
-        </View>
+        <Row gap={8}>
+          <Pill label={wallet.mode === "local" ? "Device key · devnet" : "Embedded wallet"} />
+          {data?.partial ? <Pill label="Partial read" tone="neg" /> : null}
+        </Row>
 
-        <Text style={styles.sectionTitle}>Holdings</Text>
+        <Tabs items={TABS} value={tab} onChange={setTab} />
 
-        {portfolio.loading ? (
-          <Card><Skeleton height={16} width="70%" /></Card>
-        ) : portfolio.error ? (
-          <Card><Text style={styles.error}>{portfolio.error}</Text></Card>
-        ) : (data?.positions.length ?? 0) === 0 ? (
+        {tab === "holdings" ? (
+          portfolio.loading ? (
+            <Card>
+              <Skeleton h={16} w="70%" />
+            </Card>
+          ) : portfolio.error ? (
+            <Card>
+              <Body style={{ color: theme.colors.neg }}>{portfolio.error}</Body>
+            </Card>
+          ) : (data?.positions.length ?? 0) === 0 ? (
+            <Card>
+              <Body muted>
+                Nothing held yet. Buy a coin from the Trade tab and it shows up here.
+              </Body>
+            </Card>
+          ) : (
+            data!.positions.map((position) => (
+              <Card key={position.baseMint}>
+                <Row justify="space-between" gap={12}>
+                  <Heading numberOfLines={1} style={{ fontSize: 16, flex: 1 }}>
+                    {position.name}
+                  </Heading>
+                  <Mono style={{ fontSize: 15 }}>
+                    {money(position.value, position.currency)}
+                  </Mono>
+                </Row>
+                <Row justify="space-between" style={{ marginTop: 6 }}>
+                  <Mono muted>
+                    {tokens(position.balance)} ${position.symbol}
+                  </Mono>
+                  <Delta pct={position.unrealisedPnlPct} />
+                </Row>
+                <Caption style={{ marginTop: 6 }}>
+                  {position.averageCost === null
+                    ? "No recorded cost for this holding"
+                    : `Avg cost ${money(position.averageCost, position.currency, { compact: false })}`}
+                </Caption>
+              </Card>
+            ))
+          )
+        ) : tab === "activity" ? (
           <Card>
-            <Text style={styles.empty}>
-              Nothing held yet. Buy a coin from the Trade tab and it shows up here.
-            </Text>
+            <Body muted>
+              Your trades appear on each coin&rsquo;s page, and in the Social feed.
+            </Body>
           </Card>
         ) : (
-          data!.positions.map((position) => (
-            <Card key={position.baseMint} style={styles.position}>
-              <View style={styles.positionTop}>
-                <Text style={styles.positionName} numberOfLines={1}>
-                  {position.name}
-                </Text>
-                <Text style={styles.positionValue}>
-                  {money(position.value, position.currency)}
-                </Text>
-              </View>
-              <View style={styles.positionBottom}>
-                <Text style={styles.positionMeta}>
-                  {tokens(position.balance)} ${position.symbol}
-                </Text>
-                <Delta pct={position.unrealisedPnlPct} />
-              </View>
-              <Text style={styles.positionCost}>
-                {position.averageCost === null
-                  ? "No recorded cost for this holding"
-                  : `Avg cost ${money(position.averageCost, position.currency, { compact: false })}`}
-              </Text>
-            </Card>
-          ))
+          <Card>
+            <Body muted>
+              This wallet lives in the device keychain and signs on-device. It is
+              a devnet key and is not recoverable — Juno never sees it.
+            </Body>
+          </Card>
         )}
       </ScrollView>
-    </SafeAreaView>
+    </Page>
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.bg },
-  body: { paddingHorizontal: spacing.lg, paddingBottom: 120, gap: spacing.md },
-  title: { ...type.title, color: colors.ink },
-  hero: { alignItems: "center", gap: spacing.xs, paddingVertical: spacing.xl },
-  heroLabel: { ...type.label, color: colors.muted },
-  heroValue: { ...type.display, color: colors.ink },
-  heroDelta: { marginTop: 2 },
-  caveat: { ...type.caption, color: colors.faint, textAlign: "center", marginTop: spacing.sm, paddingHorizontal: spacing.lg },
-  walletRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingHorizontal: spacing.xs },
-  walletLabel: { ...type.label, color: colors.muted },
-  walletValue: { ...type.bodyStrong, color: colors.ink, flex: 1 },
-  sectionTitle: { ...type.heading, color: colors.ink, marginTop: spacing.sm },
-  position: { gap: 6 },
-  positionTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: spacing.md },
-  positionName: { ...type.bodyStrong, color: colors.ink, flex: 1 },
-  positionValue: { ...type.bodyStrong, color: colors.ink, fontVariant: ["tabular-nums"] },
-  positionBottom: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  positionMeta: { ...type.label, color: colors.muted, fontVariant: ["tabular-nums"] },
-  positionCost: { ...type.caption, color: colors.faint },
-  empty: { ...type.body, color: colors.muted, lineHeight: 21 },
-  error: { ...type.body, color: colors.neg },
-});
+const Page = styled(SafeAreaView)`
+  flex: 1;
+  background-color: ${(p) => p.theme.colors.bg};
+`;
+
+const Hero = styled.View`
+  background-color: ${(p) => p.theme.colors.surface};
+  border-radius: ${(p) => p.theme.radius.xl}px;
+  padding-vertical: ${(p) => p.theme.space(6)}px;
+  padding-horizontal: ${(p) => p.theme.space(4)}px;
+  align-items: center;
+  gap: ${(p) => p.theme.space(1)}px;
+`;

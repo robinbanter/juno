@@ -1,6 +1,8 @@
 import Svg, { Circle, Defs, G, Line, LinearGradient, Path, Rect, Stop } from "react-native-svg";
 
-import { colors } from "../theme/tokens";
+import { theme } from "../theme";
+
+const colors = theme.colors;
 
 /**
  * Illustrations, drawn in code.
@@ -24,7 +26,7 @@ import { colors } from "../theme/tokens";
  */
 export function OnboardingArt({ size = 280 }: { size?: number }) {
   const people = [
-    { x: 140, y: 34, r: 24, fill: "#F2E230" },
+    { x: 140, y: 34, r: 24, fill: theme.colors.lime },
     { x: 232, y: 86, r: 20, fill: "#8B5CF6" },
     { x: 214, y: 196, r: 22, fill: "#2E5BFF" },
     { x: 74, y: 196, r: 26, fill: "#0E9F6E" },
@@ -35,7 +37,7 @@ export function OnboardingArt({ size = 280 }: { size?: number }) {
     <Svg width={size} height={size} viewBox="0 0 280 260">
       <Defs>
         <LinearGradient id="core" x1="0" y1="0" x2="1" y2="1">
-          <Stop offset="0%" stopColor="#F2E230" />
+          <Stop offset="0%" stopColor={theme.colors.lime} />
           <Stop offset="100%" stopColor="#0E9F6E" />
         </LinearGradient>
       </Defs>
@@ -116,7 +118,7 @@ export function PortfolioArt({ size = 130 }: { size?: number }) {
         </G>
       ))}
 
-      <Rect x={30} y={44} width={100} height={26} rx={13} fill="url(#coinTop)" />
+      <Rect x={30} y={44} width={100} height={26} rx={13} fill={theme.colors.lime} />
       <Circle cx={80} cy={57} r={8} fill={colors.surface} opacity={0.9} />
 
       {/* A small upward mark, because a portfolio screen is about direction. */}
@@ -142,9 +144,40 @@ export function CoinGlyph({ size = 48, seed = "" }: { size?: number; seed?: stri
 
   return (
     <Svg width={size} height={size} viewBox="0 0 48 48">
-      <Rect width={48} height={48} rx={14} fill={colors.surfaceSunken} />
+      <Rect width={48} height={48} rx={14} fill={colors.surfaceAlt} />
       <Circle cx={18 + (hash % 7)} cy={20 + (hash % 5)} r={11} fill={fill} opacity={0.9} />
       <Circle cx={30 - (hash % 5)} cy={30 - (hash % 6)} r={9} fill={second} opacity={0.75} />
+    </Svg>
+  );
+}
+
+
+/**
+ * A seeded avatar, drawn rather than fetched.
+ *
+ * The server's identicon is an `data:image/svg+xml` URI. That renders in a
+ * browser and makes iOS throw "URI parsing error" out of RCTImageManager,
+ * which takes the screen down with it — so on native the same idea is drawn
+ * directly. The figure is derived from the wallet address, so the same person
+ * always gets the same mark: the address *is* the data, not a placeholder
+ * standing in for a missing avatar.
+ */
+export function Identicon({ seed, size = 26 }: { seed: string; size?: number }) {
+  let h = 2166136261;
+  for (let i = 0; i < seed.length; i += 1) {
+    h ^= seed.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  const pick = (shift: number) => Math.abs(h >> shift);
+  const palette = [colors.series[0], colors.series[1], colors.series[2], colors.series[3], colors.pos];
+  const back = palette[pick(0) % palette.length];
+  const front = palette[(pick(8) + 2) % palette.length];
+
+  return (
+    <Svg width={size} height={size} viewBox="0 0 48 48">
+      <Circle cx={24} cy={24} r={24} fill={back} opacity={0.22} />
+      <Circle cx={16 + (pick(4) % 10)} cy={18 + (pick(12) % 10)} r={9} fill={back} />
+      <Circle cx={30 - (pick(16) % 8)} cy={30 - (pick(20) % 8)} r={7} fill={front} opacity={0.85} />
     </Svg>
   );
 }

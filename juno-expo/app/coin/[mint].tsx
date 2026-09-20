@@ -1,23 +1,33 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
-import {
-  Image,
-  Linking,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { Linking, RefreshControl, ScrollView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import styled from "styled-components/native";
 
-import { CoinGlyph } from "../../components/art";
-import { Button, Card, Delta, Pill, Placeholder, Skeleton, Stat } from "../../components/ui";
+import { CoinGlyph, Identicon } from "../../components/art";
+import {
+  Avatar,
+  Body,
+  Button,
+  Caption,
+  Card,
+  Col,
+  Delta,
+  Heading,
+  Label,
+  Mono,
+  Pill,
+  Placeholder,
+  Progress,
+  Row,
+  Skeleton,
+  Stat,
+  Title,
+} from "../../components/kit";
 import { TradeSheet } from "../../components/TradeSheet";
 import { juno, type NavReference } from "../../lib/api";
 import { money, since, tokens, useApi } from "../../lib/useApi";
-import { colors, radius, spacing, type } from "../../theme/tokens";
+import { theme } from "../../theme";
 
 /**
  * One coin: what it is, what it costs, and how to trade it.
@@ -35,132 +45,143 @@ export default function CoinScreen() {
   const coin = detail.data?.coin;
 
   return (
-    <SafeAreaView style={styles.screen} edges={["top"]}>
-      <View style={styles.nav}>
-        <Pressable onPress={() => router.back()} hitSlop={12} accessibilityRole="button">
-          <Text style={styles.back}>‹ Back</Text>
-        </Pressable>
-      </View>
+    <Page edges={["top"]}>
+      <Nav>
+        <Back onPress={() => router.back()} hitSlop={12} accessibilityRole="button">
+          <BackMark>‹</BackMark>
+        </Back>
+      </Nav>
 
       {detail.loading ? (
-        <View style={styles.body}>
-          <Skeleton height={220} />
-          <Skeleton height={18} width="60%" style={{ marginTop: spacing.lg }} />
-        </View>
+        <Loading>
+          <Skeleton h={260} round={22} />
+          <Skeleton h={18} w="60%" />
+        </Loading>
       ) : detail.error || !coin ? (
         <Placeholder title="Could not load this coin" detail={detail.error ?? undefined} />
       ) : (
         <>
           <ScrollView
-            contentContainerStyle={styles.body}
+            contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 170, gap: 12 }}
             showsVerticalScrollIndicator={false}
             refreshControl={
-              <RefreshControl refreshing={detail.refreshing} onRefresh={detail.refresh} tintColor={colors.muted} />
+              <RefreshControl
+                refreshing={detail.refreshing}
+                onRefresh={detail.refresh}
+                tintColor={theme.colors.muted}
+              />
             }
           >
             {juno.media(coin.media.url) ? (
-              <Image source={{ uri: juno.media(coin.media.url)! }} style={styles.hero} />
+              <Hero source={{ uri: juno.media(coin.media.url)! }} />
             ) : (
-              <View style={styles.heroEmpty}>
-                <CoinGlyph size={92} seed={coin.address} />
-              </View>
+              <HeroEmpty>
+                <CoinGlyph size={96} seed={coin.address} />
+              </HeroEmpty>
             )}
 
-            <View style={styles.heading}>
-              <Text style={styles.name}>{coin.name}</Text>
-              <View style={styles.headingRow}>
-                <Pill label={`$${coin.symbol}`} tone="primary" />
+            <Col gap={8}>
+              <Title>{coin.name}</Title>
+              <Row gap={8}>
+                <Pill label={`$${coin.symbol}`} tone="lime" />
                 <Pill label={coin.curvePreset} />
-                {coin.curve.graduated && <Pill label="Graduated" tone="pos" />}
-              </View>
-              {coin.description ? <Text style={styles.description}>{coin.description}</Text> : null}
-            </View>
+                {coin.curve.graduated ? <Pill label="Graduated" tone="pos" /> : null}
+              </Row>
+              {coin.description ? <Body muted>{coin.description}</Body> : null}
+            </Col>
 
-            <Card style={styles.stats}>
-              <Stat
-                label="Market cap"
-                value={money(coin.marketCap, coin.marketCapCurrency)}
-              />
-              <Stat label="24h" value={<Delta pct={coin.marketCapChangePct} />} />
-              <Stat
-                label="24h volume"
-                value={money(coin.volume24h, coin.marketCapCurrency)}
-              />
+            <Card>
+              <Row>
+                <Stat
+                  value={money(coin.marketCap, coin.marketCapCurrency)}
+                  label="Market cap"
+                />
+                <Stat
+                  value={money(coin.volume24h, coin.marketCapCurrency)}
+                  label="24h volume"
+                />
+                <Stat
+                  value={money(coin.creatorRewards, coin.marketCapCurrency)}
+                  label="Creator fees"
+                />
+              </Row>
+              <Row justify="center" style={{ marginTop: 10 }}>
+                <Delta pct={coin.marketCapChangePct} />
+              </Row>
             </Card>
 
-            {/* Curve progress governs graduation, so it is shown as the share
-                of the migration threshold rather than a raw reserve. */}
-            {!coin.curve.graduated && (
-              <Card style={styles.curve}>
-                <View style={styles.curveHead}>
-                  <Text style={styles.curveLabel}>Curve progress</Text>
-                  <Text style={styles.curvePct}>
-                    {(coin.curve.progress * 100).toFixed(2)}%
-                  </Text>
-                </View>
-                <View style={styles.track}>
-                  <View
-                    style={[styles.fill, { width: `${Math.min(100, coin.curve.progress * 100)}%` }]}
-                  />
-                </View>
-                <Text style={styles.curveFoot}>
+            {!coin.curve.graduated ? (
+              <Card>
+                <Row justify="space-between">
+                  <Label muted>Curve progress</Label>
+                  <Mono>{(coin.curve.progress * 100).toFixed(2)}%</Mono>
+                </Row>
+                <Spacer />
+                <Progress pct={coin.curve.progress * 100} />
+                <Caption style={{ marginTop: 8 }}>
                   {money(coin.curve.raisedUsd, coin.marketCapCurrency)} of{" "}
                   {money(coin.curve.thresholdUsd, coin.marketCapCurrency)} to graduate into a
                   DAMM v2 pool
-                </Text>
+                </Caption>
               </Card>
-            )}
+            ) : null}
 
-            {coin.nav && <NavBand nav={coin.nav} />}
+            {coin.nav ? <NavBand nav={coin.nav} /> : null}
 
-            <Text style={styles.sectionTitle}>Activity</Text>
+            <Heading style={{ marginTop: 6 }}>Activity</Heading>
             {(detail.data?.activity.length ?? 0) === 0 ? (
               <Card>
-                <Text style={styles.empty}>No trades yet.</Text>
+                <Body muted>No trades yet.</Body>
               </Card>
             ) : (
               detail.data!.activity.slice(0, 12).map((row) => (
-                <Card key={row.id} style={styles.activity}>
-                  <Image source={{ uri: row.actor.avatarUrl }} style={styles.activityAvatar} />
-                  <Text style={styles.activityHandle} numberOfLines={1}>
-                    {row.actor.handle}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.activitySide,
-                      { color: row.side === "buy" ? colors.pos : colors.neg },
-                    ]}
-                  >
-                    {row.side}
-                  </Text>
-                  <Text style={styles.activityAmount}>{tokens(row.amount)}</Text>
-                  <Text style={styles.activityWhen}>{since(row.timestamp)}</Text>
+                <Card key={row.id}>
+                  <Row gap={10}>
+                    <Identicon seed={row.actor.handle} size={22} />
+                    <Label numberOfLines={1} style={{ width: 84 }}>
+                      {row.actor.handle}
+                    </Label>
+                    <Side $buy={row.side === "buy"}>{row.side}</Side>
+                    <Mono muted style={{ flex: 1, textAlign: "right" }}>
+                      {tokens(row.amount)}
+                    </Mono>
+                    <Caption>{since(row.timestamp)}</Caption>
+                  </Row>
                 </Card>
               ))
             )}
 
-            <Pressable
-              onPress={() => Linking.openURL(juno.explorer("account", coin.pool))}
-              style={styles.proof}
-            >
-              <Text style={styles.proofText}>View the pool on Solscan ↗</Text>
-            </Pressable>
+            <LinkTap onPress={() => Linking.openURL(juno.explorer("account", coin.pool))}>
+              <LinkText>View the pool on Solscan ↗</LinkText>
+            </LinkTap>
           </ScrollView>
 
-          <View style={styles.actions}>
+          <Actions>
             {coin.curve.graduated ? (
-              <Text style={styles.graduatedNote}>
+              <GraduatedNote>
                 This curve has graduated. Trading continues in its DAMM v2 pool.
-              </Text>
+              </GraduatedNote>
             ) : (
               <>
-                <Button label="Buy" variant="buy" onPress={() => setSheet("buy")} style={{ flex: 1 }} />
-                <Button label="Sell" variant="sell" onPress={() => setSheet("sell")} style={{ flex: 1 }} />
+                <Button
+                  label="Buy"
+                  variant="lime"
+                  tall
+                  onPress={() => setSheet("buy")}
+                  style={{ flex: 1 }}
+                />
+                <Button
+                  label="Sell"
+                  variant="quiet"
+                  tall
+                  onPress={() => setSheet("sell")}
+                  style={{ flex: 1 }}
+                />
               </>
             )}
-          </View>
+          </Actions>
 
-          {sheet && (
+          {sheet ? (
             <TradeSheet
               coin={coin}
               side={sheet}
@@ -170,10 +191,10 @@ export default function CoinScreen() {
                 detail.refresh();
               }}
             />
-          )}
+          ) : null}
         </>
       )}
-    </SafeAreaView>
+    </Page>
   );
 }
 
@@ -181,8 +202,8 @@ export default function CoinScreen() {
  * Where the curve sits against the underlying.
  *
  * Three states, kept distinct because conflating them is the whole problem. An
- * equity feed outside exchange hours is showing Friday's close — that is normal
- * and is labelled as such, not dressed up as a live price.
+ * equity feed outside exchange hours shows Friday's close — normal, and labelled
+ * as such rather than dressed up as live.
  */
 function NavBand({ nav }: { nav: NavReference }) {
   const label = /^Equity\.[A-Z]+\.([A-Z.]+)\/USD$/.exec(nav.feed)?.[1] ?? nav.feed.slice(0, 8);
@@ -190,93 +211,122 @@ function NavBand({ nav }: { nav: NavReference }) {
     nav.state === "live" ? "Live" : nav.state === "closed" ? "Market closed · last close" : "Stale";
 
   return (
-    <Card style={styles.nav_}>
-      <View style={styles.navHead}>
-        <Text style={styles.navTitle}>{label} reference</Text>
-        <Text
-          style={[
-            styles.navState,
-            { color: nav.state === "live" ? colors.pos : nav.state === "stale" ? colors.neg : colors.muted },
-          ]}
+    <Card>
+      <Row justify="space-between">
+        <Label style={{ fontWeight: "700" }}>{label} reference</Label>
+        <Caption
+          style={{
+            color:
+              nav.state === "live"
+                ? theme.colors.pos
+                : nav.state === "stale"
+                  ? theme.colors.neg
+                  : theme.colors.muted,
+          }}
         >
           {state}
-        </Text>
-      </View>
-      <View style={styles.navRow}>
-        <Text style={styles.navPrice}>{money(nav.priceUsd, "USD", { compact: false })}</Text>
-        <Text style={[styles.navDev, { color: nav.withinBand ? colors.pos : colors.neg }]}>
+        </Caption>
+      </Row>
+      <Row justify="space-between" align="baseline" style={{ marginTop: 8 }}>
+        <Heading>{money(nav.priceUsd, "USD", { compact: false })}</Heading>
+        <Mono style={{ color: nav.withinBand ? theme.colors.pos : theme.colors.neg }}>
           {nav.deviation >= 0 ? "+" : ""}
           {(nav.deviation * 100).toFixed(2)}%
-        </Text>
-      </View>
-      <Text style={styles.navFoot}>
+        </Mono>
+      </Row>
+      <Caption style={{ marginTop: 8 }}>
         {nav.withinBand
           ? `Inside this preset's ${nav.bandBps / 100}% band. Read from Pyth on-chain.`
           : `Outside this preset's ${nav.bandBps / 100}% band.`}
-      </Text>
+      </Caption>
     </Card>
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.bg },
-  nav: { paddingHorizontal: spacing.lg, paddingBottom: spacing.sm },
-  back: { ...type.bodyStrong, color: colors.ink },
-  body: { paddingHorizontal: spacing.lg, paddingBottom: 150, gap: spacing.md },
-  hero: { width: "100%", aspectRatio: 1, borderRadius: radius.lg, backgroundColor: colors.surfaceSunken },
-  heroEmpty: {
-    width: "100%",
-    aspectRatio: 1,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surface,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  heading: { gap: spacing.sm },
-  name: { ...type.title, color: colors.ink },
-  headingRow: { flexDirection: "row", gap: spacing.sm, flexWrap: "wrap" },
-  description: { ...type.body, color: colors.muted, lineHeight: 21 },
-  stats: { flexDirection: "row", gap: spacing.md },
-  curve: { gap: spacing.sm },
-  curveHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  curveLabel: { ...type.label, color: colors.muted },
-  curvePct: { ...type.bodyStrong, color: colors.ink, fontVariant: ["tabular-nums"] },
-  track: { height: 6, borderRadius: 3, backgroundColor: colors.line, overflow: "hidden" },
-  fill: { height: 6, backgroundColor: colors.pos },
-  curveFoot: { ...type.caption, color: colors.faint, lineHeight: 16 },
-  nav_: { gap: spacing.sm },
-  navHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  navTitle: { ...type.bodyStrong, color: colors.ink },
-  navState: { ...type.caption },
-  navRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "baseline" },
-  navPrice: { ...type.heading, color: colors.ink, fontVariant: ["tabular-nums"] },
-  navDev: { ...type.bodyStrong, fontVariant: ["tabular-nums"] },
-  navFoot: { ...type.caption, color: colors.faint, lineHeight: 16 },
-  sectionTitle: { ...type.heading, color: colors.ink, marginTop: spacing.sm },
-  activity: { flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingVertical: spacing.md },
-  activityAvatar: { width: 22, height: 22, borderRadius: 11, backgroundColor: colors.surfaceSunken },
-  activityHandle: { ...type.label, color: colors.ink, width: 86 },
-  activitySide: { ...type.label, textTransform: "capitalize", width: 40 },
-  activityAmount: { ...type.label, color: colors.muted, flex: 1, textAlign: "right", fontVariant: ["tabular-nums"] },
-  activityWhen: { ...type.caption, color: colors.faint, width: 34, textAlign: "right" },
-  empty: { ...type.body, color: colors.muted },
-  proof: { paddingVertical: spacing.md },
-  proofText: { ...type.label, color: colors.focus },
-  actions: {
-    position: "absolute",
-    left: spacing.lg,
-    right: spacing.lg,
-    bottom: 100,
-    flexDirection: "row",
-    gap: spacing.md,
-  },
-  graduatedNote: {
-    ...type.label,
-    color: colors.muted,
-    backgroundColor: colors.surface,
-    padding: spacing.lg,
-    borderRadius: radius.md,
-    flex: 1,
-    textAlign: "center",
-  },
-});
+const Page = styled(SafeAreaView)`
+  flex: 1;
+  background-color: ${(p) => p.theme.colors.bg};
+`;
+
+const Nav = styled.View`
+  padding-horizontal: ${(p) => p.theme.space(4)}px;
+  padding-bottom: ${(p) => p.theme.space(2)}px;
+`;
+
+const Back = styled.Pressable`
+  width: 36px;
+  height: 36px;
+  border-radius: 18px;
+  background-color: ${(p) => p.theme.colors.surface};
+  align-items: center;
+  justify-content: center;
+`;
+
+const BackMark = styled.Text`
+  font-size: 24px;
+  line-height: 26px;
+  font-weight: 700;
+  color: ${(p) => p.theme.colors.text};
+`;
+
+const Loading = styled.View`
+  padding-horizontal: ${(p) => p.theme.space(4)}px;
+  gap: ${(p) => p.theme.space(4)}px;
+`;
+
+const Hero = styled.Image`
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: ${(p) => p.theme.radius.xl}px;
+  background-color: ${(p) => p.theme.colors.surfaceAlt};
+`;
+
+const HeroEmpty = styled.View`
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: ${(p) => p.theme.radius.xl}px;
+  background-color: ${(p) => p.theme.colors.surface};
+  align-items: center;
+  justify-content: center;
+`;
+
+const Spacer = styled.View`
+  height: 8px;
+`;
+
+const Side = styled.Text<{ $buy: boolean }>`
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: capitalize;
+  width: 38px;
+  color: ${(p) => (p.$buy ? p.theme.colors.pos : p.theme.colors.neg)};
+`;
+
+const LinkTap = styled.Pressable`
+  padding-vertical: ${(p) => p.theme.space(3)}px;
+`;
+
+const LinkText = styled.Text`
+  font-size: 13px;
+  font-weight: 600;
+  color: ${(p) => p.theme.colors.focus};
+`;
+
+const Actions = styled.View`
+  position: absolute;
+  left: ${(p) => p.theme.space(4)}px;
+  right: ${(p) => p.theme.space(4)}px;
+  bottom: 104px;
+  flex-direction: row;
+  gap: ${(p) => p.theme.space(3)}px;
+`;
+
+const GraduatedNote = styled.Text`
+  flex: 1;
+  font-size: 13px;
+  color: ${(p) => p.theme.colors.muted};
+  background-color: ${(p) => p.theme.colors.surface};
+  padding: ${(p) => p.theme.space(4)}px;
+  border-radius: ${(p) => p.theme.radius.md}px;
+  text-align: center;
+`;

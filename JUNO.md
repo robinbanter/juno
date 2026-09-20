@@ -10,42 +10,82 @@ pool and becomes a normal AMM market that outlives the app.
 
 Built for the Solana **STOCKLANA** hackathon.
 
+There are two surfaces. **`juno-expo/`** is the mobile app and the one to look
+at. The **Next.js app** at the repo root serves the web UI and the API the phone
+talks to.
+
 ---
 
 ## What is real, and what is not
 
 This section is deliberately first. Every claim below is verifiable on an
-explorer or by running a script in this repo.
+explorer or by running something in this repo.
 
 ### Real and working
 
 | | |
 |---|---|
 | **DBC pools created by this code** | 4 on devnet, links below |
-| **A real swap through the app's own path** | link below; the curve moved |
+| **Real swaps through the app's own path** | links below; the curve moved |
 | **A full lifecycle** | launch → trade → curve to 100% → **migrated to DAMM v2** |
 | **Creator fees claimed** | 0.009653 SOL, on-chain |
+| **Mobile app** | Expo, five tabs, real data on every screen |
+| **Transactions built server-side, signed on the device** | the key never leaves the phone; `4YM9pnRu…QLsq` is a devnet buy landed from server-built bytes |
+| **Pyth NAV band** | read from `PriceUpdateV2` accounts **on-chain**, no API key |
+| **Swap history, 24h volume, price chart** | decoded from pool vault deltas — no indexer |
+| **Portfolio with cost basis and P&L** | average-cost, derived from this wallet's own decoded trades |
 | **Token metadata** | pinned to IPFS, URI written to the mint |
 | **Curve configs** | 4 presets, 16 liquidity-weighted segments each |
-| **Persistence** | Neon Postgres (`juno_pools`), writes verified through the API |
-| **Reads** | price, curve progress, migration threshold, holders, transactions — all from chain per request |
-| **Wallet** | Phantom / Solflare via `@solana/wallet-adapter` |
-| **Quotes** | priced by the DBC quoter against live account state |
-| **Tests** | 140 unit tests, incl. every preset validated by Meteora's own `validateConfigParameters` |
+| **Persistence** | Neon Postgres (`juno_pools`, `juno_posts`) |
+| **Tests** | 172 unit + live integration tests, incl. every preset validated by Meteora's own `validateConfigParameters` and every Pyth feed id resolved on-chain |
+
+### Two things this project had written off, and was wrong about
+
+**Pyth does not need an API key.** Hermes really is gated now — its price
+endpoints answer 401 on every deployment, which is why the NAV band was shelved.
+But Pyth publishes on Solana, and a `PriceUpdateV2` account costs one
+`getAccountInfo` against the RPC already in use. For a Solana app that is the
+better integration anyway: the UI shows the price a Solana program would see.
+
+Two details the layout forces. The feeds are sharded and the shards are **not**
+equally fresh — crypto is current on shard 0, equities on shard 1 — so both are
+read and the newer wins. And an equity feed stops publishing when the exchange
+closes, so a weekend mark is Friday's close; that is reported as "market closed,
+last close" rather than dressed up as live.
+
+**Trade history does not need an indexer.** Every swap moves the pool's two
+vault token accounts in opposite directions, and those deltas are already in the
+transaction the RPC returns. Base down and quote up is a buy; the reverse is a
+sell; anything else is not a trade, which is how pool creation, fee claims and
+migration filter themselves out. That one decode produces the activity feed, 24h
+volume, total volume, the price chart and the 24h change.
+
+Before this, every Activity row shipped as `side: "buy"` with a zero amount — a
+trading feed asserting a direction it had never read, which rendered real sells
+as buys.
 
 ### Not built
 
 | | Why |
 |---|---|
-| **Pyth NAV band** | Code is written (`lib/juno/pyth.ts`) but Hermes moved its price endpoints behind an API key, and none exists in this repo. The UI shows no NAV rather than a fabricated one. |
-| **Mainnet pool** | Devnet only so far. |
-| **Price chart** | Needs a swap-event indexer. The tab says so instead of drawing a fake line. |
-| **24h volume** | Same reason. Shown as `—`, never as `$0`. |
-| **Trade direction/size in Activity** | Needs log decoding. Rows link to the real transaction instead. |
-| **Comments, follows, likes** | Not persisted. |
+| **Mainnet pool** | Devnet only, by decision. Nothing in the code prevents it: switch the cluster and fund a key. |
+| **Privy embedded wallet** | Integrated, but it needs a mobile client registered for this bundle id in Privy's dashboard — account configuration that cannot be done from the repo. The app signs with a device key in the iOS keychain instead. That is real Ed25519 signing against devnet, not a simulation, and the profile screen says it is not recoverable rather than implying a custody story it does not have. |
+| **iOS Simulator run** | Xcode is installed on the dev machine but `xcode-select` points at the command-line tools. One sudo command fixes it — see `DEPLOY.md`. Verified on Expo web meanwhile. |
+| **Likes and follows** | Not persisted. Comments and creator posts are. |
+| **Holders count on a throttled RPC** | `getTokenLargestAccounts` is refused outright by the public endpoint under load, so it degrades to unknown rather than to zero. |
 
-There is **no mock data layer**. `lib/juno/mock.ts` was deleted; if a pool is
-not on-chain and in the registry, it does not appear in the app.
+### A note on the public RPC
+
+Juno runs against `api.devnet.solana.com` with no API key, deliberately. That
+shapes real engineering: the endpoint refuses *batched* `getParsedTransactions`
+outright as a per-method policy, so transactions are fetched in small paced
+batches; reads retry with jittered backoff; a short read is reported as partial
+rather than summed into a total that would look authoritative; and values choose
+their own cache TTL so a throttled read is retried in seconds instead of being
+served for a minute.
+
+The visible consequence is that a page can legitimately come back short. Where
+that happens the UI says so — it never renders an unknown as a zero.
 
 ---
 
@@ -75,6 +115,11 @@ not on-chain and in the registry, it does not appear in the app.
 - On-chain metadata URI: `ipfs://QmejDQjPhsuUVNPa7tmk5AvKZXwHLjevuXM5UBjfBSKYaD`
 
 **Creator fee claim** (NVDAx): [`3X4g3aDg…9HdAN`](https://solscan.io/tx/3X4g3aDgpW8QKAF8WB3JD18L7S73SqUjen8MYFunqWLBdGxykWYVGT2t1DiwUMgANBpU9zx3d2c2zWGyZnA9HdAN?cluster=devnet) — 0.009653 SOL claimed, balance to zero
+
+**A buy signed the way the phone signs it** — bytes built by the server, signed
+locally, submitted and confirmed:
+[`4YM9pnRu…QLsq`](https://solscan.io/tx/4YM9pnRuUx8KXWyU4xNRDQE35RUT6hPM4mpvCaqvAyo4xbH6CEv8ziMEenJnGdPn4aAVN5kb9a1H9n4HnxHqQLsq?cluster=devnet)
+— reproduced by `npm run test:integration`.
 
 Program (identical on mainnet and devnet):
 [`dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN`](https://solscan.io/account/dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN?cluster=devnet)
@@ -126,15 +171,41 @@ rejects it, since an all-zeroes receiver would burn the remainder at migration.
 
 ## Running it
 
+Two things to start. The API first, then the app.
+
 ```bash
+# 1. the API + web UI
 npm install
-cp .env.local.example .env.local   # set DATABASE_URL, NEXT_PUBLIC_SOLANA_CLUSTER
-npm run db:push
-npm run dev
+cp .env.local.example .env.local   # DATABASE_URL, PINATA_JWT, NEXT_PUBLIC_SOLANA_CLUSTER=devnet
+npm run db:migrate
+npm run dev                        # http://localhost:3000
+npm run juno:seed-posts            # so the feed is not empty
+
+# 2. the mobile app
+cd juno-expo
+npm install
+npx expo start --ios               # needs Xcode; see DEPLOY.md if simctl is missing
 ```
 
-Routes: `/explore` · `/reels` · `/coin/[mint]` · `/creator/[wallet]` ·
+The app finds the API automatically from the host Metro was served on. Point it
+somewhere else with `EXPO_PUBLIC_API_URL` in `juno-expo/.env`.
+
+Web routes: `/explore` · `/reels` · `/coin/[mint]` · `/creator/[wallet]` ·
 `/create` · `/activity`
+
+App tabs: Social · Trade · **Post** · Reels · Profile
+
+### The API the app talks to
+
+| Endpoint | What it does |
+|---|---|
+| `GET /api/juno/feed` | Real trades and creator posts, interleaved |
+| `GET /api/juno/coins` | Market list, sortable by cap or graduation progress |
+| `GET /api/juno/coins/[mint]` | One coin: price, curve, NAV band, chart series, activity |
+| `GET /api/juno/portfolio/[wallet]` | Holdings, cost basis, P&L |
+| `POST /api/juno/tx/swap` | An **unsigned** swap, plus the quote it was built against |
+| `POST /api/juno/tx/launch` | The two **unsigned** launch transactions |
+| `POST /api/juno/tx/submit` | Submit what the device signed, confirm, drop stale caches |
 
 ### Scripts
 
@@ -142,22 +213,26 @@ Routes: `/explore` · `/reels` · `/coin/[mint]` · `/creator/[wallet]` ·
 npm run juno:launch   -- --preset ipo-book --name "AAPLx Issuance" --symbol AAPLXI --quote usdc --yes
 npm run juno:inspect  -- --mint <baseMint>
 npm run juno:trade    -- --mint <baseMint> --side buy --amount 0.5 --yes
-npm run juno:trade    -- --mint <baseMint> --side buy --amount 0.01 --partial --yes
 npm run juno:claim    -- --mint <baseMint> --yes
 npm run juno:graduate -- --mint <baseMint> --preset content --yes
+npm run juno:seed-posts
 ```
 
-Each runs the same code path the UI uses, signed by a local key instead of a
-browser wallet.
+Each runs the same code path the app uses, signed by a local key instead of a
+device.
 
-### Environment
+### Tests
 
-| Variable | Purpose |
-|---|---|
-| `DATABASE_URL` | Postgres for the pool registry |
-| `NEXT_PUBLIC_SOLANA_CLUSTER` | `devnet` or `mainnet-beta` |
-| `NEXT_PUBLIC_SOLANA_RPC` | Dedicated RPC. The public endpoints rate-limit hard enough to break a demo. |
-| `PYTH_API_KEY` | Optional. Without it, no NAV band is shown. |
+```bash
+npm run test:unit         # 172, deterministic, no network
+npm run test:integration  # live devnet + on-chain Pyth reads; nothing is signed
+```
+
+The one worth reading is `tests/integration/juno-tx.test.ts`. It takes the bytes
+the server builds, signs them locally exactly as the phone does, submits them,
+and requires the cluster to confirm — because every screen in the mobile app is
+built on that path, and a version of it that did not land would make all of them
+a demonstration of something that does not work.
 
 ---
 
@@ -167,7 +242,12 @@ Open-source, as required by the submission rules:
 
 - [`@meteora-ag/dynamic-bonding-curve-sdk`](https://github.com/MeteoraAg/dynamic-bonding-curve-sdk) — DBC client (MIT)
 - [`@solana/web3.js`](https://github.com/solana-labs/solana-web3.js), [`@solana/wallet-adapter`](https://github.com/anza-xyz/wallet-adapter) — Solana client and wallets (Apache-2.0)
+- [Expo](https://expo.dev) 57, [React Native](https://reactnative.dev) 0.86, [expo-router](https://docs.expo.dev/router/introduction/) (MIT)
+- [`@privy-io/expo`](https://www.privy.io) — embedded wallets (Apache-2.0)
 - [Next.js](https://nextjs.org) 16, [React](https://react.dev) 19, [Tailwind CSS](https://tailwindcss.com) 4 (MIT)
 - [Drizzle ORM](https://orm.drizzle.team) (Apache-2.0), [lucide-react](https://lucide.dev) (ISC), [qrcode](https://github.com/soldair/node-qrcode) (MIT)
+
+Pyth price feeds are read directly from their on-chain accounts; no SDK is
+vendored for it.
 
 [dbc]: https://docs.meteora.ag/developer-guides/dbc

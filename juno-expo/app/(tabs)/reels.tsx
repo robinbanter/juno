@@ -13,10 +13,10 @@ import {
   type ViewToken,
 } from "react-native";
 
-import { Button, Placeholder } from "../../components/ui";
+import { Button, Placeholder } from "../../components/kit";
 import { juno, type Coin } from "../../lib/api";
 import { money, useApi } from "../../lib/useApi";
-import { colors, radius, spacing, type } from "../../theme/tokens";
+import { theme } from "../../theme";
 
 const { height: SCREEN_H, width: SCREEN_W } = Dimensions.get("window");
 
@@ -107,7 +107,7 @@ function Reel({ coin, active, onOpen }: { coin: Coin; active: boolean; onOpen: (
           nativeControls={false}
         />
       ) : (
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.surfaceSunken }]} />
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.colors.surfaceAlt }]} />
       )}
 
       <View style={styles.scrim} />
@@ -136,8 +136,8 @@ const styles = StyleSheet.create({
     bottom: 0,
     backgroundColor: "rgba(0,0,0,0.28)",
   },
-  overlay: { padding: spacing.xl, paddingBottom: 130, gap: spacing.sm },
-  reelName: { ...type.title, color: "#FFFFFF" },
-  reelMeta: { ...type.label, color: "rgba(255,255,255,0.86)" },
-  reelCta: { marginTop: spacing.md, alignSelf: "flex-start", paddingHorizontal: 40 },
+  overlay: { padding: 24, paddingBottom: 130, gap: 8 },
+  reelName: { fontSize: 28, fontWeight: "800", color: "#FFFFFF" },
+  reelMeta: { fontSize: 13, fontWeight: "500", color: "rgba(255,255,255,0.86)" },
+  reelCta: { marginTop: 12, alignSelf: "flex-start", paddingHorizontal: 40 },
 });

@@ -1,9 +1,9 @@
 import { useRouter } from "expo-router";
-import { Image, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import styled from "styled-components/native";
 
-import { Button } from "../components/ui";
-import { colors, spacing, type } from "../theme/tokens";
+import { OnboardingArt } from "../components/art";
+import { Body, Button, Display } from "../components/kit";
 
 /**
  * Onboarding.
@@ -17,41 +17,38 @@ export default function Onboarding() {
   const router = useRouter();
 
   return (
-    <SafeAreaView style={styles.screen}>
-      <View style={styles.art}>
-        {/* Generated to the same style brief as the rest of the set: five
-            characters connected to one market, on the app's own sage canvas. */}
-        <Image
-          source={require("../assets/art/onboarding.png")}
-          style={styles.image}
-          resizeMode="contain"
-          accessibilityLabel="Five people connected to a shared market"
-        />
-      </View>
+    <Page edges={["top", "bottom"]}>
+      <Art>
+        <OnboardingArt size={320} />
+      </Art>
 
-      <View style={styles.copy}>
-        <Text style={styles.title}>Social Trading{"\n"}Community</Text>
-        <Text style={styles.subtitle}>
+      <Copy>
+        <Display>Social Trading{"\n"}Community</Display>
+        <Body muted>
           Every post is a live market. Back the work you believe in, and the
           creator earns the trading fees.
-        </Text>
-      </View>
+        </Body>
+      </Copy>
 
-      <Button
-        label="Get Started"
-        onPress={() => router.replace("/(tabs)/social")}
-        style={styles.cta}
-      />
-    </SafeAreaView>
+      <Button label="Get Started" tall onPress={() => router.replace("/(tabs)/social")} />
+    </Page>
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.bg, paddingHorizontal: spacing.xl },
-  art: { flex: 1, alignItems: "center", justifyContent: "center" },
-  image: { width: "100%", height: "100%" },
-  copy: { gap: spacing.md, paddingBottom: spacing.xxl },
-  title: { ...type.display, color: colors.ink, lineHeight: 46 },
-  subtitle: { ...type.body, color: colors.muted, lineHeight: 22, maxWidth: 320 },
-  cta: { marginBottom: spacing.xl },
-});
+const Page = styled(SafeAreaView)`
+  flex: 1;
+  background-color: ${(p) => p.theme.colors.bg};
+  padding-horizontal: ${(p) => p.theme.space(6)}px;
+  padding-bottom: ${(p) => p.theme.space(4)}px;
+`;
+
+const Art = styled.View`
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+`;
+
+const Copy = styled.View`
+  gap: ${(p) => p.theme.space(3)}px;
+  padding-bottom: ${(p) => p.theme.space(8)}px;
+`;

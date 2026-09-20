@@ -12,10 +12,10 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { Button, Card, Pill } from "../../components/ui";
+import { Button, Card, Pill } from "../../components/kit";
 import { juno, WSOL_MINT } from "../../lib/api";
 import { useWallet } from "../../lib/wallet";
-import { colors, radius, spacing, type } from "../../theme/tokens";
+import { theme } from "../../theme";
 
 /**
  * Post — which here means launching a real market.
@@ -163,7 +163,7 @@ export default function PostScreen() {
                 value={name}
                 onChangeText={setName}
                 placeholder="Night Market"
-                placeholderTextColor={colors.faint}
+                placeholderTextColor={theme.colors.faint}
                 style={styles.input}
                 maxLength={64}
               />
@@ -174,7 +174,7 @@ export default function PostScreen() {
                 value={symbol}
                 onChangeText={(next) => setSymbol(next.toUpperCase())}
                 placeholder="NIGHT"
-                placeholderTextColor={colors.faint}
+                placeholderTextColor={theme.colors.faint}
                 autoCapitalize="characters"
                 style={styles.input}
                 maxLength={10}
@@ -196,7 +196,7 @@ export default function PostScreen() {
                   <Card style={[styles.preset, on && styles.presetOn]}>
                     <View style={styles.presetHead}>
                       <Text style={styles.presetLabel}>{option.label}</Text>
-                      {on && <Pill label="Selected" tone="primary" />}
+                      {on && <Pill label="Selected" tone="lime" />}
                     </View>
                     <Text style={styles.presetBlurb}>{option.blurb}</Text>
                   </Card>
@@ -213,6 +213,7 @@ export default function PostScreen() {
 
           <Button
             label={status ?? "Launch coin"}
+            tall
             onPress={launch}
             loading={busy}
             disabled={!canLaunch}
@@ -247,30 +248,30 @@ function Field({
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.bg },
-  body: { paddingHorizontal: spacing.lg, paddingBottom: 140, gap: spacing.md },
-  title: { ...type.title, color: colors.ink },
-  lede: { ...type.body, color: colors.muted, lineHeight: 21 },
-  form: { gap: spacing.lg },
-  fieldLabel: { ...type.label, color: colors.muted },
-  fieldHint: { ...type.caption, color: colors.neg },
+  screen: { flex: 1, backgroundColor: theme.colors.bg },
+  body: { paddingHorizontal: 16, paddingBottom: 140, gap: 12 },
+  title: { fontSize: 28, fontWeight: "800", color: theme.colors.ink },
+  lede: { fontSize: 15, color: theme.colors.muted, lineHeight: 21 },
+  form: { gap: 16 },
+  fieldLabel: { fontSize: 13, fontWeight: "500", color: theme.colors.muted },
+  fieldHint: { fontSize: 11, fontWeight: "500", color: theme.colors.neg },
   input: {
     height: 48,
-    borderRadius: radius.md,
-    backgroundColor: colors.surfaceSunken,
-    paddingHorizontal: spacing.lg,
-    ...type.body,
-    color: colors.ink,
+    borderRadius: theme.radius.md,
+    backgroundColor: theme.colors.surfaceAlt,
+    paddingHorizontal: 16,
+    fontSize: 15,
+    color: theme.colors.text,
   },
-  sectionTitle: { ...type.heading, color: colors.ink, marginTop: spacing.sm },
-  sectionLede: { ...type.label, color: colors.muted, lineHeight: 19 },
-  presets: { gap: spacing.sm },
-  preset: { gap: 6, padding: spacing.lg },
-  presetOn: { borderWidth: 2, borderColor: colors.primary },
+  sectionTitle: { fontSize: 19, fontWeight: "700", color: theme.colors.text, marginTop: 8 },
+  sectionLede: { fontSize: 13, fontWeight: "500", color: theme.colors.muted, lineHeight: 19 },
+  presets: { gap: 8 },
+  preset: { gap: 6, padding: 16 },
+  presetOn: { borderWidth: 2, borderColor: theme.colors.lime },
   presetHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  presetLabel: { ...type.bodyStrong, color: colors.ink },
-  presetBlurb: { ...type.label, color: colors.muted, lineHeight: 19 },
+  presetLabel: { fontSize: 15, fontWeight: "600", color: theme.colors.ink },
+  presetBlurb: { fontSize: 13, fontWeight: "500", color: theme.colors.muted, lineHeight: 19 },
   errorCard: { backgroundColor: "rgba(217,45,32,0.08)" },
-  errorText: { ...type.body, color: colors.neg, lineHeight: 21 },
-  footnote: { ...type.caption, color: colors.faint, lineHeight: 16, marginTop: spacing.sm },
+  errorText: { fontSize: 15, color: theme.colors.neg, lineHeight: 21 },
+  footnote: { fontSize: 11, fontWeight: "500", color: theme.colors.faint, lineHeight: 16, marginTop: 8 },
 });
