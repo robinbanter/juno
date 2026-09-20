@@ -327,15 +327,15 @@ Tags reflect repo evidence: `[DONE]` `[IN PROGRESS]` `[NOT STARTED]` `[BLOCKED]`
 
 ### Phase 0 — Secure current work (30 min)
 **Exit:** tree clean, suites green, nothing at risk.
-- 0.1 Commit the uncommitted chart/NAV/streaming work — **[NOT STARTED]**
-- 0.2 Run `tsc`, unit + integration suites; confirm green — **[NOT STARTED]**
-- 0.3 Push branch `juno` to `origin` — **[NOT STARTED]**
+- 0.1 Commit the uncommitted chart/NAV/streaming work — **[DONE]** (`6f454c5`)
+- 0.2 Run `tsc`, unit + integration suites; confirm green — **[DONE]**
+- 0.3 Push branch `juno` to `origin` — **[DONE]**
 
 ### Phase 1 — Design system + assets (parallelisable, start immediately)
 **Exit:** a token file and every asset the screens reference.
-- 1.1 Define light theme tokens. **Validated values below — do not re-pick by eye.** — **[NOT STARTED]**
-- 1.2 Generate the 3D character system via ChatGPT in Chrome, one style prompt for consistency — **[NOT STARTED]**
-- 1.3 Generate onboarding hero (character network), portfolio 3D object, tab icons, empty states — **[NOT STARTED]**
+- 1.1 Define light theme tokens. **Validated values below — do not re-pick by eye.** — **[DONE]** (`juno-expo/theme/tokens.ts`)
+- 1.2 Generate the 3D character system via ChatGPT in Chrome, one style prompt for consistency — **[IN PROGRESS]** — vector art shipped meanwhile (`components/art.tsx`)
+- 1.3 Generate onboarding hero, portfolio 3D object, tab icons, empty states — **[IN PROGRESS]** — all drawn in code and shipping; generated versions to swap in
 - 1.4 App icon + splash — **[NOT STARTED]**
 - 1.5 Veo animations for onboarding — **[NOT STARTED]** *(P2 — cut first)*
 
@@ -357,14 +357,14 @@ white surface; all PASS):
 
 ### Phase 2 — Mobile API layer (blocks all mobile data)
 **Exit:** every endpoint in §7 returns real data, verified with `curl`.
-- 2.1 `GET /api/juno/coins` + `GET /api/juno/coins/[mint]` — **[NOT STARTED]**
-- 2.2 `GET /api/juno/feed` — mixed trades + posts, paginated — **[NOT STARTED]**
-- 2.3 `POST /api/juno/tx/swap` — unsigned tx + quote — **[NOT STARTED]**
-- 2.4 `POST /api/juno/tx/launch` — the two unsigned txs — **[NOT STARTED]**
-- 2.5 `POST /api/juno/tx/submit` — submit, confirm, invalidate caches — **[NOT STARTED]**
-- 2.6 `GET /api/juno/portfolio/[wallet]` — holdings + cost basis from decoded swaps — **[NOT STARTED]**
-- 2.7 CORS for the Expo origin; rate limiting — **[NOT STARTED]**
-- 2.8 Fix G10: bound the activity feed cost — **[NOT STARTED]**
+- 2.1 `GET /api/juno/coins` + `GET /api/juno/coins/[mint]` — **[DONE]** verified 200 with live data
+- 2.2 `GET /api/juno/feed` — mixed trades + posts — **[DONE]** verified 11 posts + trades
+- 2.3 `POST /api/juno/tx/swap` — unsigned tx + quote — **[DONE]**
+- 2.4 `POST /api/juno/tx/launch` — the two unsigned txs — **[DONE]** both under the packet limit
+- 2.5 `POST /api/juno/tx/submit` — submit, confirm, invalidate caches — **[DONE]**
+- 2.6 `GET /api/juno/portfolio/[wallet]` — holdings + cost basis — **[DONE]** 2 positions, $512.76
+- 2.7 CORS for the Expo origin — **[DONE]**. Rate limiting — **[NOT STARTED]**
+- 2.8 Fix G10: bound the activity feed cost — **[DONE]** ~17s -> 0.26s cached
 
 > Acceptance for 2.3–2.5: a test signs the returned bytes with the devnet
 > launcher key and lands a real swap. If that test cannot pass, the mobile buy
@@ -372,34 +372,34 @@ white surface; all PASS):
 
 ### Phase 3 — Expo skeleton
 **Exit:** app boots in the iOS Simulator with all five tabs navigable.
-- 3.1 `npx create-expo-app juno-expo` (expo-router), no repo restructure — **[NOT STARTED]**
-- 3.2 Theme provider from the Phase 1 tokens — **[NOT STARTED]**
-- 3.3 Bottom tab navigator, 5 slots, raised centre Post (reference 4) — **[NOT STARTED]**
-- 3.4 API client with typed responses + error/retry handling — **[NOT STARTED]**
-- 3.5 Boot on the iOS Simulator — **[NOT STARTED]**
+- 3.1 `create-expo-app juno-expo` (expo-router), no repo restructure — **[DONE]**
+- 3.2 Theme tokens + UI primitives — **[DONE]**
+- 3.3 Bottom tab navigator, 5 slots, raised centre Post — **[DONE]** verified rendering
+- 3.4 API client with typed responses, timeouts, host inference — **[DONE]**
+- 3.5 Boot on the iOS Simulator — **[BLOCKED]** — `xcode-select` points at CommandLineTools. Xcode.app *is* installed; needs one sudo command (see §4 USER_ACTION). Verified on Expo web instead: all screens render, no console errors.
 
 ### Phase 4 — Wallet + the money path (**the highest-risk phase; start early**)
 **Exit:** a real signed devnet buy from the simulator, verifiable on Solscan.
-- 4.1 `@privy-io/expo` v0.74.2 integration, email OTP — **[NOT STARTED]**
-- 4.2 Sign-in sheet, triggered only on trade/post (D11) — **[NOT STARTED]**
-- 4.3 Sign an API-built transaction and submit it — **[NOT STARTED]**
-- 4.4 **Land one real devnet buy from the simulator** — **[NOT STARTED]**
-- 4.5 Failure states: no funds, stale quote, cancel, graduated pool — **[NOT STARTED]**
+- 4.1 `@privy-io/expo` v0.74.2 — **[BLOCKED]** — needs a mobile client registered for bundle id `fun.juno.app` in the Privy dashboard. Spike done: `signTransaction` takes a web3.js `Transaction`, not raw bytes.
+- 4.2 Wallet created on demand at trade/post, never before (D11) — **[DONE]**
+- 4.3 Sign an API-built transaction and submit it — **[DONE]** (device keychain key)
+- 4.4 **Land a real devnet buy from server-built bytes** — **[DONE]** — `4YM9pnRu…QLsq` confirmed on devnet via `tests/integration/juno-tx.test.ts`. From the *simulator* specifically: blocked with 3.5.
+- 4.5 Failure states: graduated pool, zero amount, timeouts, unreachable API — **[DONE]**. No-funds copy — **[NOT STARTED]**
 
 ### Phase 5 — Core screens
 **Exit:** S1–S7 render real data.
-- 5.1 S1 onboarding with generated art — **[NOT STARTED]**
-- 5.2 S2 social feed, trades + posts mixed — **[NOT STARTED]**
-- 5.3 `juno_posts` table + migration + composer (G5) — **[NOT STARTED]**
-- 5.4 S4 market list — **[NOT STARTED]**
-- 5.5 S5 coin detail: price, curve, NAV band — **[NOT STARTED]**
-- 5.6 S6 buy/sell sheet with custom numpad (reference 2) — **[NOT STARTED]**
-- 5.7 S3 post composer → real launch (D6) — **[NOT STARTED]**
-- 5.8 S7 reels, `expo-video`, IPFS playback via `/api/ipfs/[cid]` — **[NOT STARTED]**
+- 5.1 S1 onboarding — **[DONE]** (vector art; generated art pending 1.2)
+- 5.2 S2 social feed, trades + posts mixed — **[DONE]** verified
+- 5.3 `juno_posts` table + migration + seed — **[DONE]**. In-app text composer — **[NOT STARTED]**
+- 5.4 S4 market list with sorts — **[DONE]** verified, 10 coins
+- 5.5 S5 coin detail: price, curve, NAV band, activity — **[DONE]** verified
+- 5.6 S6 buy/sell sheet with custom numpad — **[DONE]** (live quote, debounced)
+- 5.7 S3 launch composer → real on-chain launch (D6) — **[DONE]** (two-step signing, resumable)
+- 5.8 S7 reels, `expo-video`, IPFS playback — **[DONE]**
 
 ### Phase 6 — Portfolio
-- 6.1 Cost basis + P&L from decoded swaps filtered by wallet (G6) — **[NOT STARTED]**
-- 6.2 S8 profile: 3D object, total value, % change, holdings (reference 3) — **[NOT STARTED]**
+- 6.1 Cost basis + P&L, average-cost, 9 unit tests — **[DONE]**
+- 6.2 S8 profile: 3D object, total value, % change, holdings — **[DONE]**
 
 ### Phase 7 — Re-theme web (D9)
 - 7.1 Light tokens in `globals.css` — **[NOT STARTED]**

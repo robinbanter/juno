@@ -44,9 +44,21 @@ export async function POST(req: NextRequest) {
   const limited = rateLimit(`records:${user.id}`, { limit: 5, windowMs: 60_000 });
   if (limited) return limited;
 
-  let form: FormData;
+  /**
+   * Only what this route reads.
+   *
+   * Two incompatible `FormData` types are visible during the production build —
+   * the ambient DOM one and the undici one `req.formData()` actually returns —
+   * and annotating either way fails: the first rejects the assignment, the
+   * second reports `get` as missing. `tsc --noEmit` sees only one of them and
+   * passes, which is why this only surfaced at build time.
+   *
+   * A structural type describing the single method used sidesteps the clash
+   * without asserting anything untrue about the value.
+   */
+  let form: { get(name: string): unknown };
   try {
-    form = await req.formData();
+    form = (await req.formData()) as unknown as typeof form;
   } catch {
     return NextResponse.json({ error: "Expected multipart/form-data" }, { status: 400 });
   }

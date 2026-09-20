@@ -1,8 +1,7 @@
 import { useRouter } from "expo-router";
-import { StyleSheet, Text, View } from "react-native";
+import { Image, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { OnboardingArt } from "../components/art";
 import { Button } from "../components/ui";
 import { colors, spacing, type } from "../theme/tokens";
 
@@ -20,7 +19,14 @@ export default function Onboarding() {
   return (
     <SafeAreaView style={styles.screen}>
       <View style={styles.art}>
-        <OnboardingArt size={300} />
+        {/* Generated to the same style brief as the rest of the set: five
+            characters connected to one market, on the app's own sage canvas. */}
+        <Image
+          source={require("../assets/art/onboarding.png")}
+          style={styles.image}
+          resizeMode="contain"
+          accessibilityLabel="Five people connected to a shared market"
+        />
       </View>
 
       <View style={styles.copy}>
@@ -43,6 +49,7 @@ export default function Onboarding() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg, paddingHorizontal: spacing.xl },
   art: { flex: 1, alignItems: "center", justifyContent: "center" },
+  image: { width: "100%", height: "100%" },
   copy: { gap: spacing.md, paddingBottom: spacing.xxl },
   title: { ...type.display, color: colors.ink, lineHeight: 46 },
   subtitle: { ...type.body, color: colors.muted, lineHeight: 22, maxWidth: 320 },

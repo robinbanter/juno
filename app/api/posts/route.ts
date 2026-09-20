@@ -160,9 +160,17 @@ export async function POST(req: NextRequest) {
     throw err;
   }
 
-  let form: FormData;
+  /**
+   * Only what this route reads.
+   *
+   * Two incompatible `FormData` types are visible during the production build —
+   * the ambient DOM one and the undici one `.formData()` actually returns — and
+   * annotating either way fails. `tsc --noEmit` sees only one of them and
+   * passes, which is why this only surfaces at build time.
+   */
+  let form: { get(name: string): unknown };
   try {
-    form = await req.formData();
+    form = (await req.formData()) as unknown as typeof form;
   } catch {
     return Response.json({ error: "Expected multipart/form-data" }, { status: 400 });
   }
