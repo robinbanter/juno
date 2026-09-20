@@ -181,6 +181,9 @@ export type FeedItem =
       side: "buy" | "sell";
       amount: number;
       valueUsd: number;
+      price: number;
+      priceNow: number | null;
+      currency: string;
       signature?: string;
       actor: { handle: string; avatarUrl: string };
       coin: { address: string; name: string; symbol: string; mediaUrl: string | null; mediaKind: string };
@@ -195,6 +198,8 @@ export type FeedItem =
       mediaKind: string | null;
       coin: { address: string; name: string; symbol: string } | null;
     };
+
+export type PositionTrade = { t: string; side: "buy" | "sell"; base: number; price: number };
 
 export type Position = {
   baseMint: string;
@@ -213,6 +218,7 @@ export type Position = {
   realisedPnl: number;
   currency: string;
   graduated: boolean;
+  trades: PositionTrade[];
 };
 
 export type Portfolio = {
@@ -223,6 +229,8 @@ export type Portfolio = {
   totalPnlPct: number | null;
   currency: string;
   partial: boolean;
+  /** What the wallet was worth at each moment it traded, oldest first. */
+  history: Array<{ t: string; value: number }>;
 };
 
 export type UnsignedTransaction = { transaction: string; label: string; bytes: number };

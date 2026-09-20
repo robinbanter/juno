@@ -67,6 +67,11 @@ export type Position = {
   /** What the figures above are denominated in — "USD" or the quote symbol. */
   currency: string;
   graduated: boolean;
+  /**
+   * This wallet's own trades against the pool, oldest first. Kept so the
+   * portfolio's value over time can be rebuilt without re-reading the chain.
+   */
+  trades: Array<{ t: string; side: "buy" | "sell"; base: number; price: number }>;
 };
 
 export type Portfolio = {
@@ -84,6 +89,19 @@ export type Portfolio = {
    * final.
    */
   partial: boolean;
+  /**
+   * What this wallet was worth over time, oldest first.
+   *
+   * Nothing stores this, and nothing needs to: every position's balance history
+   * is implied by its trades, and every price is implied by the trade that set
+   * it. Replaying both together reconstructs the total at each moment something
+   * actually happened.
+   *
+   * The series therefore has a point per *trade*, not per interval — a flat
+   * stretch means nobody traded, which is the truth, rather than a smoothed
+   * line through prices nobody paid.
+   */
+  history: Array<{ t: string; value: number }>;
 };
 
 type Basis = {
@@ -207,6 +225,14 @@ async function positionFor(
       realisedPnl: basis.realised * rate,
       currency,
       graduated: snapshot.curve.graduated,
+      trades: [...mine]
+        .sort((a, b) => a.slot - b.slot)
+        .map((swap) => ({
+          t: swap.timestamp,
+          side: swap.side,
+          base: swap.baseAmount,
+          price: swap.price * rate,
+        })),
     },
     partial: history?.partial ?? false,
   };
@@ -274,10 +300,62 @@ export async function loadPortfolio(
   return {
     wallet,
     positions,
+    history: valueOverTime(positions, totalValue),
     totalValue,
     totalPnl,
     totalPnlPct: totalPnl === null || totalCost <= 0 ? null : totalPnl / totalCost,
     currency,
     partial,
   };
+}
+
+
+/**
+ * Rebuild what the wallet was worth at each moment it traded.
+ *
+ * Walks every position's trades in one merged, time-ordered pass, carrying a
+ * running balance and last-seen price per position. At each event the total is
+ * the sum of `balance × lastPrice` across everything held — which is the only
+ * honest reconstruction available, because no price was observed between
+ * trades and inventing one would draw a line through numbers nobody paid.
+ *
+ * The final point is the live total, so the chart ends where the headline says
+ * it does.
+ */
+export function valueOverTime(
+  positions: Position[],
+  liveTotal: number,
+): Array<{ t: string; value: number }> {
+  type Event = { at: number; mint: string; side: "buy" | "sell"; base: number; price: number };
+
+  const events: Event[] = [];
+  for (const position of positions) {
+    for (const trade of position.trades) {
+      const at = Date.parse(trade.t);
+      if (Number.isFinite(at)) {
+        events.push({ at, mint: position.baseMint, side: trade.side, base: trade.base, price: trade.price });
+      }
+    }
+  }
+  if (events.length === 0) return [];
+
+  events.sort((a, b) => a.at - b.at);
+
+  const balance = new Map<string, number>();
+  const price = new Map<string, number>();
+  const series: Array<{ t: string; value: number }> = [];
+
+  for (const event of events) {
+    const held = balance.get(event.mint) ?? 0;
+    balance.set(event.mint, event.side === "buy" ? held + event.base : Math.max(0, held - event.base));
+    price.set(event.mint, event.price);
+
+    let total = 0;
+    for (const [mint, amount] of balance) total += amount * (price.get(mint) ?? 0);
+    series.push({ t: new Date(event.at).toISOString(), value: total });
+  }
+
+  // End on the live figure rather than on the last trade's mark.
+  series.push({ t: new Date().toISOString(), value: liveTotal });
+  return series;
 }

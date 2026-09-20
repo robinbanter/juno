@@ -39,11 +39,17 @@ export function TradeSheet({
   side,
   onClose,
   onDone,
+  holding = null,
+  quoteBalance = null,
 }: {
   coin: Coin;
   side: "buy" | "sell";
   onClose: () => void;
   onDone: () => void;
+  /** Coin balance, for a sell. Null when unknown. */
+  holding?: number | null;
+  /** Quote-token balance, for a buy. Null when unknown. */
+  quoteBalance?: number | null;
 }) {
   const wallet = useWallet();
   const [amount, setAmount] = useState("");
@@ -56,6 +62,25 @@ export function TradeSheet({
   const value = Number(amount || "0");
   const valid = Number.isFinite(value) && value > 0;
   const unit = side === "buy" ? coin.quote.symbol : coin.symbol;
+
+  /**
+   * What the wallet can actually spend on this side.
+   *
+   * Null rather than zero when it is not known — a balance that failed to load
+   * and a genuinely empty wallet are different, and only one of them should
+   * stop someone trying.
+   */
+  const balance = useMemo(() => {
+    if (side === "sell") return holding;
+    return quoteBalance;
+  }, [side, holding, quoteBalance]);
+
+  const usdEquivalent = useMemo(() => {
+    if (!valid) return null;
+    const rate = quote?.quoteUsdRate ?? null;
+    if (side === "buy") return rate === null ? null : money(value * rate, "USD", { compact: false });
+    return coin.priceUsd > 0 ? money(value * coin.priceUsd, coin.marketCapCurrency, { compact: false }) : null;
+  }, [valid, value, side, quote?.quoteUsdRate, coin.priceUsd, coin.marketCapCurrency]);
 
   useEffect(() => {
     if (!valid || !wallet.address) {
@@ -150,6 +175,12 @@ export function TradeSheet({
           </Close>
         </Row>
 
+        {/* Balance first, as in the reference — the number that decides whether
+            any of the rest is possible. */}
+        <Balance>
+          Balance: {balance === null ? "—" : `${tokens(balance)} ${unit}`}
+        </Balance>
+
         {stage === "done" && signature ? (
           <Done>
             <DoneTitle>Done</DoneTitle>
@@ -168,7 +199,13 @@ export function TradeSheet({
                 <AmountValue>{amount || "0"}</AmountValue>
                 <AmountUnit>{unit}</AmountUnit>
               </AmountRow>
+              {/* The dollar equivalent under the amount, and the receive line
+                  under that — both from the server's quote, never multiplied
+                  out from spot, because a curve moves as it fills. */}
               <Caption>
+                {usdEquivalent ? `~${usdEquivalent}` : " "}
+              </Caption>
+              <Receive>
                 {quoting
                   ? "Quoting against the curve…"
                   : receiving
@@ -176,7 +213,7 @@ export function TradeSheet({
                     : valid
                       ? " "
                       : "Enter an amount"}
-              </Caption>
+              </Receive>
               {quote && quote.quote.priceImpact > 0.02 ? (
                 <Pill
                   label={`Price impact ${(quote.quote.priceImpact * 100).toFixed(1)}%`}
@@ -273,6 +310,20 @@ const Close = styled.Pressable`
 const CloseMark = styled.Text`
   font-size: 15px;
   color: ${(p) => p.theme.colors.muted};
+`;
+
+const Balance = styled.Text`
+  font-size: 13px;
+  font-weight: 500;
+  color: ${(p) => p.theme.colors.muted};
+  text-align: center;
+`;
+
+const Receive = styled.Text`
+  font-size: 13px;
+  font-weight: 600;
+  color: ${(p) => p.theme.colors.text};
+  min-height: 18px;
 `;
 
 const Amount = styled.View`

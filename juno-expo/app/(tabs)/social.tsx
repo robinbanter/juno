@@ -4,10 +4,13 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import styled from "styled-components/native";
 
 import { Identicon } from "../../components/art";
+import { JunoMark } from "../../components/logo";
 import {
   Avatar,
   Body,
   Caption,
+  Delta,
+  Stat,
   Card,
   Col,
   Heading,
@@ -39,10 +42,13 @@ export default function SocialScreen() {
   return (
     <Page edges={["top"]}>
       <Header>
-        <Col gap={2}>
-          <Title>juno</Title>
-          <Label muted>Every post is a market</Label>
-        </Col>
+        <Row gap={10}>
+          <JunoMark size={30} color={theme.colors.text} />
+          <Col gap={2}>
+            <Title>juno</Title>
+            <Label muted>Every post is a market</Label>
+          </Col>
+        </Row>
       </Header>
 
       {feed.loading ? (
@@ -120,12 +126,35 @@ function FeedRow({
               <Heading numberOfLines={1} style={{ fontSize: 16 }}>
                 {item.coin.name}
               </Heading>
-              <Mono muted>
-                {tokens(item.amount)} for {money(item.valueUsd)}
-              </Mono>
               <Pill label={buying ? "Buy" : "Sell"} tone={buying ? "pos" : "neg"} />
             </Col>
           </Row>
+
+          {/* The numbers that make this a trade rather than an event: what was
+              paid, what it cost per token, and where that price is now. The
+              move is only shown when both prices are known — a live price the
+              RPC would not serve is left as a dash, never as 0%. */}
+          <Figures>
+            <Stat value={tokens(item.amount)} label="Amount" />
+            <Stat
+              value={money(item.valueUsd, item.currency)}
+              label={`Total (${item.currency})`}
+            />
+            <Stat
+              value={money(item.price, item.currency, { compact: false })}
+              label="Price"
+            />
+            <Col gap={2} style={{ flex: 1, alignItems: "center" }}>
+              <Delta
+                pct={
+                  item.priceNow !== null && item.price > 0
+                    ? (item.priceNow - item.price) / item.price
+                    : null
+                }
+              />
+              <Caption>Since</Caption>
+            </Col>
+          </Figures>
         </Card>
       </Tap>
     );
@@ -202,4 +231,12 @@ const CoinChip = styled.Pressable`
   padding-vertical: ${(p) => p.theme.space(2)}px;
   border-radius: ${(p) => p.theme.radius.md}px;
   margin-top: ${(p) => p.theme.space(3)}px;
+`;
+
+const Figures = styled.View`
+  flex-direction: row;
+  margin-top: ${(p) => p.theme.space(3)}px;
+  padding-top: ${(p) => p.theme.space(3)}px;
+  border-top-width: 1px;
+  border-top-color: ${(p) => p.theme.colors.line};
 `;

@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { RefreshControl, ScrollView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import styled from "styled-components/native";
 
-import { PortfolioArt } from "../../components/art";
+import { AreaChart, RANGES, withinRange, type Range } from "../../components/AreaChart";
+import { Identicon } from "../../components/art";
 import {
   Body,
   Button,
@@ -19,10 +20,10 @@ import {
   Pill,
   Placeholder,
   Row,
+  Segmented,
   Skeleton,
   Stat,
   Tabs,
-  Title,
 } from "../../components/kit";
 import { juno } from "../../lib/api";
 import { money, tokens, useApi } from "../../lib/useApi";
@@ -38,27 +39,53 @@ const TABS = [
 ];
 
 /**
- * Portfolio.
+ * Profile and portfolio.
  *
- * Holdings are read from chain. Cost is not on-chain anywhere, so it is derived
- * from this wallet's own decoded trades — which means a position acquired some
- * other way has a balance but no cost, and shows a dash rather than a
- * fabricated zero. A zero cost would imply the whole holding is profit.
+ * Holdings come from chain. Cost does not exist on-chain, so it is derived from
+ * this wallet's own decoded trades — which means a position acquired any other
+ * way has a balance but no cost, and shows a dash rather than a fabricated
+ * zero. A zero cost would imply the whole holding is profit.
+ *
+ * The value chart is reconstructed the same way: every balance change is a
+ * trade, every price is the trade that set it. A point per trade rather than
+ * per interval, because no price was observed in between and smoothing across
+ * that gap would draw a line through numbers nobody paid.
  */
 export default function ProfileScreen() {
   const wallet = useWallet();
   const [tab, setTab] = useState<Tab>("holdings");
+  const [range, setRange] = useState<Range>("ALL");
+
   const portfolio = useApi(
     async () => (wallet.address ? juno.portfolio(wallet.address) : null),
     [wallet.address],
   );
 
+  const data = portfolio.data;
+  const currency = data?.currency === "mixed" ? "USD" : (data?.currency ?? "USD");
+
+  const series = useMemo(
+    () => withinRange(data?.history ?? [], range),
+    [data?.history, range],
+  );
+
+  const volumes = useMemo(() => {
+    if (!data) return [];
+    const byTime = new Map<string, number>();
+    for (const position of data.positions) {
+      for (const trade of position.trades) {
+        byTime.set(trade.t, (byTime.get(trade.t) ?? 0) + trade.base * trade.price);
+      }
+    }
+    return series.map((point) => byTime.get(point.t) ?? 0);
+  }, [data, series]);
+
   if (!wallet.ready) {
     return (
       <Page edges={["top"]}>
-        <Body style={{ padding: 16 }}>
-          <Skeleton h={140} />
-        </Body>
+        <Padded>
+          <Skeleton h={160} round={26} />
+        </Padded>
       </Page>
     );
   }
@@ -70,23 +97,19 @@ export default function ProfileScreen() {
           title="No wallet yet"
           detail="Create one to trade and to launch your own coins. No sign-up."
           action={
-            <Button
-              label="Create wallet"
-              onPress={() => wallet.connect().then(portfolio.refresh)}
-            />
+            <Button label="Create wallet" onPress={() => wallet.connect().then(portfolio.refresh)} />
           }
         />
       </Page>
     );
   }
 
-  const data = portfolio.data;
-  const currency = data?.currency === "mixed" ? "USD" : (data?.currency ?? "USD");
+  const short = `${wallet.address.slice(0, 4)}…${wallet.address.slice(-4)}`;
 
   return (
     <Page edges={["top"]}>
       <ScrollView
-        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 130, gap: 12 }}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 130, gap: 14 }}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -96,24 +119,18 @@ export default function ProfileScreen() {
           />
         }
       >
-        {/* The hero, taken from the portfolio reference: one big value, a
-            signed badge under it, and a 3D object rather than a chart — a chart
-            would imply a performance history a new wallet has not got. */}
-        <Hero>
-          <PortfolioArt size={116} />
-          <Caption>Total value</Caption>
-          {portfolio.loading ? (
-            <Skeleton h={40} w="60%" />
-          ) : (
-            <Display>{money(data?.totalValue ?? 0, currency, { compact: false })}</Display>
-          )}
-          <DeltaBadge pct={data?.totalPnlPct ?? null} />
+        {/* Identity, as in the profile reference: avatar, handle, address. */}
+        <Identity>
+          <Identicon seed={wallet.address} size={72} />
+          <Heading>{short}</Heading>
+          <Caption>{wallet.mode === "local" ? "Device key · devnet" : "Embedded wallet"}</Caption>
+        </Identity>
 
-          <Row gap={0} style={{ marginTop: 18, alignSelf: "stretch" }}>
-            <Stat
-              value={String(data?.positions.length ?? 0)}
-              label="Positions"
-            />
+        {/* Three-up stats, the reference's Trackers / PnL / WR row — but the
+            three figures this app can actually stand behind. */}
+        <Card>
+          <Row>
+            <Stat value={String(data?.positions.length ?? 0)} label="Positions" />
             <Stat
               value={
                 data?.totalPnl === null || data?.totalPnl === undefined
@@ -129,17 +146,35 @@ export default function ProfileScreen() {
                     : "neg"
               }
             />
-            <Stat
-              value={`${wallet.address.slice(0, 4)}…${wallet.address.slice(-4)}`}
-              label="Wallet"
-            />
+            <Stat value={String(data?.history.length ?? 0)} label="Trades" />
           </Row>
-        </Hero>
+        </Card>
 
-        <Row gap={8}>
-          <Pill label={wallet.mode === "local" ? "Device key · devnet" : "Embedded wallet"} />
-          {data?.partial ? <Pill label="Partial read" tone="neg" /> : null}
-        </Row>
+        {/* Portfolio, per the portfolio reference: one big value, a signed
+            badge, a time range, then the chart. */}
+        <Card>
+          <Centered>
+            <Caption>Portfolio</Caption>
+            {portfolio.loading ? (
+              <Skeleton h={42} w="60%" />
+            ) : (
+              <Display>{money(data?.totalValue ?? 0, currency, { compact: false })}</Display>
+            )}
+            <DeltaBadge pct={data?.totalPnlPct ?? null} />
+          </Centered>
+
+          <RangeRow>
+            <Segmented items={RANGES} value={range} onChange={setRange} />
+          </RangeRow>
+
+          <AreaChart
+            points={series}
+            bars={volumes}
+            format={(v) => money(v, currency, { compact: true })}
+          />
+        </Card>
+
+        {data?.partial ? <Pill label="Some history could not be read" tone="neg" /> : null}
 
         <Tabs items={TABS} value={tab} onChange={setTab} />
 
@@ -161,21 +196,22 @@ export default function ProfileScreen() {
           ) : (
             data!.positions.map((position) => (
               <Card key={position.baseMint}>
-                <Row justify="space-between" gap={12}>
-                  <Heading numberOfLines={1} style={{ fontSize: 16, flex: 1 }}>
-                    {position.name}
-                  </Heading>
-                  <Mono style={{ fontSize: 15 }}>
-                    {money(position.value, position.currency)}
-                  </Mono>
+                <Row gap={12}>
+                  <Identicon seed={position.baseMint} size={38} />
+                  <Col gap={3} style={{ flex: 1 }}>
+                    <Label style={{ fontWeight: "700" }} numberOfLines={1}>
+                      {position.name}
+                    </Label>
+                    <Caption>
+                      {tokens(position.balance)} ${position.symbol}
+                    </Caption>
+                  </Col>
+                  <Col gap={3} style={{ alignItems: "flex-end" }}>
+                    <Mono>{money(position.value, position.currency)}</Mono>
+                    <Delta pct={position.unrealisedPnlPct} />
+                  </Col>
                 </Row>
-                <Row justify="space-between" style={{ marginTop: 6 }}>
-                  <Mono muted>
-                    {tokens(position.balance)} ${position.symbol}
-                  </Mono>
-                  <Delta pct={position.unrealisedPnlPct} />
-                </Row>
-                <Caption style={{ marginTop: 6 }}>
+                <Caption style={{ marginTop: 8 }}>
                   {position.averageCost === null
                     ? "No recorded cost for this holding"
                     : `Avg cost ${money(position.averageCost, position.currency, { compact: false })}`}
@@ -184,16 +220,40 @@ export default function ProfileScreen() {
             ))
           )
         ) : tab === "activity" ? (
-          <Card>
-            <Body muted>
-              Your trades appear on each coin&rsquo;s page, and in the Social feed.
-            </Body>
-          </Card>
+          (data?.positions ?? []).flatMap((p) =>
+            p.trades.map((t) => ({ ...t, name: p.name, symbol: p.symbol, currency: p.currency })),
+          ).length === 0 ? (
+            <Card>
+              <Body muted>No trades yet.</Body>
+            </Card>
+          ) : (
+            (data?.positions ?? [])
+              .flatMap((p) =>
+                p.trades.map((t) => ({ ...t, name: p.name, symbol: p.symbol, currency: p.currency })),
+              )
+              .sort((a, b) => Date.parse(b.t) - Date.parse(a.t))
+              .slice(0, 20)
+              .map((trade, i) => (
+                <Card key={`${trade.t}-${i}`}>
+                  <Row gap={10}>
+                    <Side $buy={trade.side === "buy"}>{trade.side}</Side>
+                    <Label numberOfLines={1} style={{ flex: 1 }}>
+                      {trade.name}
+                    </Label>
+                    <Mono muted>{tokens(trade.base)}</Mono>
+                  </Row>
+                  <Caption style={{ marginTop: 6 }}>
+                    at {money(trade.price, trade.currency, { compact: false })} ·{" "}
+                    {new Date(trade.t).toLocaleString()}
+                  </Caption>
+                </Card>
+              ))
+          )
         ) : (
           <Card>
             <Body muted>
-              This wallet lives in the device keychain and signs on-device. It is
-              a devnet key and is not recoverable — Juno never sees it.
+              This wallet lives in the device keychain and signs on-device. It is a
+              devnet key and is not recoverable — Juno never sees it.
             </Body>
           </Card>
         )}
@@ -207,11 +267,30 @@ const Page = styled(SafeAreaView)`
   background-color: ${(p) => p.theme.colors.bg};
 `;
 
-const Hero = styled.View`
-  background-color: ${(p) => p.theme.colors.surface};
-  border-radius: ${(p) => p.theme.radius.xl}px;
-  padding-vertical: ${(p) => p.theme.space(6)}px;
-  padding-horizontal: ${(p) => p.theme.space(4)}px;
+const Padded = styled.View`
+  padding: ${(p) => p.theme.space(4)}px;
+`;
+
+const Identity = styled.View`
+  align-items: center;
+  gap: 6px;
+  padding-top: ${(p) => p.theme.space(2)}px;
+`;
+
+const Centered = styled.View`
   align-items: center;
   gap: ${(p) => p.theme.space(1)}px;
+`;
+
+const RangeRow = styled.View`
+  align-items: center;
+  margin-vertical: ${(p) => p.theme.space(3)}px;
+`;
+
+const Side = styled.Text<{ $buy: boolean }>`
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: capitalize;
+  width: 38px;
+  color: ${(p) => (p.$buy ? p.theme.colors.pos : p.theme.colors.neg)};
 `;

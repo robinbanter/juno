@@ -26,6 +26,7 @@ import {
 } from "../../components/kit";
 import { TradeSheet } from "../../components/TradeSheet";
 import { juno, type NavReference } from "../../lib/api";
+import { useWallet } from "../../lib/wallet";
 import { money, since, tokens, useApi } from "../../lib/useApi";
 import { theme } from "../../theme";
 
@@ -41,8 +42,19 @@ export default function CoinScreen() {
   const router = useRouter();
   const [sheet, setSheet] = useState<"buy" | "sell" | null>(null);
 
+  const wallet = useWallet();
   const detail = useApi(() => juno.coin(mint), [mint]);
   const coin = detail.data?.coin;
+
+  // What this wallet holds of this coin, so the sell sheet can show a real
+  // balance instead of a dash. Read from the portfolio rather than a second
+  // chain call — it is the same figure, already fetched.
+  const portfolio = useApi(
+    async () => (wallet.address ? juno.portfolio(wallet.address) : null),
+    [wallet.address],
+  );
+  const holding =
+    portfolio.data?.positions.find((position) => position.baseMint === mint)?.balance ?? null;
 
   return (
     <Page edges={["top"]}>
@@ -185,6 +197,7 @@ export default function CoinScreen() {
             <TradeSheet
               coin={coin}
               side={sheet}
+              holding={holding}
               onClose={() => setSheet(null)}
               onDone={() => {
                 setSheet(null);

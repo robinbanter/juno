@@ -15,9 +15,10 @@ import { theme } from "../../theme";
  * and launching are the same act, and a bar that buried Post in a menu would be
  * arguing the opposite.
  *
- * The active item is a lime pill carrying its label; inactive ones show only a
- * glyph. That is taken from the reference, and it earns its place: five labels
- * at once is a wall of text, while one is a clear answer to "where am I".
+ * The active item is a lime pill; inactive ones are bare glyphs. No labels at
+ * all — five icons are already legible, the label only ever appeared on the tab
+ * you were demonstrably already on, and dropping it lets each slot breathe.
+ * `accessibilityLabel` still names every tab for a screen reader.
  */
 export default function TabsLayout() {
   const router = useRouter();
@@ -104,7 +105,6 @@ function Slot({
       accessibilityState={{ selected: active }}
     >
       <Icon color={active ? theme.colors.onLime : theme.colors.faint} />
-      {active ? <SlotLabel>{label}</SlotLabel> : null}
     </SlotBox>
   );
 }
@@ -131,17 +131,10 @@ const SlotBox = styled.Pressable<{ $on: boolean }>`
   flex-direction: row;
   align-items: center;
   justify-content: center;
-  gap: 6px;
   height: 44px;
   margin-horizontal: 2px;
   border-radius: ${(p) => p.theme.radius.pill}px;
   background-color: ${(p) => (p.$on ? p.theme.colors.lime : "transparent")};
-`;
-
-const SlotLabel = styled.Text`
-  font-size: 13px;
-  font-weight: 700;
-  color: ${(p) => p.theme.colors.onLime};
 `;
 
 const PostBox = styled.Pressable`

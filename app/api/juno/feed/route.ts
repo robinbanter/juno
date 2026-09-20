@@ -1,4 +1,4 @@
-import { globalActivity } from "@/lib/juno/chain";
+import { globalActivity, hydratePool } from "@/lib/juno/chain";
 import { mediaKind, mediaSrc } from "@/lib/juno/media";
 import { identicon } from "@/lib/juno/identicon";
 import { shortAddress } from "@/lib/juno/format";
@@ -29,6 +29,11 @@ type FeedItem =
       side: "buy" | "sell";
       amount: number;
       valueUsd: number;
+      /** What one token cost in this trade — value over size. */
+      price: number;
+      /** The coin's live price now, so a card can show the move since. */
+      priceNow: number | null;
+      currency: string;
       signature?: string;
       actor: { handle: string; avatarUrl: string };
       coin: { address: string; name: string; symbol: string; mediaUrl: string | null; mediaKind: string };
@@ -66,6 +71,17 @@ export async function GET(request: Request) {
       listPosts({ limit }),
     ]);
 
+    // One hydration per coin that appears, not per row: a feed shows the same
+    // coin several times and each hydration is a pool read.
+    const mentioned = [...new Set(trades.map((trade) => trade.coinAddress))];
+    const live = new Map<string, { price: number; currency: string }>();
+    for (const mint of mentioned) {
+      const row = byMint.get(mint);
+      if (!row) continue;
+      const coin = await hydratePool(row).catch(() => null);
+      if (coin) live.set(mint, { price: coin.priceUsd, currency: coin.marketCapCurrency });
+    }
+
     const items: FeedItem[] = [];
 
     for (const trade of trades) {
@@ -77,6 +93,10 @@ export async function GET(request: Request) {
         side: trade.side,
         amount: trade.amount,
         valueUsd: trade.valueUsd,
+        // Derived, never assumed: a zero-size row has no price to report.
+        price: trade.amount > 0 ? trade.valueUsd / trade.amount : 0,
+        priceNow: live.get(trade.coinAddress)?.price ?? null,
+        currency: live.get(trade.coinAddress)?.currency ?? "USD",
         signature: trade.signature,
         actor: trade.actor,
         coin: {
