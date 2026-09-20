@@ -50,6 +50,13 @@
       "when": 1789937163224,
       "tag": "0006_unique_zemo",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1789946771457,
+      "tag": "0007_fresh_banshee",
+      "breakpoints": true
     }
   ]
 }

@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { CurvePreview } from "../../components/CurvePreview";
 import { Button, Card, Pill } from "../../components/kit";
 import { juno, WSOL_MINT } from "../../lib/api";
 import { useWallet } from "../../lib/wallet";
@@ -194,11 +195,18 @@ export default function PostScreen() {
               return (
                 <Pressable key={option.id} onPress={() => setPreset(option.id)}>
                   <Card style={[styles.preset, on && styles.presetOn]}>
-                    <View style={styles.presetHead}>
-                      <Text style={styles.presetLabel}>{option.label}</Text>
-                      {on && <Pill label="Selected" tone="lime" />}
+                    <View style={styles.presetRow}>
+                      <View style={styles.presetText}>
+                        <View style={styles.presetHead}>
+                          <Text style={styles.presetLabel}>{option.label}</Text>
+                          {on && <Pill label="Selected" tone="lime" />}
+                        </View>
+                        <Text style={styles.presetBlurb}>{option.blurb}</Text>
+                      </View>
+                      {/* The curve itself, drawn from the same sixteen weights
+                          the launch uses. The weights are the whole decision. */}
+                      <CurvePreview preset={option.id} active={on} />
                     </View>
-                    <Text style={styles.presetBlurb}>{option.blurb}</Text>
                   </Card>
                 </Pressable>
               );
@@ -268,7 +276,9 @@ const styles = StyleSheet.create({
   presets: { gap: 8 },
   preset: { gap: 6, padding: 16 },
   presetOn: { borderWidth: 2, borderColor: theme.colors.lime },
-  presetHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  presetRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  presetText: { flex: 1, gap: 6 },
+  presetHead: { flexDirection: "row", alignItems: "center", gap: 8 },
   presetLabel: { fontSize: 15, fontWeight: "600", color: theme.colors.ink },
   presetBlurb: { fontSize: 13, fontWeight: "500", color: theme.colors.muted, lineHeight: 19 },
   errorCard: { backgroundColor: "rgba(217,45,32,0.08)" },

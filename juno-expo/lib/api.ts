@@ -196,6 +196,7 @@ export type FeedItem =
       author: { wallet: string; handle: string; avatarUrl: string };
       mediaUrl: string | null;
       mediaKind: string | null;
+      replyCount: number;
       coin: { address: string; name: string; symbol: string } | null;
     };
 
@@ -231,6 +232,15 @@ export type Portfolio = {
   partial: boolean;
   /** What the wallet was worth at each moment it traded, oldest first. */
   history: Array<{ t: string; value: number }>;
+};
+
+export type PostDetail = {
+  id: string;
+  body: string;
+  timestamp: string;
+  author: { wallet: string; handle: string; avatarUrl: string };
+  mediaUrl: string | null;
+  mediaKind: string | null;
 };
 
 export type UnsignedTransaction = { transaction: string; label: string; bytes: number };
@@ -278,8 +288,31 @@ export const juno = {
       `/api/juno/posts?limit=${limit}`,
     ),
 
-  createPost: (input: { authorWallet: string; body: string; baseMint?: string | null }) =>
-    api.post<{ post: { id: string } }>("/api/juno/posts", input),
+  createPost: (input: {
+    authorWallet: string;
+    body: string;
+    baseMint?: string | null;
+    /** Set to reply. A comment is a post with a parent. */
+    parentId?: string | null;
+  }) => api.post<{ post: { id: string } }>("/api/juno/posts", input),
+
+  post: (id: string) =>
+    api.get<{
+      post: PostDetail;
+      replies: PostDetail[];
+      replyCount: number;
+      coin: {
+        address: string;
+        name: string;
+        symbol: string;
+        priceUsd: number;
+        marketCap: number;
+        currency: string;
+        changePct: number | null;
+        progress: number;
+        graduated: boolean;
+      } | null;
+    }>(`/api/juno/posts/${id}`),
 
   /**
    * Index a launch after its pool transaction has confirmed.

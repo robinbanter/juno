@@ -1105,11 +1105,22 @@ export const junoPosts = pgTable(
     mediaUrl: text("media_url"),
     mediaMime: text("media_mime"),
 
+    /**
+     * The post this one replies to.
+     *
+     * A comment is a post with a parent rather than its own table: it has the
+     * same author, body, timestamp and cluster scoping, and giving it a second
+     * schema would mean two of every query. Null for a top-level post, which is
+     * also what the feed filters on.
+     */
+    parentId: varchar("parent_id", { length: 32 }),
+
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     index("juno_posts_cluster_created_idx").on(table.cluster, table.createdAt),
     index("juno_posts_author_idx").on(table.authorWallet),
     index("juno_posts_mint_idx").on(table.baseMint),
+    index("juno_posts_parent_idx").on(table.parentId),
   ],
 );

@@ -31,6 +31,7 @@ export default function RootLayout() {
             <Stack.Screen name="index" />
             <Stack.Screen name="(tabs)" />
             <Stack.Screen name="coin/[mint]" />
+            <Stack.Screen name="post/[id]" />
           </Stack>
         </WalletProvider>
       </SafeAreaProvider>

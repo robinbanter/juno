@@ -1,7 +1,7 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
-import { and, desc, eq, lt } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, isNull, lt } from "drizzle-orm";
 
 import { getDb } from "@/lib/db";
 import { junoPosts } from "@/lib/db/schema";
@@ -28,6 +28,8 @@ export type NewPost = {
   baseMint?: string | null;
   mediaUrl?: string | null;
   mediaMime?: string | null;
+  /** Set to reply to another post. A comment is a post with a parent. */
+  parentId?: string | null;
 };
 
 /** Long enough for a thought, short enough to read in a feed. */
@@ -51,6 +53,7 @@ export async function createPost(input: NewPost): Promise<JunoPostRow> {
       baseMint: input.baseMint ?? null,
       mediaUrl: input.mediaUrl ?? null,
       mediaMime: input.mediaMime ?? null,
+      parentId: input.parentId ?? null,
     })
     .returning();
 
@@ -69,8 +72,14 @@ export async function listPosts(options: {
   before?: Date;
   authorWallet?: string;
   baseMint?: string;
+  /** Replies to one post. Omit for the feed, which shows top-level only. */
+  parentId?: string;
 } = {}): Promise<JunoPostRow[]> {
   const filters = [eq(junoPosts.cluster, cluster())];
+  // The feed is top-level posts; a reply belongs under its parent, not in it.
+  filters.push(
+    options.parentId ? eq(junoPosts.parentId, options.parentId) : isNull(junoPosts.parentId),
+  );
   if (options.before) filters.push(lt(junoPosts.createdAt, options.before));
   if (options.authorWallet) filters.push(eq(junoPosts.authorWallet, options.authorWallet));
   if (options.baseMint) filters.push(eq(junoPosts.baseMint, options.baseMint));
@@ -79,8 +88,20 @@ export async function listPosts(options: {
     .select()
     .from(junoPosts)
     .where(and(...filters))
-    .orderBy(desc(junoPosts.createdAt))
+    // Replies read oldest-first, like a conversation; the feed newest-first.
+    .orderBy(options.parentId ? asc(junoPosts.createdAt) : desc(junoPosts.createdAt))
     .limit(Math.min(options.limit ?? 30, 100));
+}
+
+/** How many replies each of these posts has. */
+export async function replyCounts(ids: string[]): Promise<Map<string, number>> {
+  if (ids.length === 0) return new Map();
+  const rows = await getDb()
+    .select({ parentId: junoPosts.parentId, count: count() })
+    .from(junoPosts)
+    .where(and(eq(junoPosts.cluster, cluster()), inArray(junoPosts.parentId, ids)))
+    .groupBy(junoPosts.parentId);
+  return new Map(rows.map((row) => [row.parentId ?? "", Number(row.count)]));
 }
 
 export async function getPost(id: string): Promise<JunoPostRow | null> {

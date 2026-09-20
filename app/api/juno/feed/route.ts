@@ -2,7 +2,7 @@ import { globalActivity, hydratePool } from "@/lib/juno/chain";
 import { mediaKind, mediaSrc } from "@/lib/juno/media";
 import { identicon } from "@/lib/juno/identicon";
 import { shortAddress } from "@/lib/juno/format";
-import { listPosts } from "@/lib/juno/posts";
+import { listPosts, replyCounts } from "@/lib/juno/posts";
 import { listPools } from "@/lib/juno/registry";
 import { junoHandler, junoJson, junoOptions } from "@/lib/juno/api";
 import { cluster } from "@/lib/juno/cluster";
@@ -46,6 +46,7 @@ type FeedItem =
       author: { wallet: string; handle: string; avatarUrl: string };
       mediaUrl: string | null;
       mediaKind: string | null;
+      replyCount: number;
       coin: { address: string; name: string; symbol: string } | null;
     };
 
@@ -109,6 +110,10 @@ export async function GET(request: Request) {
       });
     }
 
+    const counts = await replyCounts(posts.map((post) => post.id)).catch(
+      () => new Map<string, number>(),
+    );
+
     for (const post of posts) {
       const row = post.baseMint ? byMint.get(post.baseMint) : undefined;
       items.push({
@@ -123,6 +128,7 @@ export async function GET(request: Request) {
         },
         mediaUrl: mediaSrc(post.mediaUrl) ?? null,
         mediaKind: post.mediaMime ? mediaKind(post.mediaMime) : null,
+        replyCount: counts.get(post.id) ?? 0,
         coin: row
           ? { address: row.baseMint, name: row.name, symbol: row.symbol }
           : null,

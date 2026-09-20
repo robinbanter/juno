@@ -43,6 +43,7 @@ export async function POST(request: Request) {
       baseMint: typeof body.baseMint === "string" ? body.baseMint : null,
       mediaUrl: typeof body.mediaUrl === "string" ? body.mediaUrl : null,
       mediaMime: typeof body.mediaMime === "string" ? body.mediaMime : null,
+      parentId: typeof body.parentId === "string" ? body.parentId : null,
     });
 
     return junoJson({ post }, { status: 201 });

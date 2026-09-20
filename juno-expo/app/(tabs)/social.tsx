@@ -83,7 +83,11 @@ export default function SocialScreen() {
             />
           }
           renderItem={({ item }) => (
-            <FeedRow item={item} onOpen={(mint) => router.push(`/coin/${mint}`)} />
+            <FeedRow
+              item={item}
+              onOpen={(mint) => router.push(`/coin/${mint}`)}
+              onOpenPost={(postId) => router.push(`/post/${postId}`)}
+            />
           )}
         />
       )}
@@ -94,9 +98,11 @@ export default function SocialScreen() {
 function FeedRow({
   item,
   onOpen,
+  onOpenPost,
 }: {
   item: FeedItem;
   onOpen: (mint: string) => void;
+  onOpenPost: (postId: string) => void;
 }) {
   if (item.kind === "trade") {
     const buying = item.side === "buy";
@@ -161,27 +167,42 @@ function FeedRow({
   }
 
   return (
-    <Card>
-      <Row gap={8}>
-        <Identicon seed={item.author.wallet} />
-        <Label numberOfLines={1} style={{ fontWeight: "700" }}>
-          {item.author.handle}
-        </Label>
-        <Grow />
-        <Caption>{since(item.timestamp)}</Caption>
-      </Row>
-
-      <Body style={{ marginTop: 12 }}>{item.body}</Body>
-
-      {item.coin ? (
-        <CoinChip onPress={() => onOpen(item.coin!.address)}>
-          <Label style={{ fontWeight: "700" }}>${item.coin.symbol}</Label>
-          <Label muted numberOfLines={1} style={{ flex: 1 }}>
-            {item.coin.name}
+    <Tap onPress={() => onOpenPost(item.id)}>
+      <Card>
+        <Row gap={8}>
+          <Identicon seed={item.author.wallet} />
+          <Label numberOfLines={1} style={{ fontWeight: "700" }}>
+            {item.author.handle}
           </Label>
-        </CoinChip>
-      ) : null}
-    </Card>
+          <Grow />
+          <Caption>{since(item.timestamp)}</Caption>
+        </Row>
+
+        <Body style={{ marginTop: 12 }}>{item.body}</Body>
+
+        {item.coin ? (
+          <CoinChip onPress={() => onOpen(item.coin!.address)}>
+            <Label style={{ fontWeight: "700" }}>${item.coin.symbol}</Label>
+            <Label muted numberOfLines={1} style={{ flex: 1 }}>
+              {item.coin.name}
+            </Label>
+            <Chevron>›</Chevron>
+          </CoinChip>
+        ) : null}
+
+        {/* The conversation, and a way into it. A post you cannot answer is an
+            announcement, and this is supposed to be a social app. */}
+        <Engagement>
+          <Label muted>
+            {item.replyCount === 0
+              ? "Reply"
+              : `${item.replyCount} ${item.replyCount === 1 ? "reply" : "replies"}`}
+          </Label>
+          <Grow />
+          <Chevron>›</Chevron>
+        </Engagement>
+      </Card>
+    </Tap>
   );
 }
 
@@ -239,4 +260,19 @@ const Figures = styled.View`
   padding-top: ${(p) => p.theme.space(3)}px;
   border-top-width: 1px;
   border-top-color: ${(p) => p.theme.colors.line};
+`;
+
+const Engagement = styled.View`
+  flex-direction: row;
+  align-items: center;
+  margin-top: ${(p) => p.theme.space(3)}px;
+  padding-top: ${(p) => p.theme.space(3)}px;
+  border-top-width: 1px;
+  border-top-color: ${(p) => p.theme.colors.line};
+`;
+
+const Chevron = styled.Text`
+  font-size: 18px;
+  font-weight: 700;
+  color: ${(p) => p.theme.colors.faint};
 `;
