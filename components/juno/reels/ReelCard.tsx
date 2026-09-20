@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { Heart, MessageCircle, Play, Share2, Volume2, VolumeX } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { compact, usd } from "@/lib/juno/format";
+import { compact, money, usd } from "@/lib/juno/format";
 import type { Coin } from "@/lib/juno/types";
 import { Avatar } from "../ui/Avatar";
 import { Button } from "../ui/Button";
@@ -268,7 +268,7 @@ function ReelFooter({ coin, onBuy }: { coin: Coin; onBuy: () => void }) {
           <Delta value={coin.marketCap} direction={coin.marketCapChangePct} currency={coin.marketCapCurrency} />
           <span className="text-[11px] text-white/60">
             {coin.holders !== null && <>{compact(coin.holders, 1)} holders</>}
-            {coin.volume24h !== null && <> · {usd(coin.volume24h)} 24h</>}
+            {coin.volume24h !== null && <> · {money(coin.volume24h, coin.marketCapCurrency)} 24h</>}
           </span>
         </span>
       </div>

@@ -46,6 +46,29 @@ export function usd(
   return `${sign}$${abs.toFixed(2)}`;
 }
 
+/**
+ * A money figure in whatever unit it is actually denominated in.
+ *
+ * `usd()` prints a dollar sign unconditionally, which is wrong for a SOL-quoted
+ * pool: no USD price feed means the figure is in SOL, and a `$` in front of it
+ * would overstate it by the SOL price. Pass `Coin.marketCapCurrency` and the
+ * label follows the number.
+ */
+export function money(
+  value: number | null | undefined,
+  currency: string,
+  opts: { compact?: boolean } = {},
+): string {
+  if (currency === "USD") return usd(value, opts);
+  if (value === null || value === undefined || !Number.isFinite(value)) return "—";
+  const abs = Math.abs(value);
+  const sign = value < 0 ? "-" : "";
+  if (opts.compact !== false && abs >= 1000) return `${sign}${compact(abs)} ${currency}`;
+  if (abs === 0) return `0 ${currency}`;
+  const figure = abs < 0.01 ? trimZeros(abs.toPrecision(2)) : abs.toFixed(abs < 1 ? 4 : 2);
+  return `${sign}${figure} ${currency}`;
+}
+
 /** Coin balances and trade sizes: `7.5m`, `349,674`. */
 export function tokenAmount(value: number): string {
   if (!Number.isFinite(value)) return "—";

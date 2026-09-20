@@ -11,7 +11,21 @@ import { CurveProgressBar } from "./CurveProgress";
  * The coin's media, with the view toggle underneath that swaps between the
  * artwork and the price chart.
  */
-export function CoinMedia({ coin }: { coin: Coin }) {
+export function CoinMedia({
+  coin,
+  chart,
+}: {
+  coin: Coin;
+  /**
+   * The price chart, rendered on the server behind its own Suspense boundary.
+   *
+   * Passed in rather than built here because the chart needs the pool's whole
+   * trade history — the slowest read on the page — while the artwork needs
+   * nothing but the row. Taking it as a node lets the media paint immediately
+   * and the chart arrive when it is ready.
+   */
+  chart: React.ReactNode;
+}) {
   const [view, setView] = useState<"media" | "chart">("media");
   const [muted, setMuted] = useState(true);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -60,7 +74,7 @@ export function CoinMedia({ coin }: { coin: Coin }) {
             {!coin.curve.graduated && <CurveProgressBar curve={coin.curve} />}
           </>
         ) : (
-          <PriceChartPlaceholder />
+          chart
         )}
       </div>
 
@@ -96,14 +110,3 @@ export function CoinMedia({ coin }: { coin: Coin }) {
   );
 }
 
-/**
- * Placeholder until the pool's swap history is indexed. Kept visually honest —
- * it says there is no data rather than drawing a fake line.
- */
-function PriceChartPlaceholder() {
-  return (
-    <div className="flex aspect-[16/10] w-full items-center justify-center">
-      <p className="text-[14px] text-j-faint">Price history is still indexing.</p>
-    </div>
-  );
-}

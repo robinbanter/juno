@@ -5,7 +5,7 @@ import { useState } from "react";
 import { Check, Coins, Copy, DollarSign, Flame, MoreHorizontal, Share } from "lucide-react";
 
 import { CURVE_PRESETS } from "@/lib/juno/curves";
-import { compact, usd } from "@/lib/juno/format";
+import { compact, money } from "@/lib/juno/format";
 import type { Coin } from "@/lib/juno/types";
 import { Avatar } from "../ui/Avatar";
 import { IconButton } from "../ui/Button";
@@ -14,6 +14,7 @@ import { Pill } from "../ui/Pill";
 import { StatCards } from "../ui/StatCards";
 import { CurveChart } from "./CurveChart";
 import { CurveProgress } from "./CurveProgress";
+import { NavPanel } from "./NavPanel";
 
 /** Everything above the trade panel: who made it, what it is, how it's doing. */
 export function CoinSummary({ coin }: { coin: Coin }) {
@@ -65,16 +66,19 @@ export function CoinSummary({ coin }: { coin: Coin }) {
           },
           {
             label: "24H Volume",
-            value: usd(coin.volume24h),
+            value: money(coin.volume24h, coin.marketCapCurrency),
             icon: <Flame size={13} className="text-j-muted" aria-hidden="true" />,
           },
           {
             label: "Creator Rewards",
-            value: usd(coin.creatorRewards),
+            value: money(coin.creatorRewards, coin.marketCapCurrency),
             icon: <Coins size={13} className="text-j-muted" aria-hidden="true" />,
           },
         ]}
       />
+
+      {/* Only an equity-shaped launch has a net asset value to sit against. */}
+      {coin.nav && <NavPanel nav={coin.nav} />}
 
       {coin.curve.graduated ? (
         <p className="rounded-j bg-j-surface px-3 py-2 text-[13px] text-j-muted">

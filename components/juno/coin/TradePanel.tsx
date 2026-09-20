@@ -4,7 +4,8 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Info } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { quoteAmount, tokenAmount, usd } from "@/lib/juno/format";
+import { feedLabel } from "./NavPanel";
+import { percent, quoteAmount, tokenAmount, usd } from "@/lib/juno/format";
 import type { Coin, QuoteToken, TradeSide } from "@/lib/juno/types";
 import { Button } from "../ui/Button";
 import { TokenSelect } from "./TokenSelect";
@@ -302,6 +303,8 @@ export function TradePanel({
         )}
       </dl>
 
+      <NavBandWarning coin={coin} quote={quote} buying={buying} />
+
       <input
         value={comment}
         onChange={(e) => setComment(e.target.value)}
@@ -373,5 +376,55 @@ function CoinMark({ coin }: { coin: Coin }) {
         className="size-full object-cover"
       />
     </span>
+  );
+}
+
+/**
+ * Warn before a trade walks the price out of the preset's NAV band.
+ *
+ * Only equity-shaped presets have a band, and only pools launched against a
+ * Pyth feed have a reference to measure against, so on a content coin this
+ * renders nothing — a photo has no net asset value to deviate from.
+ *
+ * The post-trade price comes from the quoter's own price impact rather than a
+ * second simulation: impact *is* the move this trade would cause, and reusing it
+ * keeps the warning consistent with the number shown directly above it.
+ *
+ * This informs, it does not block. The band is the issuer's stated intent, not a
+ * rule the program enforces, and a UI that refused the trade would be claiming
+ * an authority it does not have.
+ */
+function NavBandWarning({
+  coin,
+  quote,
+  buying,
+}: {
+  coin: Coin;
+  quote: TradeQuoteResult | null;
+  buying: boolean;
+}) {
+  const nav = coin.nav;
+  if (!nav || !quote || coin.priceUsd <= 0 || nav.priceUsd <= 0) return null;
+
+  // A buy walks the curve up, a sell walks it down.
+  const after = coin.priceUsd * (buying ? 1 + quote.priceImpact : 1 - quote.priceImpact);
+  const deviation = (after - nav.priceUsd) / nav.priceUsd;
+  const breaches = Math.abs(deviation) * 10_000 > nav.bandBps;
+
+  // Already outside and getting worse is worth saying; already outside and
+  // coming back is the trade the band wants to encourage.
+  if (!breaches) return null;
+  if (!nav.withinBand && Math.abs(deviation) <= Math.abs(nav.deviation)) return null;
+
+  return (
+    <p
+      role="status"
+      className="rounded-j border border-j-neg/40 bg-j-neg/10 px-3 py-2 text-[12px] leading-snug text-j-ink"
+    >
+      This trade would put {coin.symbol} {percent(deviation)} against{" "}
+      {feedLabel(nav.feed)}
+      {nav.state === "closed" ? "'s last close" : ""} — outside the{" "}
+      {nav.bandBps / 100}% band this issuance was launched with.
+    </p>
   );
 }

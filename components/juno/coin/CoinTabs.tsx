@@ -3,12 +3,11 @@
 import { useState } from "react";
 
 import { cn } from "@/lib/utils";
-import { percent, shortAddress, since, tokenAmount, usd } from "@/lib/juno/format";
+import { money, percent, shortAddress, since, tokenAmount, usd } from "@/lib/juno/format";
 import { CURVE_PRESETS } from "@/lib/juno/curves";
-import type { Activity, Coin, Comment, Holder } from "@/lib/juno/types";
+import type { Coin, Comment, Holder } from "@/lib/juno/types";
 import { Avatar } from "../ui/Avatar";
 import { Tabs } from "../ui/Tabs";
-import { ActivityList } from "./ActivityList";
 import { CommentComposer } from "./CommentComposer";
 import { EconomicsPanel } from "./EconomicsPanel";
 
@@ -21,7 +20,8 @@ export function CoinTabs({
   comments,
 }: {
   coin: Coin;
-  activity: Activity[];
+  /** Streamed in on the server — see the coin page's Suspense boundaries. */
+  activity: React.ReactNode;
   holders: Holder[];
   comments: Comment[];
 }) {
@@ -45,7 +45,7 @@ export function CoinTabs({
       />
 
       <div className="pt-2">
-        {tab === "activity" && <ActivityList items={activity} />}
+        {tab === "activity" && activity}
         {tab === "holders" && <HoldersList items={holders} />}
         {tab === "comments" && (
           <>
@@ -140,7 +140,7 @@ function DetailsPanel({ coin }: { coin: Coin }) {
         </Row>
         <Row label="Graduation threshold">{usd(coin.curve.thresholdUsd)}</Row>
         <Row label="Curve progress">{percent(coin.curve.progress, 1).replace("+", "")}</Row>
-        <Row label="Total volume">{usd(coin.totalVolume)}</Row>
+        <Row label="Total volume">{money(coin.totalVolume, coin.marketCapCurrency)}</Row>
         {coin.graduatedPool && (
           <Row label="DAMM v2 pool" mono>
             {shortAddress(coin.graduatedPool, 6, 6)}
