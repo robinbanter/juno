@@ -1,4 +1,4 @@
-import { listPoolActivity } from "@/lib/juno/activity";
+import { poolActivity } from "@/lib/juno/chain";
 import { cluster } from "@/lib/juno/cluster";
 import { listPools } from "@/lib/juno/registry";
 import { ActivityList } from "@/components/juno/coin/ActivityList";
@@ -13,7 +13,7 @@ export default async function ActivityPage() {
   // indexer is the answer once there are more pools than fit in one screen.
   const perPool = await Promise.all(
     pools.map(async (pool) => {
-      const rows = await listPoolActivity(pool.poolAddress, 10);
+      const rows = await poolActivity(pool, 10);
       return rows.map((row) => ({
         ...row,
         coinName: pool.name,

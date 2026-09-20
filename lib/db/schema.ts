@@ -1060,6 +1060,9 @@ export const junoPools = pgTable(
 
     mediaUrl: text("media_url"),
     posterUrl: text("poster_url"),
+    /** What kind of file the media is. URLs on IPFS carry no extension, so
+        image-vs-video cannot be sniffed from the address. */
+    mediaMime: text("media_mime"),
     mediaWidth: integer("media_width"),
     mediaHeight: integer("media_height"),
 

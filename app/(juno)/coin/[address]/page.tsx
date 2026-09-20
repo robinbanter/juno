@@ -4,11 +4,11 @@ import { ExternalLink } from "lucide-react";
 import { shortAddress } from "@/lib/juno/format";
 import { identicon } from "@/lib/juno/identicon";
 
-import { hydratePool } from "@/lib/juno/chain";
+import { hydratePool, poolActivity } from "@/lib/juno/chain";
 import { cluster, explorer, meteoraPoolUrl } from "@/lib/juno/cluster";
 import { GraduatedNotice } from "@/components/juno/coin/GraduatedNotice";
 import { QUOTE_TOKENS } from "@/lib/juno/dbc";
-import { listPoolActivity, listPoolHolders } from "@/lib/juno/activity";
+import { listPoolHolders } from "@/lib/juno/activity";
 import { getPool } from "@/lib/juno/registry";
 import { listComments } from "@/lib/juno/social";
 import { CoinMedia } from "@/components/juno/coin/CoinMedia";
@@ -43,9 +43,11 @@ export default async function CoinPage({
   if (!coin) notFound();
 
   const [activity, holders, comments] = await Promise.all([
-    listPoolActivity(row.poolAddress),
+    poolActivity(row, 20),
     listPoolHolders(row.baseMint),
-    listComments(row.baseMint, cluster()).catch(() => []),
+    listComments(row.baseMint, cluster()).catch(
+      (): Awaited<ReturnType<typeof listComments>> => [],
+    ),
   ]);
 
   return (

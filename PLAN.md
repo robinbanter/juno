@@ -1,228 +1,165 @@
 # Juno — build plan
 
 Living document. Statuses are verified by running things, not by reading code.
-Last verified: 2026-09-17.
+Last verified: 2026-09-21.
+
+Deadline: **Fri 25 Sep 2026, 16:00 ET** (STOCKLANA, Solana).
 
 ---
 
-## 1. Goals
+## 0. Decisions taken (2026-09-21)
 
-### What Juno is
-A social app where publishing a post or reel launches a **Meteora Dynamic
-Bonding Curve** pool for it. People buy the content itself. The creator earns
-trading fees. When the pool raises its `migrationQuoteThreshold` it graduates
-into a **DAMM v2** pool and becomes a normal AMM market that outlives the app.
-
-### What "done" means
-Entry in the Solana **STOCKLANA** hackathon (tokenized stocks on Solana).
-**Deadline: Fri 25 Sep 2026, 16:00 ET.** Max 3 sponsor tracks.
-
-Submission requires all of:
-1. Public GitHub repo, README stating honestly what is on-chain vs mock
-2. Live demo URL with working wallet connect
-3. Pitch video ≤ 3 min (problem → product → one live transaction)
-4. Technical video ≤ 5 min (optional, do it): config+pool creation, a swap, explorer links
-5. **On-chain proof**: ≥1 DBC pool created *by the app*, explorer links in README
-6. **Stock-shaped demo content** — an equity preset launch, not only coined photos
-7. Track selection: **Meteora (mandatory)** + **Pyth** (cheap: `navBandBps` exists) + optionally one of Tessera/PreStocks
-8. Open-source dependency disclosure
-
-### What "winning" means
-- **Meteora $5k** judges: originality of the DBC config, technical soundness,
-  *life after the hackathon*. Their bar: **"working mainnet code beats slides."**
-- **Main $100k** judges: real user problem, working end-to-end demo, a reason it
-  is on Solana, execution quality. Core question: *could this be a real app people use?*
-
-### The strategic tension
-Juno is a **social content app**; the hackathon is about **tokenized stocks**.
-The four curve presets are the bridge and they are genuinely original DBC work.
-The demo must therefore lead with an **equity issuance**, not a coined photo.
+| Decision | Choice |
+|---|---|
+| Deploy | Vercel for the app. It is one Next.js app — the API routes *are* the backend, so there is nothing to split. Railway revisited at deploy time only if the IPFS/RPC proxy is worth a long-running service. |
+| Mainnet | **Not now.** Devnet + a **mainnet-fork** run to prove the mainnet code path. Real mainnet funded later by the user. |
+| RPC | **Public endpoints**, with caching / bounded concurrency / backoff in code to survive a demo. No credential. |
+| Git | Push branch `juno` to `origin`. |
 
 ---
 
-## 2. Phases, tasks and status
+## 1. Measured completion
+
+**INITIAL: 70%** — measured 2026-09-21 by running typecheck, the unit suite, live
+RPC probes and live DB reads. Not by reading file names.
+
+Evidence gathered:
+- `npx tsc --noEmit` → clean.
+- `npm run test:unit` → 18 files, **140 passed**.
+- `juno_pools` → **15 rows** (11 devnet, 4 mainnet-fork), read live from Neon.
+- Devnet launcher `9CHr5g24…WYoE` holds **5.5092 SOL** — enough to execute real
+  on-chain work without asking for funds.
+- Meteora DBC lifecycle verified on-chain: launch → 8 buys → 100% curve →
+  `migrateToDammV2` → DAMM v2 pool `EhvtVimk…MYy7L`, + a real fee claim.
+
+### Two "BLOCKED" items in the previous plan were not blocked
+
+Both were re-tested against live infrastructure and both are false.
+
+**Pyth (was 5.3/5.4 BLOCKED, "Hermes needs an API key").** Hermes *is* behind a
+key — confirmed, `/v2/updates/price/latest` returns **401**. But Pyth's prices
+are also **on-chain on Solana**, in push-oracle `PriceUpdateV2` accounts owned by
+`pythWSnswVUd12oZpeFP8e9CVaEqJg25g1Vtc2biRsT`, readable with nothing but an RPC
+connection. Probed live, mainnet:
+
+| Feed | Account | Read |
+|---|---|---|
+| SOL/USD (shard 0) | `7UVimffxr9ow1uXYxsr4LHAcV58mLzhmwaeKvJ1pjLiE` | $109.868353, 13s old |
+| USDC/USD (shard 0) | `Dpw1EAVrSB1ibxiDQyTAW6Zip3J4Btk2x4SgApQCeFbX` | $0.99995301, 7s old |
+| AAPL/USD (shard 1) | `D9uk39pqZMcnmtPP9WeC8cREUpKZmyXLga9mSQ79SphW` | $334.8159, Fri close |
+| NVDA/USD (shard 1) | `5VETJ8h3p4JrESYrzhjTDAWPEjDjfcnduqe9CjxgqBNd` | $222.515, Fri close |
+| TSLA/USD (shard 1) | `FQB8c4zB8Emrp9W8bmyk6GanCLq4aRytHYPDAnaEpq9z` | $364.17481, Fri close |
+
+Two facts that shape the implementation: **shard 0 is fresh for crypto, shard 1
+for equities**, so the right account is per-feed and must be chosen by
+comparing `publishTime`; and an equity feed at the weekend is *supposed* to be
+hours old — that is the last close, not a broken read, so the UI must say
+"market closed, last close" rather than either hiding it or implying it is live.
+Reading Pyth **on-chain from Solana** is also a strictly better story for this
+hackathon than an HTTP call would have been.
+
+**Swap analytics (was "needs a swap-event indexer").** No indexer is needed.
+`getParsedTransaction` returns `pre/postTokenBalances`; the pool's own base and
+quote vault deltas give side, size, price and counterparty exactly. Verified
+against devnet pool `FGcLWvDc…RBHpK`:
+
+```
+2E8UDB5v…  BUY   4,000 base for 0.00795413 SOL  → 1.9885e-6 SOL/token
+5QzDFFKT…  SELL  4,968.59 base for 0.01 SOL
+J8bCyCkc…  BUY   10,000 base for 0.01988536 SOL
+```
+
+That one decode unblocks **four** things at once: real Activity rows, 24h
+volume, total volume, and the price chart.
+
+### P0 defects found (things that are wrong, not merely missing)
+
+| # | Defect | Evidence | Impact |
+|---|---|---|---|
+| D1 | Every Activity row is hardcoded `side: "buy"`, `amount: 0`, `valueUsd: 0` | `lib/juno/activity.ts:38-45` | **A trading screen asserting a direction it never read.** Sells render as buys. This is the one real dishonesty in the app. |
+| D2 | `marketCapChangePct: 0` on every coin | `lib/juno/chain.ts:131` | Renders as a computed "0.00%" delta. Never derived. |
+| D3 | Media kind sniffed from the URL extension | `lib/juno/chain.ts:99` | IPFS URLs carry no extension, so **every video renders as an image**. `media_mime` exists in the DB and is populated; nothing reads it. |
+| D4 | `Equity.US.MSFT/USD` stored on a pool, absent from `PYTH_FEEDS` | `lib/juno/pyth.ts:17-21` vs DB row `FH3NaHes…` | NAV resolution returns null for a pool that claims a feed. |
+
+---
+
+## 2. Phases and status
 
 Legend: `DONE` · `IN PROGRESS` · `NOT STARTED` · `BLOCKED`
 
-### Phase 0 — Foundation (product surface)
+### Phase A — Truth repairs (P0, no dependencies)
 | # | Task | Status |
 |---|---|---|
-| 0.1 | Design system, dark Juno palette scoped to `.juno` | DONE |
-| 0.2 | App shell: header + brand lockup, side rail, mobile bottom nav | DONE |
-| 0.3 | `/explore` with `?q=` search and `?sort=trending` | DONE (mock data) |
-| 0.4 | `/reels` snap feed, one video plays via IntersectionObserver | DONE (mock data) |
-| 0.5 | `/coin/[address]` page: media, stats, trade panel, 4 tabs | DONE (mock data) |
-| 0.6 | `/creator/[handle]` profile with posts/reels tabs | DONE (mock data) |
-| 0.7 | `/create` launch form with curve preset picker | DONE |
-| 0.8 | `/activity` global trade feed | DONE (mock data) |
-| 0.9 | Unit tests (140) + production build green | DONE |
+| A.1 | `lib/juno/swaps.ts` — decode side/size/price from vault deltas | NOT STARTED |
+| A.2 | Real Activity rows (fixes D1) | NOT STARTED |
+| A.3 | 24h volume + total volume from decoded swaps | NOT STARTED |
+| A.4 | Price chart from decoded swap prices (replaces placeholder) | NOT STARTED |
+| A.5 | `marketCapChangePct` real or null (fixes D2) | NOT STARTED |
+| A.6 | Wire `media_mime` through registry → chain → components (fixes D3) | NOT STARTED |
+| A.7 | Commit the in-flight IPFS gateway-failover route | NOT STARTED |
 
-### Phase 1 — On-chain core
+### Phase B — Pyth track (P0, unblocked above)
 | # | Task | Status |
 |---|---|---|
-| 1.1 | `lib/juno/curves.ts`: 4 presets, 16 liquidity weights each | DONE |
-| 1.2 | Validate every preset against SDK `validateConfigParameters` | DONE (test) |
-| 1.3 | `lib/juno/cluster.ts`: cluster switch, RPC, Solscan/Meteora links | DONE |
-| 1.4 | Cluster-aware quote mints (devnet USDC ≠ mainnet USDC) | DONE |
-| 1.5 | `planLaunch()` — split config + pool into 2 txs under 1232B | DONE |
-| 1.6 | `sendTransaction()` / `sendLaunch()` — blockhash, signers, confirm | DONE |
-| 1.7 | `fetchPoolSnapshot()` reads live pool + curve progress | DONE (verified) |
-| 1.8 | `quoteTrade()` prices against the live curve | DONE (verified) |
-| 1.9 | `buildSwapTransaction()` | DONE (built, never sent) |
-| 1.10 | CLI `npm run juno:launch` | DONE |
-| 1.11 | CLI `npm run juno:inspect` | DONE |
-| 1.12 | **Launch a real devnet pool** | DONE — see §4 |
+| B.1 | Rewrite `lib/juno/pyth.ts` onto on-chain `PriceUpdateV2` reads | NOT STARTED |
+| B.2 | Freshest-shard selection + staleness + market-open state | NOT STARTED |
+| B.3 | Expand feed table (AAPL, NVDA, TSLA, MSFT, GOOGL, AMZN, META, SOL, USDC) (fixes D4) | NOT STARTED |
+| B.4 | NAV band on the coin page | NOT STARTED |
+| B.5 | Trade-panel warning when price leaves the preset's `navBandBps` | NOT STARTED |
+| B.6 | Honest USD denomination for SOL-quoted pools | NOT STARTED |
+| B.7 | Unit tests for decode, shard choice, staleness, band maths | NOT STARTED |
 
-### Phase 2 — Wallet
+### Phase C — RPC resilience (P0 — public RPC is the demo's biggest risk)
 | # | Task | Status |
 |---|---|---|
-| 2.1 | `JunoWalletProvider` (Phantom + Solflare), Juno-scoped | DONE |
-| 2.2 | `ConnectButton` in header using Juno tokens | DONE |
-| 2.3 | `useLaunch()` hook with per-step status | DONE |
-| 2.4 | Create form signs and sends for real | DONE — verified via CLI on the same code path |
-| 2.5 | Post-launch receipt with Solscan links | DONE |
-| 2.6 | Verify connect → launch → receipt in a real browser wallet | NOT STARTED — needs a human with a funded browser wallet; same code path verified via CLI |
+| C.1 | Retry with backoff on 429 across all RPC reads | NOT STARTED |
+| C.2 | Extend caching to swaps/Pyth/holders | NOT STARTED |
+| C.3 | Verify the pages survive a cold load on public devnet RPC | NOT STARTED |
 
-### Phase 3 — Persistence (kill the mocks)
+### Phase D — Stock wedge (P1, unblocked by Phase B)
 | # | Task | Status |
 |---|---|---|
-| 3.1 | `juno_pools` table in Neon Postgres (identity/provenance only) | DONE (pushed) |
-| 3.2 | `lib/juno/registry.ts` — record/list/get launched pools | DONE |
-| 3.3 | `lib/juno/identicon.ts` — artwork derived from mint address | DONE |
-| 3.4 | `POST /api/juno/pools` — record a launch after confirmation | DONE — verified 201 + on-chain check |
-| 3.5 | `lib/juno/chain.ts` — map `JunoPoolRow` + snapshot → `Coin` | DONE |
-| 3.6 | `/explore` reads real pools | DONE — verified renders AAPLx |
-| 3.7 | `/coin/[address]` reads real pool by mint | DONE — verified real MC/threshold |
-| 3.8 | `/creator/[handle]` reads real pools by wallet | DONE |
-| 3.9 | `/activity` reads real swap history | DONE — real signatures; amounts need an indexer |
-| 3.10 | `/reels` reads real `format = reel` pools | DONE |
-| 3.11 | Delete `lib/juno/mock.ts` | DONE — deleted, nothing imported it |
+| D.1 | Issuance mode in `/create`: ticker → preset → NAV feed | NOT STARTED |
+| D.2 | Seed equity issuances with media across presets | NOT STARTED |
 
-### Phase 4 — Trading
+### Phase E — Verification
 | # | Task | Status |
 |---|---|---|
-| 4.1 | Trade panel calls real `quoteTrade` | DONE |
-| 4.2 | Buy sends a real signed swap | DONE — verified on devnet |
-| 4.3 | Sell sends a real signed swap | DONE (code, same path) — sell not yet executed |
-| 4.7 | Partial-fill swaps (`swap2` + `SwapMode.PartialFill`) | DONE — verified completing a curve |
-| 4.8 | Creator fee claiming (`claimCreatorTradingFee`) | DONE — verified, 0.009653 SOL |
-| 4.9 | Graduation (`migrateToDammV2`) | DONE — verified, DAMM v2 pool exists |
-| 4.4 | Show real wallet balances (quote + coin holding) | DONE |
-| 4.5 | Tx receipt + Solscan link after a trade | DONE |
-| 4.6 | Execute a real devnet buy, verify on explorer | DONE — 59DBxUgP…, curve moved |
+| E.1 | Juno unit tests for every new module | NOT STARTED |
+| E.2 | Real-browser pass over all 5 routes | NOT STARTED |
+| E.3 | **Mainnet-fork run**: launch → trade → graduate against forked mainnet state | NOT STARTED |
+| E.4 | Full devnet re-run of launch/trade/claim/graduate after refactors | NOT STARTED |
+| E.5 | Production build green | NOT STARTED |
 
-### Phase 5 — Pyth (2nd sponsor track)
+### Phase F — Submission
 | # | Task | Status |
 |---|---|---|
-| 5.1 | `lib/juno/pyth.ts` — Hermes client, equity + crypto feeds | DONE (code) |
-| 5.2 | Map `navBandBps` presets to a Pyth feed id | DONE — feed ids verified, stored per pool |
-| 5.3 | NAV vs curve price on the coin page | BLOCKED — Hermes price API needs a key; none in repo |
-| 5.4 | Warn in trade panel when price leaves the NAV band | BLOCKED — same credential |
-| 5.5 | SOL/USD feed so SOL-quoted pools have honest USD figures | DONE — degrades to SOL-denominated labelling when no key |
-
-### Phase 6 — Stock wedge
-| # | Task | Status |
-|---|---|---|
-| 6.1 | Launch an equity-preset pool named for a real ticker | DONE (AAPLx Issuance) |
-| 6.2 | Issuance mode in `/create`: pick ticker → preset → NAV feed | NOT STARTED — depends on 5.3 (Pyth key) to be worth building |
-| 6.4 | Media upload + IPFS token metadata | DONE — Pinata; URI verified on the mint's Metaplex account |
-| 6.3 | Seed 2–3 equity issuances across presets for the demo | DONE — AAPLx (ipo-book), NVDAx (thin-name) |
-
-### Phase 7 — Graduation
-| # | Task | Status |
-|---|---|---|
-| 7.1 | Surface migration threshold + progress from chain | DONE (in snapshot) |
-| 7.2 | Graduation state on coin page when `isMigrated` | DONE — verified on a really-migrated pool |
-| 7.3 | Link to DAMM v2 pool post-migration | DONE — derived via deriveDammV2PoolAddress |
-
-### Phase 8 — Submission
-| # | Task | Status |
-|---|---|---|
-| 8.1 | Juno README: what is on-chain vs mock, explorer links, dep disclosure | DONE — `JUNO.md` |
-| 8.2 | Deploy to a public URL | NOT STARTED |
-| 8.3 | Set `NEXT_PUBLIC_SOLANA_RPC` to a dedicated endpoint | BLOCKED — no RPC key in env |
-| 8.4 | Pitch video ≤3 min | NOT STARTED (human) |
-| 8.5 | Technical video ≤5 min | NOT STARTED (human) |
-| 8.6 | One mainnet pool | BLOCKED — needs mainnet SOL + user approval |
-| 8.7 | Submit on hackathons.solana.com | NOT STARTED (human) |
+| F.1 | `JUNO.md` updated to the new truth (Pyth on-chain, real analytics) | NOT STARTED |
+| F.2 | Push branch `juno` to origin | NOT STARTED |
+| F.3 | Deploy to Vercel | NOT STARTED |
+| F.4 | Pitch video ≤3 min | BLOCKED (human) |
+| F.5 | Technical video ≤5 min | BLOCKED (human) |
+| F.6 | Mainnet pool | BLOCKED (user funds later — by decision, not by code) |
+| F.7 | Submit on hackathons.solana.com | BLOCKED (human) |
 
 ---
 
-## 3. Gap list
+## 3. Critical path
 
-Every gap ties to the phase/task it blocks.
+`A.1 → A.2/A.3/A.4` (one decoder feeds four surfaces) → `B.1 → B.4/B.5`
+(sponsor track) → `C` (or the demo dies on rate limits) → `E.3` (mainnet-fork
+proof) → `F.1/F.2/F.3`.
 
-### Blocking gaps (product is mock without these)
-| Gap | Location | Blocks |
-|---|---|---|
-| All 5 content pages read fixtures | `app/(juno)/{explore,reels,activity,creator,coin}` import `DEMO_*` | 3.6–3.10 |
-| `lib/juno/mock.ts` is the data layer | whole file | 3.11 |
-| Trade quotes are fake spot arithmetic | `app/(juno)/coin/[address]/TradePanelClient.tsx:46` | 4.1 |
-| Swap submit is deliberately inert | `TradePanelClient.tsx:58` | 4.2, 4.3 |
-| Balances hardcoded to 0 | `TradePanelClient.tsx` `balanceUsd={0} holding={0}` | 4.4 |
-| Rail/nav link to demo creator | `SideRail.tsx:8`, `MobileNav.tsx:8` import `DEMO_CREATOR` | 3.8 |
-| No launch persistence | table exists, nothing writes to it | 3.2–3.4 |
-
-### Sponsor gaps
-| Gap | Location | Blocks |
-|---|---|---|
-| `navBandBps` defined, never read | `lib/juno/curves.ts` | 5.2–5.4 |
-| No Pyth integration at all | — | Phase 5 |
-| No issuance mode | `/create` has no ticker concept | 6.2 |
-
-### Submission gaps
-| Gap | Location | Blocks |
-|---|---|---|
-| README is Norr's, zero Juno mentions | `README.md` | 8.1 |
-| Not deployed | — | 8.2 |
-| Public RPC only, rate-limited | `lib/juno/cluster.ts` fallback | 8.3 |
-| No videos, not submitted | — | 8.4–8.7 |
-
-### Cosmetic / lower priority
-| Gap | Location | Blocks |
-|---|---|---|
-| Price chart is an honest empty state | `CoinMedia.tsx:103` | nothing critical |
-| No media upload (Supabase creds exist) | `/create` file input inert | 6.2 nice-to-have |
-| No comments/holders indexer | `CoinTabs` tabs read fixtures | 3.9 partial |
+Phases A and B are independent of each other and are both independent of every
+blocked item. Everything on the critical path is executable now.
 
 ---
 
-## 4. On-chain facts (devnet)
+## 4. USER_ACTION_REQUIRED
 
-First pool launched by the app's own code path, 2026-09-17:
+Collected as they are hit. Nothing here blocks anything else.
 
-| | |
-|---|---|
-| Preset | `ipo-book` (16 segments, 4% → 0.5% fee) |
-| Name / ticker | AAPLx Issuance / AAPLXI |
-| Quote | devnet USDC `4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU` |
-| Base mint | `CMjWQU2Bzd1NWwy1GB2qFNcpgRtW6xm9dhcjnevtBcbp` |
-| Pool | `9DnKw5r5rYx1JoGmwLU2yCXFhKDkypaycuebrwrZSxFa` |
-| Config | `7cu21NeoDjZ74VckNXhAnfo7Ahq5r5T1xTBAKnpnFmsS` |
-| Config tx | `2X1zcRbEQoT527dvtRMnxAihmu4t91ZfeKxDvMSmTP7CFnXBK8zaHuYjQ86mvyizfnWrY6LdpzqrrZ61QNa7Shtz` |
-| Pool tx | `4NiD7oZBfbGc7gNtVSyDgtTFohUSMYHMBEpxGQN6qsDbmYBTncLSpjuQXQovS39FvGZeCedmsAqT7msqX5dxRAh3` |
-| Deployer | `9CHr5g24EdzUKg9GZFUvEuAvHAjZGCsF1Z3zVPudWYoE` (10 SOL devnet) |
-
-Verified read-back: threshold $4124.999999, progress 0%, quote for 10 USDC →
-9,564,026 tokens, fee 0.309, price impact 4.36%.
-
-### Engineering note worth keeping
-`createConfigAndPool` **cannot** carry a 16-segment curve: the bundled message
-serialises to ~1488 bytes against Solana's 1232 limit. `creator.createPool`
-alone does not work either — it reads the config account from chain, which does
-not exist at build time. The working path is
-`createConfigAndPoolWithFirstBuy` with no first buy, which returns the two
-transactions *separately* (config 1109B, pool 673B) and takes `tokenType` from
-params instead of fetching. Dropping curve points to fit one transaction would
-have gutted the exact thing Meteora is judging.
-
----
-
-## 5. Execution order
-
-1. Phase 3 (persistence) — unlocks every page showing real data
-2. Phase 4 (trading) — the demo's core loop
-3. Phase 5 (Pyth) — second sponsor track, cheap
-4. Phase 6.2–6.3 (issuance mode + seeded equity pools) — the stock wedge
-5. Phase 7 (graduation) — Meteora's "life after" story
-6. Phase 8 (README, deploy) — submission artifacts
+- **F.4 / F.5** — pitch + technical videos. Only you can record these.
+- **F.6** — mainnet pool needs a funded mainnet key. Deferred by your decision;
+  the code path will be proven on a mainnet fork first.
+- **F.7** — the submission itself.

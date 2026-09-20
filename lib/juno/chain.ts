@@ -3,13 +3,38 @@ import "server-only";
 import { PublicKey } from "@solana/web3.js";
 import type BN from "bn.js";
 
-import { getConnection, getDbcClient, bnToUi, fetchPoolSnapshot } from "./dbc";
-import { quoteTokenUsdPrice } from "./pyth";
+import { getConnection, getDbcClient, bnToUi, fetchPoolSnapshot, vaultsOf } from "./dbc";
+import {
+  fetchPythPrice,
+  marketState as marketStateOf,
+  navBand,
+  quoteTokenUsdPrice,
+} from "./pyth";
 import { curveShape } from "./curve-shape";
+import { CURVE_PRESETS } from "./curves";
 import { feeSchedule, tokenomics } from "./economics";
 import { identicon } from "./identicon";
+import { listPoolActivity } from "./activity";
+import { mediaKind, mediaSrc } from "./media";
+import { tryRead } from "./rpc";
+import {
+  changeWithin,
+  listSwapHistory,
+  priceSeries,
+  totalVolume as sumVolume,
+  volumeWithin,
+  DAY_MS,
+} from "./swaps";
 import type { JunoPoolRow } from "./registry";
-import type { Coin, CoinFormat, CurvePresetId, Creator, QuoteToken } from "./types";
+import type {
+  Activity,
+  Coin,
+  CoinFormat,
+  CurvePresetId,
+  Creator,
+  NavReference,
+  QuoteToken,
+} from "./types";
 import { shortAddress } from "./format";
 
 /**
@@ -40,7 +65,46 @@ function creatorFromWallet(wallet: string): Creator {
     posts: 0,
     marketCap: 0,
     marketCapCurrency: "USD",
-    marketCapChangePct: 0,
+    // A wallet is not a profile. There is no creator-coin market here to have a
+    // change, so null rather than a 0% that would render as a real reading.
+    marketCapChangePct: null,
+  };
+}
+
+/**
+ * Where the underlying is marked, for a pool that names a Pyth feed.
+ *
+ * Only equity-shaped presets carry a `navBandBps`, and only pools launched in
+ * issuance mode carry a feed id, so most coins have no NAV and that is correct
+ * rather than missing — a photo has no net asset value.
+ */
+async function navFor(
+  row: JunoPoolRow,
+  priceUsd: number,
+  preset: CurvePresetId,
+): Promise<NavReference | null> {
+  if (!row.navFeedId) return null;
+  const bandBps = CURVE_PRESETS[preset]?.navBandBps;
+  if (!bandBps) return null;
+
+  const price = await fetchPythPrice(row.navFeedId);
+  if (!price) return null;
+
+  const { deviation } = navBand({
+    curvePriceUsd: priceUsd,
+    navPriceUsd: price.priceUsd,
+    bandBps,
+  });
+
+  return {
+    feed: row.navFeedId,
+    priceUsd: price.priceUsd,
+    deviation,
+    updatedAt: price.publishedAt,
+    bandBps,
+    withinBand: Math.abs(deviation) * 10_000 <= bandBps,
+    state: marketStateOf(price),
+    ageSeconds: price.ageSeconds,
   };
 }
 
@@ -97,15 +161,34 @@ export async function hydratePool(
     ? bnToUi(fees.current.creatorQuoteFee, snapshot.quoteDecimals) * rate
     : 0;
 
+  // Media kind comes from the stored mime type, never from the URL's tail: an
+  // IPFS address is a hash with no extension, so sniffing it classified every
+  // video as an image and the reel feed rendered stills.
+  const fallbackArt = identicon(row.baseMint);
   const media = {
-    kind: (row.mediaUrl?.match(/\.(mp4|webm|mov)$/i) ? "video" : "image") as
-      | "image"
-      | "video",
-    url: row.mediaUrl ?? identicon(row.baseMint),
-    posterUrl: row.posterUrl ?? row.mediaUrl ?? identicon(row.baseMint),
+    kind: mediaKind(row.mediaMime),
+    url: mediaSrc(row.mediaUrl) ?? fallbackArt,
+    posterUrl: mediaSrc(row.posterUrl) ?? mediaSrc(row.mediaUrl) ?? fallbackArt,
     width: row.mediaWidth ?? (row.format === "reel" ? 720 : 1000),
     height: row.mediaHeight ?? (row.format === "reel" ? 1280 : 1000),
   };
+
+  // Trade history drives volume, the 24h change and the chart. One read feeds
+  // all three, and it is skipped for list views that show none of them.
+  const preset = row.curvePreset as CurvePresetId;
+  const history = options.detailed
+    ? await listSwapHistory(row.poolAddress, vaultsOf(snapshot))
+    : null;
+
+  const swaps = history?.swaps ?? [];
+  // A partial read is short of the truth, so a total from it would understate
+  // volume while looking authoritative. Null says "unknown" instead.
+  const complete = history !== null && !history.partial;
+  const volume24h = complete ? volumeWithin(swaps, DAY_MS) : null;
+  const allVolume = complete ? sumVolume(swaps) : null;
+  const priceChange = complete ? changeWithin(swaps, DAY_MS, snapshot.price) : null;
+
+  const nav = options.detailed ? await navFor(row, priceUsd, preset) : null;
 
   return {
     address: row.baseMint,
@@ -121,15 +204,21 @@ export async function hydratePool(
     quote: quoteFromRow(row, snapshot.quoteDecimals),
     marketCap: priceUsd * TOTAL_SUPPLY,
     marketCapCurrency: quoteUsd === null ? quoteFromRow(row, snapshot.quoteDecimals).symbol : "USD",
-    // Needs a price history to compute. Flat until an indexer exists.
-    marketCapChangePct: 0,
-    volume24h: null,
-    totalVolume: null,
+    // Market cap is price times a fixed supply, so its change is the price's.
+    marketCapChangePct: priceChange,
+    // Quote-denominated volume converted into whatever `marketCapCurrency`
+    // says this coin is measured in, so the two figures agree.
+    volume24h: volume24h === null ? null : volume24h * rate,
+    totalVolume: allVolume === null ? null : allVolume * rate,
+    priceHistory: options.detailed
+      ? priceSeries(swaps).map((point) => ({ ...point, price: point.price * rate }))
+      : undefined,
+    nav,
     creatorRewards,
     holders,
     priceUsd,
     curve: snapshot.curve,
-    curvePreset: row.curvePreset as CurvePresetId,
+    curvePreset: preset,
     graduatedPool: snapshot.curve.graduated ? row.poolAddress : undefined,
     fee: options.detailed
       ? feeSchedule({
@@ -151,6 +240,23 @@ export async function hydratePool(
         })
       : undefined,
   };
+}
+
+/**
+ * Recent trades against one pool, ready for the activity feed.
+ *
+ * Takes a registry row rather than vault addresses so no caller has to know how
+ * a swap is decoded. The snapshot and the swap history are both cached, so the
+ * coin page calling this after `hydratePool` costs no extra RPC.
+ */
+export async function poolActivity(row: JunoPoolRow, limit = 10): Promise<Activity[]> {
+  const quoteUsd = await quoteTokenUsdPrice(row.quoteMint).catch(() => null);
+  const rate = quoteUsd ?? 1;
+
+  const snapshot = await fetchPoolSnapshot(row.poolAddress, rate);
+  if (!snapshot) return [];
+
+  return listPoolActivity(row.poolAddress, vaultsOf(snapshot), rate, limit);
 }
 
 /**

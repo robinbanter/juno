@@ -37,7 +37,11 @@ export type Creator = {
    * mislabelled as dollars.
    */
   marketCapCurrency: string;
-  marketCapChangePct: number;
+  /**
+   * Null when there is no trade old enough to measure against. A creator with
+   * no trading history has no 24h change, and 0 would claim one.
+   */
+  marketCapChangePct: number | null;
 };
 
 export type MediaKind = "image" | "video" | "audio";
@@ -89,11 +93,22 @@ export type Coin = {
    * mislabelled as dollars.
    */
   marketCapCurrency: string;
-  marketCapChangePct: number;
   /**
-   * Null when unknown. Rolling volume needs an indexer over swap events —
-   * the program exposes cumulative fees, not a 24h window — and showing a
-   * number we cannot derive would be a lie on a trading screen.
+   * 24h change as a signed ratio, or null when it cannot be derived.
+   *
+   * Null covers two real cases: a pool whose entire trade history is inside the
+   * window, so there is no earlier price to compare against, and a history the
+   * RPC would not serve. Neither is a 0% change, which is a claim about a
+   * period we would not have measured.
+   */
+  marketCapChangePct: number | null;
+  /**
+   * Traded quote volume in the last 24h and across all visible history, in the
+   * same unit as `marketCapCurrency`.
+   *
+   * Both are derived from decoded swaps (`lib/juno/swaps.ts`). Null means no
+   * history was readable at all — distinct from 0, which means the market is
+   * genuinely quiet.
    */
   volume24h: number | null;
   totalVolume: number | null;
@@ -106,6 +121,16 @@ export type Coin = {
 
   /** Price of one coin, in the quote token's USD terms. */
   priceUsd: number;
+  /**
+   * Realised prices over time, oldest first — the coin page's chart.
+   *
+   * Executed trades, not marks, so a gap means nobody traded rather than a
+   * price that held. Only loaded on the coin page. Undefined when not loaded;
+   * empty when loaded and the pool has never traded.
+   */
+  priceHistory?: PricePoint[];
+  /** Where the underlying is marked, for an equity-preset launch. Coin page only. */
+  nav?: NavReference | null;
 
   curve: CurveState;
   /** Which `lib/juno/curves.ts` preset this pool was launched with. */
@@ -144,6 +169,13 @@ export type CurveState = {
 
 import type { CurveShape } from "./curve-shape";
 import type { FeeSchedule, Tokenomics } from "./economics";
+
+/**
+ * One realised trade price. Lives here rather than in `lib/juno/swaps.ts`
+ * because client components render it and that module is `server-only` — a
+ * type-only import would be erased, but a domain type belongs with the domain.
+ */
+export type PricePoint = { t: string; price: number };
 
 export type CurvePresetId =
   | "content"
@@ -185,10 +217,23 @@ export type Comment = {
 
 /** Reference price for a tokenized equity, for the NAV band. */
 export type NavReference = {
-  /** e.g. "Equity.US.AAPL/USD". */
+  /** Feed id, or a name like "Equity.US.AAPL/USD". */
   feed: string;
   priceUsd: number;
   /** How far the curve price sits from NAV, as a signed ratio. */
   deviation: number;
   updatedAt: string;
+  /** The preset's own tolerance, in basis points. */
+  bandBps: number;
+  withinBand: boolean;
+  /**
+   * Whether this mark is live, a last close, or too old to trust.
+   *
+   * An equity feed stops publishing when the exchange shuts, so "closed" is the
+   * normal weekend state and means Friday's close — not a failed read. The UI
+   * has to say which, because a stale number presented as live is the kind of
+   * thing someone trades on.
+   */
+  state: "live" | "closed" | "stale";
+  ageSeconds: number;
 };

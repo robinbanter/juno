@@ -53,6 +53,13 @@ type PoolStateFields = {
   baseReserve: BN;
   quoteReserve: BN;
   sqrtPrice: BN;
+  /**
+   * The token accounts the pool trades out of. Every swap moves these two in
+   * opposite directions, which is how `lib/juno/swaps.ts` reads trade history
+   * without an indexer.
+   */
+  baseVault: PublicKey;
+  quoteVault: PublicKey;
   /** u8 flag, non-zero once the pool has migrated to DAMM v2. */
   isMigrated: number;
 };
@@ -189,6 +196,27 @@ export async function fetchPoolSnapshot(
   const value = await readPoolSnapshot(poolAddress, quoteUsdPrice);
   snapshotCache.set(cacheKey, { at: Date.now(), value });
   return value;
+}
+
+/**
+ * The pool's two vault accounts, plus the decimals needed to scale them.
+ *
+ * Everything here is already in the snapshot, so reading history costs no extra
+ * account fetch — which matters on an endpoint that starts refusing calls.
+ */
+export function vaultsOf(snapshot: PoolSnapshot): {
+  baseVault: string;
+  quoteVault: string;
+  baseDecimals: number;
+  quoteDecimals: number;
+} {
+  const state = poolState(snapshot.pool);
+  return {
+    baseVault: state.baseVault.toBase58(),
+    quoteVault: state.quoteVault.toBase58(),
+    baseDecimals: snapshot.baseDecimals,
+    quoteDecimals: snapshot.quoteDecimals,
+  };
 }
 
 /** Drop a pool's cached snapshot — call after a trade so the next read is live. */

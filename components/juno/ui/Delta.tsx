@@ -14,13 +14,35 @@ export function Delta({
   currency = "USD",
 }: {
   value: number;
-  /** Defaults to the sign of `value`. */
-  direction?: number;
+  /**
+   * Which way to point. Defaults to the sign of `value`.
+   *
+   * **Null means the direction is unknown** — a pool whose whole trade history
+   * is inside the window, or a history the RPC would not serve. It is not the
+   * same as zero, and it is rendered without a triangle and without a colour:
+   * a green arrow is a claim that the price went up, and pointing one at a
+   * number we never measured is the sort of thing a trading screen must not do.
+   */
+  direction?: number | null;
   className?: string;
   compact?: boolean;
   /** Non-USD values are shown in their own unit rather than a dollar sign. */
   currency?: string;
 }) {
+  const label =
+    currency === "USD" ? usd(value, { compact }) : `${compactValue(value, compact)} ${currency}`;
+
+  if (direction === null) {
+    return (
+      <span
+        className={cn("inline-flex items-center font-semibold tabular-nums text-j-ink", className)}
+        title="No price change to report — not enough trade history"
+      >
+        {label}
+      </span>
+    );
+  }
+
   const up = (direction ?? value) >= 0;
   return (
     <span
@@ -31,9 +53,7 @@ export function Delta({
       )}
     >
       <Triangle up={up} />
-      {currency === "USD"
-        ? usd(value, { compact })
-        : `${compactValue(value, compact)} ${currency}`}
+      {label}
     </span>
   );
 }
