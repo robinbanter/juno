@@ -173,6 +173,8 @@ export type SwapHistory = {
  * shown immediately — `invalidateSwapHistory` runs on the way back from a swap.
  */
 const HISTORY_TTL_MS = 60_000;
+/** How long a throttled, incomplete read is reused before trying again. */
+const PARTIAL_TTL_MS = 8_000;
 const historyCache = ttlCache<SwapHistory>(HISTORY_TTL_MS);
 
 /**
@@ -188,45 +190,54 @@ export async function listSwapHistory(
   vaults: PoolVaults,
   limit = DEFAULT_LIMIT,
 ): Promise<SwapHistory> {
-  return historyCache.get(`${poolAddress}:${limit}`, async () => {
-    const connection = getConnection();
+  return historyCache.get(
+    `${poolAddress}:${limit}`,
+    async () => {
+      const connection = getConnection();
 
-    let candidates: string[];
-    try {
-      const signatures = await withRetry(() =>
-        connection.getSignaturesForAddress(new PublicKey(poolAddress), { limit }, "confirmed"),
+      let candidates: string[];
+      try {
+        const signatures = await withRetry(() =>
+          connection.getSignaturesForAddress(new PublicKey(poolAddress), { limit }, "confirmed"),
+        );
+        candidates = signatures.filter((entry) => !entry.err).map((entry) => entry.signature);
+      } catch {
+        return { swaps: [], partial: true };
+      }
+
+      if (candidates.length === 0) return { swaps: [], partial: false };
+
+      const chunks: string[][] = [];
+      for (let i = 0; i < candidates.length; i += BATCH) {
+        chunks.push(candidates.slice(i, i + BATCH));
+      }
+
+      const { items, partial } = await collect(
+        chunks,
+        async (chunk) => {
+          const parsed = await connection.getParsedTransactions(chunk, {
+            maxSupportedTransactionVersion: 0,
+            commitment: "confirmed",
+          });
+          // Pace the next chunk. The endpoint's per-method limit is about rate,
+          // not concurrency, so the gap is what keeps the following chunk legal.
+          await new Promise((resolve) => setTimeout(resolve, CHUNK_GAP_MS));
+          return parsed
+            .map((tx) => (tx ? decodeSwap(tx, vaults) : null))
+            .filter((swap): swap is PoolSwap => swap !== null);
+        },
+        { attempts: 4, baseDelayMs: 400, maxDelayMs: 3_000 },
       );
-      candidates = signatures.filter((entry) => !entry.err).map((entry) => entry.signature);
-    } catch {
-      return { swaps: [], partial: true };
-    }
 
-    if (candidates.length === 0) return { swaps: [], partial: false };
-
-    const chunks: string[][] = [];
-    for (let i = 0; i < candidates.length; i += BATCH) {
-      chunks.push(candidates.slice(i, i + BATCH));
-    }
-
-    const { items, partial } = await collect(
-      chunks,
-      async (chunk) => {
-        const parsed = await connection.getParsedTransactions(chunk, {
-          maxSupportedTransactionVersion: 0,
-          commitment: "confirmed",
-        });
-        // Pace the next chunk. The endpoint's per-method limit is about rate,
-        // not concurrency, so the gap is what keeps the following chunk legal.
-        await new Promise((resolve) => setTimeout(resolve, CHUNK_GAP_MS));
-        return parsed
-          .map((tx) => (tx ? decodeSwap(tx, vaults) : null))
-          .filter((swap): swap is PoolSwap => swap !== null);
-      },
-      { attempts: 4, baseDelayMs: 400, maxDelayMs: 3_000 },
-    );
-
-    return { swaps: items.sort((a, b) => b.slot - a.slot), partial };
-  });
+      return { swaps: items.sort((a, b) => b.slot - a.slot), partial };
+    },
+    // A complete read holds for a minute. A partial one is a symptom of
+    // throttling, so it is trusted only briefly — long enough that the same
+    // page's second read of the same history is a cache hit rather than
+    // another refused call, short enough to retry while the user is still
+    // looking at the screen.
+    (history) => (history.partial ? PARTIAL_TTL_MS : HISTORY_TTL_MS),
+  );
 }
 
 /** Drop a pool's cached history — call after a trade so the next read is live. */

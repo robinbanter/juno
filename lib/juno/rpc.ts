@@ -129,14 +129,32 @@ export async function collect<TPage, TItem>(
  * instances each do one read.
  */
 export function ttlCache<T>(ttlMs: number) {
-  const entries = new Map<string, { at: number; value: T }>();
+  const entries = new Map<string, { at: number; value: T; ttl: number }>();
 
   return {
-    async get(key: string, load: () => Promise<T>): Promise<T> {
+    /**
+     * `ttlFor` lets a value choose how long it is trusted.
+     *
+     * A complete read is worth the full TTL. A short one — the shape a burst of
+     * 429s produces — is not, and the two failure modes either side of this are
+     * both real. Caching a throttled read for the full minute served an empty
+     * feed to everyone without retrying. Refusing to cache it at all sent every
+     * subsequent caller straight back at the endpoint that was already
+     * refusing, so a coin page showed a four-point chart beside an empty
+     * activity list, because the second read of the same history was throttled
+     * where the first was not.
+     *
+     * A brief TTL is the answer to both: retry soon, but not on every request.
+     */
+    async get(
+      key: string,
+      load: () => Promise<T>,
+      ttlFor: (value: T) => number = () => ttlMs,
+    ): Promise<T> {
       const hit = entries.get(key);
-      if (hit && Date.now() - hit.at < ttlMs) return hit.value;
+      if (hit && Date.now() - hit.at < hit.ttl) return hit.value;
       const value = await load();
-      entries.set(key, { at: Date.now(), value });
+      entries.set(key, { at: Date.now(), value, ttl: Math.max(0, ttlFor(value)) });
       return value;
     },
     invalidate(prefix: string): void {

@@ -30,7 +30,8 @@
     "juno:inspect": "dotenv -e .env.local -- tsx scripts/juno-inspect.ts",
     "juno:trade": "dotenv -e .env.local -- tsx scripts/juno-trade.ts",
     "juno:claim": "dotenv -e .env.local -- tsx scripts/juno-claim.ts",
-    "juno:graduate": "dotenv -e .env.local -- tsx scripts/juno-graduate.ts"
+    "juno:graduate": "dotenv -e .env.local -- tsx scripts/juno-graduate.ts",
+    "juno:seed-posts": "dotenv -e .env.local -- tsx scripts/juno-seed-posts.ts"
   },
   "dependencies": {
     "@agoralabs-sh/avm-web-provider": "^1.7.0",

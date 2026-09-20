@@ -1079,3 +1079,37 @@ export const junoPools = pgTable(
     uniqueIndex("juno_pools_pool_address_idx").on(table.poolAddress),
   ],
 );
+
+/**
+ * Creator posts — the non-trade half of the social feed.
+ *
+ * Juno's feed mixes two kinds of item. Trades are read from chain and are never
+ * stored; a post is something a person wrote, which has nowhere else to live.
+ * A post may reference a coin (`base_mint`) or stand alone, so a creator can
+ * talk about a launch without every message having to be one.
+ *
+ * Cluster-scoped for the same reason pools are: a devnet demo must not surface
+ * in a mainnet feed.
+ */
+export const junoPosts = pgTable(
+  "juno_posts",
+  {
+    id: varchar("id", { length: 32 }).primaryKey(),
+    authorWallet: varchar("author_wallet", { length: 44 }).notNull(),
+    cluster: varchar("cluster", { length: 16 }).notNull(),
+
+    body: text("body").notNull(),
+    /** Optional: the coin this post is about. */
+    baseMint: varchar("base_mint", { length: 44 }),
+
+    mediaUrl: text("media_url"),
+    mediaMime: text("media_mime"),
+
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("juno_posts_cluster_created_idx").on(table.cluster, table.createdAt),
+    index("juno_posts_author_idx").on(table.authorWallet),
+    index("juno_posts_mint_idx").on(table.baseMint),
+  ],
+);

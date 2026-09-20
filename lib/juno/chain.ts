@@ -302,16 +302,27 @@ const feedCache = ttlCache<Array<Activity & { coinName: string; coinAddress: str
 export async function globalActivity(
   rows: JunoPoolRow[],
   perPool = 10,
-  width = 3,
+  width = 2,
+  /**
+   * Stop once this many items are in hand.
+   *
+   * Most pools have never traded, so walking all of them to fill one screen
+   * spends the endpoint's patience on pools that will return nothing — and by
+   * the time it reaches one that would have, it is being refused. Rows arrive
+   * newest-first, which is also most-likely-to-have-traded-first.
+   */
+  enough = 40,
 ): Promise<Array<Activity & { coinName: string; coinAddress: string }>> {
   const key = rows.map((row) => row.baseMint).join(",");
 
-  return feedCache.get(key, async () => {
+  return feedCache.get(
+    key,
+    async () => {
     const out: Array<Activity & { coinName: string; coinAddress: string }> = [];
     let cursor = 0;
 
     async function worker() {
-      while (cursor < rows.length) {
+      while (cursor < rows.length && out.length < enough) {
         const row = rows[cursor++];
         const rowsForPool = await poolActivity(row, perPool).catch(() => []);
         for (const entry of rowsForPool) {
@@ -322,7 +333,11 @@ export async function globalActivity(
 
     await Promise.all(Array.from({ length: Math.min(width, rows.length) }, worker));
     return out.sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp));
-  });
+  },
+    // An empty feed is almost always a throttled read rather than a quiet
+    // market, so it is trusted for seconds instead of a minute.
+    (items) => (items.length > 0 ? 60_000 : 8_000),
+  );
 }
 
 /**
