@@ -23,7 +23,14 @@ export default async function ExplorePage({
   const { q, sort } = await searchParams;
   const query = q?.trim().toLowerCase() ?? "";
 
-  let coins: Coin[] = await hydratePools(await listPools());
+  const rows = await listPools();
+  let coins: Coin[] = await hydratePools(rows);
+
+  // The registry holding rows while nothing hydrates means the reads failed,
+  // not that the market is empty. Those are different claims and only one of
+  // them is ours to make — on a public RPC a burst of 429s produces exactly
+  // this, and "no coins yet" would be a confident lie about a busy cluster.
+  const unreadable = rows.length > 0 && coins.length === 0;
 
   if (query) {
     coins = coins.filter(
@@ -71,7 +78,7 @@ export default async function ExplorePage({
       </div>
 
       {coins.length === 0 ? (
-        <EmptyState query={q} />
+        <EmptyState query={q} unreadable={unreadable} />
       ) : (
         <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {coins.map((coin) => (
@@ -85,12 +92,24 @@ export default async function ExplorePage({
   );
 }
 
-function EmptyState({ query }: { query?: string }) {
+function EmptyState({ query, unreadable }: { query?: string; unreadable?: boolean }) {
   if (query) {
     return (
       <p className="py-20 text-center text-[14px] text-j-faint">
         Nothing matches “{query}”.
       </p>
+    );
+  }
+  if (unreadable) {
+    return (
+      <div className="py-20 text-center">
+        <p className="text-[15px] font-semibold">Could not read the market</p>
+        <p className="mx-auto mt-1 max-w-sm text-[14px] text-j-muted">
+          There are pools on {cluster()}, but the RPC would not serve them just
+          now. Juno runs on the public endpoint, which rate-limits. Try again in
+          a moment.
+        </p>
+      </div>
     );
   }
   return (

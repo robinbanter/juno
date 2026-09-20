@@ -115,47 +115,50 @@
    establishes an independent context for the Juno routes.
    ============================================================ */
 .juno {
-  color-scheme: dark;
+  color-scheme: light;
 
-  /* Canvas — near-black with a violet cast, so the ambers read warm
-     against it instead of muddy. */
-  --j-bg: #0d0b12;
-  --j-ink: #f4f1f8;
-  --j-muted: #a79fb8;
-  --j-faint: #6f6684;
+  /* Canvas — sage, so the yellow reads as a deliberate action colour rather
+     than a warning. Cards sit on it in plain white. */
+  --j-bg: #d3e3cb;
+  --j-ink: #1c1c1c;
+  --j-muted: #5a6357;
+  --j-faint: #8a927f;
 
   /* Raised surfaces: chips, search pill, stat cards, inputs. */
-  --j-surface: #171320;
-  --j-input: #141020;
-  --j-line: #241e31;
-  --j-line-strong: #3a3150;
+  --j-surface: #ffffff;
+  --j-input: #f1f5ee;
+  --j-line: #dce4d6;
+  --j-line-strong: #b9c6b1;
 
   /* Brand. Used for the mark and the graduation bar — never for a
-     control, so it never competes with buy/sell. */
-  --j-brand: #ffb020;
-  --j-brand-dim: #c9861a;
+     control, so it never competes with buy/sell. Yellow carries dark
+     text only; it is far too light to sit under white. */
+  --j-brand: #f2e230;
+  --j-brand-dim: #dfd01f;
 
-  /* Direction. Positive is jade, negative is coral — far enough apart
-     in hue and lightness to stay separable for deuteranopes, which
-     Zora's green/magenta pairing is not. */
-  --j-pos: #1fd98a;
-  --j-pos-press: #17c079;
-  --j-neg: #ff5c6c;
+  /* Direction, re-picked for a light surface rather than carried over.
+     The dark theme's jade and coral both sit above the lightness band on
+     white; these pass all six palette checks against #ffffff, including
+     deuteranopia separation. Still never the only signal — every delta
+     spells its sign out in text. */
+  --j-pos: #0e9f6e;
+  --j-pos-press: #0b8a5f;
+  --j-neg: #d92d20;
 
-  --j-danger: #ff4d4d;   /* amount exceeds balance */
-  --j-focus: #7c6bff;    /* focus ring */
+  --j-danger: #d92d20;   /* amount exceeds balance */
+  --j-focus: #2e5bff;    /* focus ring */
 
   /* Graduation heat: jade while there is curve left to buy through,
-     amber as the pool approaches its migration threshold. */
-  --j-curve: linear-gradient(90deg, #1fd98a 0%, #ffb020 62%, #ffe066 100%);
-  --j-media-progress: linear-gradient(90deg, #1fd98a 0%, #ffb020 100%);
+     yellow as the pool approaches its migration threshold. */
+  --j-curve: linear-gradient(90deg, #0e9f6e 0%, #f2e230 72%, #ffe066 100%);
+  --j-media-progress: linear-gradient(90deg, #0e9f6e 0%, #f2e230 100%);
 
   --j-radius: 12px;
   --j-radius-lg: 16px;
 
-  /* Dark surfaces need more shadow spread than light ones to read as
-     lifted at all. */
-  --j-shadow-pop: 0 12px 40px rgba(0, 0, 0, 0.6);
+  /* Light surfaces need far less spread than dark ones to read as lifted —
+     the dark theme's 40px at 0.6 opacity looks like smoke here. */
+  --j-shadow-pop: 0 10px 30px rgba(42, 51, 38, 0.14);
 
   background: var(--j-bg);
   color: var(--j-ink);
