@@ -5,9 +5,11 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import styled from "styled-components/native";
 
 import { CoinGlyph, Identicon } from "../../components/art";
+import { Candles } from "../../components/Candles";
 import {
   Avatar,
   Body,
+  Display,
   Button,
   Caption,
   Card,
@@ -56,6 +58,8 @@ export default function CoinScreen() {
   const holding =
     portfolio.data?.positions.find((position) => position.baseMint === mint)?.balance ?? null;
 
+  const art = coin ? juno.media(coin.media.url) : null;
+
   return (
     <Page edges={["top"]}>
       <Nav>
@@ -70,11 +74,15 @@ export default function CoinScreen() {
           <Skeleton h={18} w="60%" />
         </Loading>
       ) : detail.error || !coin ? (
-        <Placeholder title="Could not load this coin" detail={detail.error ?? undefined} />
+        <Placeholder
+          title="Could not load this coin"
+          detail={detail.error ?? undefined}
+          action={<Button label="Try again" onPress={detail.refresh} />}
+        />
       ) : (
         <>
           <ScrollView
-            contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 170, gap: 12 }}
+            contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 210, gap: 12 }}
             showsVerticalScrollIndicator={false}
             refreshControl={
               <RefreshControl
@@ -84,23 +92,50 @@ export default function CoinScreen() {
               />
             }
           >
-            {juno.media(coin.media.url) ? (
-              <Hero source={{ uri: juno.media(coin.media.url)! }} />
-            ) : (
-              <HeroEmpty>
-                <CoinGlyph size={96} seed={coin.address} />
-              </HeroEmpty>
-            )}
+            {/* Identity first, compact. The old layout opened with a square
+                the height of the screen that was usually empty — a coin with no
+                artwork got a huge white void where the price should be. */}
+            <Row gap={12}>
+              {art ? (
+                <Thumb source={{ uri: art }} />
+              ) : (
+                <ThumbEmpty>
+                  <CoinGlyph size={56} seed={coin.address} />
+                </ThumbEmpty>
+              )}
+              <Col gap={6} style={{ flex: 1 }}>
+                <Title numberOfLines={2}>{coin.name}</Title>
+                <Row gap={6}>
+                  <Pill label={`$${coin.symbol}`} tone="lime" />
+                  <Pill label={coin.curvePreset} />
+                  {coin.curve.graduated ? <Pill label="Graduated" tone="pos" /> : null}
+                </Row>
+              </Col>
+            </Row>
 
-            <Col gap={8}>
-              <Title>{coin.name}</Title>
-              <Row gap={8}>
-                <Pill label={`$${coin.symbol}`} tone="lime" />
-                <Pill label={coin.curvePreset} />
-                {coin.curve.graduated ? <Pill label="Graduated" tone="pos" /> : null}
+            {/* The price, then the chart. This is a trading screen. */}
+            <Card>
+              <Row justify="space-between" align="flex-end">
+                <Col gap={2}>
+                  <Caption>Price</Caption>
+                  <Display style={{ fontSize: 30 }}>
+                    {price(coin.priceUsd, coin.marketCapCurrency)}
+                  </Display>
+                </Col>
+                <Col gap={4} style={{ alignItems: "flex-end" }}>
+                  <Delta pct={coin.marketCapChangePct} />
+                  <Caption>24h</Caption>
+                </Col>
               </Row>
-              {coin.description ? <Body muted>{coin.description}</Body> : null}
-            </Col>
+
+              <Divider />
+
+              <Candles
+                ticks={coin.priceHistory ?? []}
+                livePrice={coin.priceUsd}
+                format={(v: number) => price(v, coin.marketCapCurrency)}
+              />
+            </Card>
 
             <Card>
               <Row>
@@ -113,14 +148,19 @@ export default function CoinScreen() {
                   label="24h volume"
                 />
                 <Stat
-                  value={money(coin.creatorRewards, coin.marketCapCurrency)}
-                  label="Creator fees"
+                  value={
+                    coin.holders === null ? "—" : String(coin.holders)
+                  }
+                  label="Holders"
                 />
               </Row>
-              <Row justify="center" style={{ marginTop: 10 }}>
-                <Delta pct={coin.marketCapChangePct} />
-              </Row>
             </Card>
+
+            {coin.description ? (
+              <Card>
+                <Body muted>{coin.description}</Body>
+              </Card>
+            ) : null}
 
             {!coin.curve.graduated ? (
               <Card>
@@ -287,21 +327,39 @@ const Loading = styled.View`
   gap: ${(p) => p.theme.space(4)}px;
 `;
 
-const Hero = styled.Image`
-  width: 100%;
-  aspect-ratio: 1;
-  border-radius: ${(p) => p.theme.radius.xl}px;
+const Thumb = styled.Image`
+  width: 76px;
+  height: 76px;
+  border-radius: ${(p) => p.theme.radius.lg}px;
   background-color: ${(p) => p.theme.colors.surfaceAlt};
 `;
 
-const HeroEmpty = styled.View`
-  width: 100%;
-  aspect-ratio: 1;
-  border-radius: ${(p) => p.theme.radius.xl}px;
+const ThumbEmpty = styled.View`
+  width: 76px;
+  height: 76px;
+  border-radius: ${(p) => p.theme.radius.lg}px;
   background-color: ${(p) => p.theme.colors.surface};
   align-items: center;
   justify-content: center;
 `;
+
+const Divider = styled.View`
+  height: 1px;
+  background-color: ${(p) => p.theme.colors.line};
+  margin-vertical: ${(p) => p.theme.space(3)}px;
+`;
+
+/**
+ * Prices on a bonding curve start far below a cent, so a two-decimal format
+ * collapses them all to zero. Significant digits are what make an early curve
+ * readable at all.
+ */
+function price(value: number, currency: string): string {
+  if (!Number.isFinite(value)) return "—";
+  if (value >= 0.01) return money(value, currency, { compact: false });
+  const figure = value.toPrecision(3);
+  return currency === "USD" ? `$${figure}` : `${figure} ${currency}`;
+}
 
 const Spacer = styled.View`
   height: 8px;
@@ -325,13 +383,25 @@ const LinkText = styled.Text`
   color: ${(p) => p.theme.colors.focus};
 `;
 
+/*
+ * The sticky trade bar.
+ *
+ * Full-bleed with its own surface rather than two floating pills: floating,
+ * whatever card happened to be scrolled underneath showed through between and
+ * around them, which read as a rendering fault rather than as a layer.
+ */
 const Actions = styled.View`
   position: absolute;
-  left: ${(p) => p.theme.space(4)}px;
-  right: ${(p) => p.theme.space(4)}px;
-  bottom: 104px;
+  left: 0;
+  right: 0;
+  bottom: 86px;
   flex-direction: row;
   gap: ${(p) => p.theme.space(3)}px;
+  padding-horizontal: ${(p) => p.theme.space(4)}px;
+  padding-vertical: ${(p) => p.theme.space(3)}px;
+  background-color: ${(p) => p.theme.colors.bg};
+  border-top-width: 1px;
+  border-top-color: ${(p) => p.theme.colors.line};
 `;
 
 const GraduatedNote = styled.Text`

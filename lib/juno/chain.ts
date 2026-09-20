@@ -162,6 +162,18 @@ export async function hydratePool(
   // exact figure — enough to render, and honest about small markets.
   const wantHistory = options.history ?? options.detailed ?? false;
 
+  /*
+   * Every one of these is optional, and the whole group is wrapped as well as
+   * each member.
+   *
+   * Per-promise `.catch` handles a read that rejects. It does not handle a
+   * throw raised while the group is being *assembled* — `vaultsOf`, or the SDK
+   * rejecting before the returned promise exists — and that path took the
+   * entire coin page down on a busy endpoint, discarding a price, a curve and a
+   * NAV band that had all been read successfully a moment earlier.
+   *
+   * The snapshot above is the only read this function cannot do without.
+   */
   const [largest, fees, history, nav] = options.detailed
     ? await Promise.all([
         getConnection()
@@ -172,7 +184,7 @@ export async function hydratePool(
           ? listSwapHistory(row.poolAddress, vaultsOf(snapshot)).catch(() => null)
           : null,
         navFor(row, priceUsd, preset).catch(() => null),
-      ])
+      ]).catch(() => [null, null, null, null] as const)
     : [null, null, null, null];
 
   // null, not 0: `largest` is null when the RPC refused, and "0 holders" is
@@ -231,7 +243,11 @@ export async function hydratePool(
     volume24h: volume24h === null ? null : volume24h * rate,
     totalVolume: allVolume === null ? null : allVolume * rate,
     priceHistory: history
-      ? priceSeries(swaps).map((point) => ({ ...point, price: point.price * rate }))
+      ? priceSeries(swaps).map((point) => ({
+          ...point,
+          price: point.price * rate,
+          volume: point.volume * rate,
+        }))
       : undefined,
     nav,
     creatorRewards,

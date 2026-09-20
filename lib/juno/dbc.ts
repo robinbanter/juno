@@ -34,6 +34,7 @@ import {
 import BN from "bn.js";
 
 import { isMainnet, rpcEndpoint } from "./cluster";
+import { gatedFetch, withRetry } from "./rpc";
 import { buildPresetParams, type BuildPresetOptions } from "./curves";
 import type { CurveState, QuoteToken, TradeSide } from "./types";
 
@@ -109,6 +110,10 @@ let cachedConnection: Connection | null = null;
 export function getConnection(): Connection {
   cachedConnection ??= new Connection(rpcEndpoint(), {
     commitment: COMMITMENT,
+    // Every call — including the ones Meteora's SDK makes internally, which no
+    // caller can pace — goes through the gate. The public endpoint refuses on
+    // simultaneous connections, and that is the only place to catch them all.
+    fetch: gatedFetch,
     // The public devnet endpoint refuses some calls outright —
     // `getTokenLargestAccounts` among them. web3.js answers a 429 by retrying
     // four times with backoff and logging each attempt, which turns one
@@ -154,13 +159,43 @@ export type PoolSnapshot = {
  * endpoint answers that load with 429s. Cached for the process lifetime.
  */
 const configCache = new Map<string, PoolConfig>();
-const decimalsCache = new Map<string, number>();
 
+/**
+ * Mint decimals, seeded with the ones that are facts rather than lookups.
+ *
+ * Every Juno pool is quoted in wrapped SOL or USDC, and both have fixed,
+ * well-known decimals. Asking the chain for them was not merely wasteful — it
+ * was the single call that broke the coin page: the public endpoint refuses
+ * `getTokenDecimals` by method, and a cold request for one coin had no choice
+ * but to make it. The market list appeared to work only because the first pool
+ * it hydrated populated this cache for all the others.
+ *
+ * Seeding it removes the call entirely for the quote side. A base mint is still
+ * read, but its decimal is carried on the pool config, so that path never
+ * touches the network either.
+ */
+const decimalsCache = new Map<string, number>([
+  ["So11111111111111111111111111111111111111112", 9],
+  // USDC on both clusters — same 6 decimals, different mints.
+  ["EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", 6],
+  ["4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU", 6],
+]);
+
+/*
+ * Both of these are retried for the same reason `getPool` is: they sit on the
+ * critical path of every screen, and a single 429 on either one propagated out
+ * of the route as a failure for a pool that was fine. They are cached forever
+ * once read — a config and a mint's decimals cannot change — so the retry cost
+ * is paid at most once per process.
+ */
 async function cachedConfig(configAddress: PublicKey): Promise<PoolConfig | null> {
   const key = configAddress.toBase58();
   const hit = configCache.get(key);
   if (hit) return hit;
-  const config = await getDbcClient().state.getPoolConfig(configAddress);
+  const config = await withRetry(
+    () => getDbcClient().state.getPoolConfig(configAddress),
+    { attempts: 4, baseDelayMs: 300, maxDelayMs: 2_500 },
+  );
   if (config) configCache.set(key, config);
   return config;
 }
@@ -169,7 +204,11 @@ async function cachedDecimals(mint: PublicKey): Promise<number> {
   const key = mint.toBase58();
   const hit = decimalsCache.get(key);
   if (hit !== undefined) return hit;
-  const decimals = await getTokenDecimals(getConnection(), mint);
+  const decimals = await withRetry(() => getTokenDecimals(getConnection(), mint), {
+    attempts: 4,
+    baseDelayMs: 300,
+    maxDelayMs: 2_500,
+  });
   decimalsCache.set(key, decimals);
   return decimals;
 }
@@ -234,7 +273,15 @@ async function readPoolSnapshot(
   const client = getDbcClient();
   const address = new PublicKey(poolAddress);
 
-  const pool = await client.state.getPool(address);
+  // Retried, because this is the one read every screen depends on. A 429 here
+  // used to propagate out of the route as a 500 and take the whole coin page
+  // down — "Could not load this coin" for a pool that was perfectly fine and
+  // simply busy. Everything downstream of this call already degrades.
+  const pool = await withRetry(() => client.state.getPool(address), {
+    attempts: 4,
+    baseDelayMs: 300,
+    maxDelayMs: 2_500,
+  });
   if (!pool) return null;
 
   const state = poolState(pool);

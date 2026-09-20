@@ -149,7 +149,7 @@ export type Coin = {
   creatorRewards: number;
   holders: number | null;
   priceUsd: number;
-  priceHistory?: Array<{ t: string; price: number }>;
+  priceHistory?: Array<{ t: string; price: number; volume: number; side: "buy" | "sell" }>;
   nav?: NavReference | null;
   curve: CurveState;
   curvePreset: string;

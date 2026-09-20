@@ -292,12 +292,18 @@ export type { PricePoint };
  *
  * These are executed prices, not marks: each point is a trade that happened at
  * that price, which is why a flat stretch means nobody traded rather than a
- * price that held.
+ * price that held. Size rides along so the chart can aggregate the series into
+ * candles with real volume rather than counting trades.
  */
 export function priceSeries(swaps: PoolSwap[]): PricePoint[] {
   return [...swaps]
     .sort((a, b) => a.slot - b.slot)
-    .map((swap) => ({ t: swap.timestamp, price: swap.price }));
+    .map((swap) => ({
+      t: swap.timestamp,
+      price: swap.price,
+      volume: swap.quoteAmount,
+      side: swap.side,
+    }));
 }
 
 /**

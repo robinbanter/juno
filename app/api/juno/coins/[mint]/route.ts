@@ -31,9 +31,22 @@ export async function GET(
     const coin = await hydratePool(row, { detailed: true });
     if (!coin) return junoError("Pool is not on this cluster", 404);
 
+    /*
+     * Activity and holders are extras, and they are allowed to fail.
+     *
+     * Both walk calls the public endpoint refuses by method rather than by
+     * rate — `getTokenLargestAccounts` outright, `getParsedTransactions` in
+     * batches — so on a busy endpoint one of them throwing took the entire coin
+     * page down with it. The price, the curve and the NAV band had all been
+     * read successfully by that point and were discarded.
+     *
+     * Core data decides whether this route succeeds. Everything after it
+     * degrades to empty, and the screen already renders "no trades yet"
+     * honestly.
+     */
     const [activity, holders] = await Promise.all([
-      poolActivity(row, 20),
-      listPoolHolders(row.baseMint),
+      poolActivity(row, 20).catch(() => []),
+      listPoolHolders(row.baseMint).catch(() => []),
     ]);
 
     return junoJson({

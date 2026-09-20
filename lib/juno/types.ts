@@ -175,7 +175,13 @@ import type { FeeSchedule, Tokenomics } from "./economics";
  * because client components render it and that module is `server-only` — a
  * type-only import would be erased, but a domain type belongs with the domain.
  */
-export type PricePoint = { t: string; price: number };
+export type PricePoint = {
+  t: string;
+  price: number;
+  /** Quote-denominated size of the trade that set this price. */
+  volume: number;
+  side: TradeSide;
+};
 
 export type CurvePresetId =
   | "content"

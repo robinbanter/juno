@@ -167,3 +167,68 @@ export function ttlCache<T>(ttlMs: number) {
     },
   };
 }
+
+/**
+ * A gate on how many RPC calls are in flight at once.
+ *
+ * The public endpoint enforces two different limits and they need two
+ * different answers. A per-method refusal ("Too many requests for a specific
+ * RPC call") is a policy, and the response is smaller, paced batches. A
+ * *connection* refusal ("Connection rate limits exceeded") is about
+ * simultaneity — and no amount of retrying fixes it, because every retry is
+ * another connection competing with the ones already being refused.
+ *
+ * Hydrating a coin page fans out into a dozen reads, several of them inside
+ * Meteora's SDK where no caller can pace them. Gating the connection's own
+ * `fetch` is the only place that catches all of them.
+ *
+ * Four is empirical: enough that a page does not feel serialised, few enough
+ * that the endpoint stops refusing.
+ */
+const MAX_IN_FLIGHT = 4;
+
+let inFlight = 0;
+const waiting: Array<() => void> = [];
+
+async function acquire(): Promise<void> {
+  if (inFlight < MAX_IN_FLIGHT) {
+    inFlight += 1;
+    return;
+  }
+  await new Promise<void>((resolve) => waiting.push(resolve));
+  inFlight += 1;
+}
+
+function release(): void {
+  inFlight -= 1;
+  const next = waiting.shift();
+  if (next) next();
+}
+
+/**
+ * `fetch`, with the gate applied. Hand this to `new Connection(url, { fetch })`
+ * and every call the SDK makes goes through it, whether or not the caller knew
+ * it was making one.
+ */
+export const gatedFetch: typeof fetch = async (input, init) => {
+  await acquire();
+  try {
+    return await fetch(input, {
+      ...init,
+      /*
+       * Next.js instruments global `fetch` with its own caching layer, and an
+       * RPC POST is exactly the shape it will happily memoise. That turned a
+       * single 429 into a permanent one: the refusal was cached and replayed to
+       * every subsequent request, so the coin page stayed broken long after the
+       * endpoint had recovered — while the same code in a plain Node process
+       * worked fine.
+       *
+       * Chain state is never cacheable at this layer anyway; the TTL caches in
+       * this module are where that decision belongs.
+       */
+      cache: "no-store",
+    });
+  } finally {
+    release();
+  }
+};

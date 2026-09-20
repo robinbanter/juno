@@ -59,6 +59,12 @@ export class CallerError extends Error {
   }
 }
 
+/** A public-RPC refusal, as opposed to a fault in this server. */
+function isRpcBusy(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  return /429|rate limit|Too Many Requests|503|Connection rate limits/i.test(message);
+}
+
 /** Run a handler, turning a thrown error into a clean 4xx/5xx. */
 export async function junoHandler(
   run: () => Promise<Response>,
@@ -69,6 +75,21 @@ export async function junoHandler(
     if (error instanceof CallerError) {
       return junoError(error.message, error.status);
     }
+    // A throttled chain read is not a server fault and must not read like one.
+    // Juno runs on the public RPC by choice; when it refuses, the honest answer
+    // is "busy, try again", with a 503 so a client can retry rather than treat
+    // it as broken. This used to surface as a flat 500 and took whole screens
+    // down for a pool that was perfectly fine.
+    if (isRpcBusy(error)) {
+      // Logged, quietly. It is not a fault, but without it there is no way to
+      // tell *which* read the endpoint refused.
+      console.warn("[juno rpc busy]", error instanceof Error ? error.stack : error);
+      return junoError(
+        "The Solana RPC is rate-limiting us right now. Try again in a moment.",
+        503,
+      );
+    }
+
     // Ours. Log it with the stack, and do not leak internals to the client —
     // a failed SQL statement is not something a phone should be shown.
     console.error("[juno api]", error);
