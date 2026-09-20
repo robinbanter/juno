@@ -65,9 +65,13 @@ export function ProfileHeader({
           <Delta value={creator.marketCap} direction={creator.marketCapChangePct} currency={creator.marketCapCurrency} />
           <span className="text-j-muted">MC</span>
         </span>
+        {/*
+          Posts is a real count of what this wallet launched. Followers and
+          following are not stored anywhere, and printing 0 for them was a
+          confident claim about an audience this app has never measured — on a
+          profile whose whole purpose is to establish credibility.
+        */}
         <Stat value={creator.posts} label="Posts" />
-        <Stat value={creator.followers} label="Followers" />
-        <Stat value={creator.following} label="Following" />
 
         {creator.socials?.x && (
           <a

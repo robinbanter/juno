@@ -146,9 +146,17 @@ function ReelSideRail({
 }) {
   return (
     <div className="absolute right-3 bottom-32 z-10 flex flex-col items-center gap-5 sm:right-5">
+      {/*
+        A count nobody stores is not shown.
+        
+        Likes are not persisted anywhere, so `coin.likes ?? 0` printed a
+        confident "0 likes" under every reel — a claim about engagement this
+        app has never measured. The affordance stays (a tap still registers
+        locally); the fabricated number does not.
+      */}
       <ReelAction
         label={liked ? "Unlike" : "Like"}
-        count={(coin.likes ?? 0) + (liked ? 1 : 0)}
+        count={liked ? 1 : undefined}
         onClick={onLike}
       >
         <Heart
@@ -158,7 +166,7 @@ function ReelSideRail({
         />
       </ReelAction>
 
-      <ReelAction label="Comments" count={coin.commentCount ?? 0}>
+      <ReelAction label="Comments" count={coin.commentCount}>
         <MessageCircle size={26} className="text-white" />
       </ReelAction>
 

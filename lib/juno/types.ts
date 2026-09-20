@@ -26,8 +26,17 @@ export type Creator = {
   wallet: string;
   /** Verified links row (X, etc). */
   socials?: { x?: string };
-  followers: number;
-  following: number;
+  /**
+   * Null, always, until someone stores them.
+   *
+   * These were `number` and set to 0 everywhere, which rendered as a confident
+   * "0 Followers" on a profile whose entire job is to establish credibility.
+   * Typed nullable so a future render has to decide what to do about not
+   * knowing rather than silently printing a zero.
+   */
+  followers: number | null;
+  following: number | null;
+  /** Real: how many coins this wallet has launched. */
   posts: number;
   /** Creator-coin market cap in USD. */
   marketCap: number;
