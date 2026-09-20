@@ -24,9 +24,19 @@ export async function GET(request: Request) {
     if (sort === "marketCap") {
       coins.sort((a, b) => b.marketCap - a.marketCap);
     } else if (sort === "graduating") {
-      // Closest to its migration threshold first — the coins about to become
-      // permanent AMM markets.
-      coins.sort((a, b) => b.curve.progress - a.curve.progress);
+      /*
+       * Closest to its migration threshold first — the coins about to become
+       * permanent AMM markets.
+       *
+       * A pool that has already graduated is *done*, so it drops to the bottom
+       * rather than topping a list about what is next. This matches the web
+       * `/explore` ordering exactly; the two disagreed until a graduated pool
+       * started correctly reporting 100% progress, at which point the API
+       * started leading with pools that had already finished.
+       */
+      const rank = (coin: (typeof coins)[number]) =>
+        coin.curve.graduated ? -1 : coin.curve.progress;
+      coins.sort((a, b) => rank(b) - rank(a));
     }
 
     return junoJson({ cluster: cluster(), coins });

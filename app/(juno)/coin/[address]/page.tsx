@@ -5,7 +5,7 @@ import { ExternalLink } from "lucide-react";
 import { shortAddress } from "@/lib/juno/format";
 import { identicon } from "@/lib/juno/identicon";
 
-import { hydratePool, poolActivity } from "@/lib/juno/chain";
+import { hydratePool, poolActivityRead } from "@/lib/juno/chain";
 import { cluster, explorer, meteoraPoolUrl } from "@/lib/juno/cluster";
 import { GraduatedNotice } from "@/components/juno/coin/GraduatedNotice";
 import { QUOTE_TOKENS } from "@/lib/juno/dbc";
@@ -135,18 +135,59 @@ function Proof({ href, children }: { href: string; children: React.ReactNode }) 
  * indexed lookup and the swap history underneath is cached, so the two
  * boundaries share one fetch rather than doubling it.
  */
+/*
+ * Each streamed section owns its own failure.
+ *
+ * A Suspense boundary catches *pending*, not *throwing*. When the activity read
+ * hit a 429 it threw, the route's error boundary caught it, and the entire coin
+ * page — price, curve, NAV band, all of it already rendered — was replaced by
+ * "The network is not answering" because one secondary list could not load.
+ * Streaming these was supposed to stop exactly that.
+ */
 async function StreamedChart({ address }: { address: string }) {
-  const row = await getPool(address);
-  if (!row) return <ChartPending />;
-  const coin = await hydratePool(row, { detailed: true });
-  if (!coin) return <ChartPending />;
-  return <PriceChart coin={coin} />;
+  try {
+    const row = await getPool(address);
+    if (!row) return <ChartUnavailable />;
+    const coin = await hydratePool(row, { detailed: true });
+    if (!coin) return <ChartUnavailable />;
+    return <PriceChart coin={coin} />;
+  } catch {
+    return <ChartUnavailable />;
+  }
 }
 
 async function StreamedActivity({ address }: { address: string }) {
-  const row = await getPool(address);
-  if (!row) return <ActivityList items={[]} />;
-  return <ActivityList items={await poolActivity(row, 20)} />;
+  try {
+    const row = await getPool(address);
+    if (!row) return <ActivityList items={[]} />;
+
+    const { items, partial } = await poolActivityRead(row, 20);
+    return (
+      <ActivityList
+        items={items}
+        // "No trades yet" is a claim about the pool. When the read came back
+        // short it is a claim about the RPC instead, and saying the wrong one
+        // told visitors a pool with four trades had never traded.
+        empty={partial ? UNREADABLE : "No trades yet."}
+      />
+    );
+  } catch {
+    return <ActivityList items={[]} empty={UNREADABLE} />;
+  }
+}
+
+const UNREADABLE =
+  "Could not read this pool's trade history just now — the public RPC is rate-limiting. Try again in a moment.";
+
+function ChartUnavailable() {
+  return (
+    <div className="flex aspect-[16/10] w-full items-center justify-center px-8">
+      <p className="text-center text-[14px] text-j-faint">
+        Price history could not be read just now — the public RPC is
+        rate-limiting. Try again in a moment.
+      </p>
+    </div>
+  );
 }
 
 function ChartPending() {

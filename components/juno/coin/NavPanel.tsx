@@ -61,8 +61,9 @@ export function NavPanel({ nav, className }: { nav: NavReference; className?: st
       <p className="mt-2 text-[11px] leading-snug text-j-faint">
         {outside ? (
           <>
-            The curve is trading {percent(Math.abs(nav.deviation))} away from the
-            reference — outside this preset&rsquo;s {nav.bandBps / 100}% band.
+            The curve is trading {(Math.abs(nav.deviation) * 100).toFixed(2)}%{" "}
+            {nav.deviation >= 0 ? "above" : "below"} the reference — outside this
+            preset&rsquo;s {nav.bandBps / 100}% band.
           </>
         ) : (
           <>

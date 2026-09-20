@@ -14,7 +14,7 @@ import { curveShape } from "./curve-shape";
 import { CURVE_PRESETS } from "./curves";
 import { feeSchedule, tokenomics } from "./economics";
 import { identicon } from "./identicon";
-import { listPoolActivity } from "./activity";
+import { activityFromSwap } from "./activity";
 import { mediaKind, mediaSrc } from "./media";
 import { tryRead, ttlCache } from "./rpc";
 import {
@@ -286,13 +286,34 @@ export async function hydratePool(
  * coin page calling this after `hydratePool` costs no extra RPC.
  */
 export async function poolActivity(row: JunoPoolRow, limit = 10): Promise<Activity[]> {
+  return (await poolActivityRead(row, limit)).items;
+}
+
+/**
+ * Recent trades, and whether the read was complete.
+ *
+ * Callers that render an *empty state* need the second half. An empty list from
+ * a throttled endpoint and a pool nobody has traded look identical, and a coin
+ * page was telling people "No trades yet" about a pool with four trades in it
+ * because the history read came back short.
+ */
+export async function poolActivityRead(
+  row: JunoPoolRow,
+  limit = 10,
+): Promise<{ items: Activity[]; partial: boolean }> {
   const quoteUsd = await quoteTokenUsdPrice(row.quoteMint).catch(() => null);
   const rate = quoteUsd ?? 1;
 
   const snapshot = await fetchPoolSnapshot(row.poolAddress, rate);
-  if (!snapshot) return [];
+  if (!snapshot) return { items: [], partial: true };
 
-  return listPoolActivity(row.poolAddress, vaultsOf(snapshot), rate, limit);
+  const history = await listSwapHistory(row.poolAddress, vaultsOf(snapshot));
+  return {
+    items: history.swaps
+      .slice(0, limit)
+      .map((swap) => activityFromSwap(swap, rate)),
+    partial: history.partial,
+  };
 }
 
 /** The merged feed moves only when someone trades. */

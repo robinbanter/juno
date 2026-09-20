@@ -299,8 +299,20 @@ async function readPoolSnapshot(
   const thresholdBn = config.migrationQuoteThreshold as BN;
   const reserveBn = state.quoteReserve;
   const threshold = thresholdBn;
-  const progress =
-    thresholdBn.isZero() === false
+  const graduated = state.isMigrated !== 0;
+
+  /*
+   * A graduated pool is at 100%, not at whatever its drained vaults imply.
+   *
+   * Migration empties the quote vault, so the reserve-over-threshold ratio
+   * reads 0 afterwards — and a pool that completed its curve was being reported
+   * as 0% progress. The visible symptom was the "closest to graduating" sort
+   * putting the two pools that actually graduated dead last, behind pools that
+   * have never traded.
+   */
+  const progress = graduated
+    ? 1
+    : thresholdBn.isZero() === false
       ? Math.min(1, Number(reserveBn.toString()) / Number(thresholdBn.toString()))
       : 0;
 
@@ -323,7 +335,7 @@ async function readPoolSnapshot(
       progress,
       raisedUsd: thresholdUi * progress * quoteUsdPrice,
       thresholdUsd: thresholdUi * quoteUsdPrice,
-      graduated: state.isMigrated !== 0,
+      graduated,
     },
   };
 }

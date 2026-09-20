@@ -1,173 +1,135 @@
 # Juno — test plan
 
-Every item states what **correct** means before it is tested. A pass requires
-the observed result to match that statement exactly, with a clean console and
-no failed network requests.
+Written **before** testing, so it is a checklist rather than a description of
+whatever happened to work. Every item states what *correct* means as a specific
+observable result.
 
-**Final result: 70 of 71 PASS, 1 UNTESTED (credential-blocked).**
-Verified in a real Chrome against the running app, with console and network
-capture on every item. Re-run top to bottom after the last fix — all green.
+Run: 2026-09-21. Cluster: devnet. Server: `npm run dev` on :3000.
+Mobile: Expo on the iPhone 17 simulator via `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer`.
 
-Cluster: devnet. Base URL: `http://localhost:3000`.
-
-Known fixtures on devnet:
-- `AAPL` = `CMjWQU2Bzd1NWwy1GB2qFNcpgRtW6xm9dhcjnevtBcbp` (ipo-book, USDC)
-- `NVDA` = `6driivZmcZ4pgfCNkVERbbNcQiyzEpKvaJJ19AXQYj69` (thin-name, SOL)
-- `TSLA` = `D7PDa2u1Qm6dVq2D4B2ieq9gyPVr7avNJrF9PyBRBf2F` (tight-nav, USDC, IPFS)
-- `GRAD` = `HYgG9w3DrsiNn7tPHFeACGnCdtnioyC9DeiukausmZQ9` (content, **graduated**)
-- Creator wallet = `9CHr5g24EdzUKg9GZFUvEuAvHAjZGCsF1Z3zVPudWYoE`
+Status values: **PASS** · **FAIL** · **UNTESTABLE** (with the reason).
 
 ---
 
-## A. Global shell
+## A note on the two constraints this plan must respect
 
-| # | Item | Correct means | Status |
-|---|---|---|---|
-| A1 | Header brand lockup | Gas-giant mark + "juno" wordmark, top-left, links to `/explore` | PASS |
-| A2 | Header search | Centred pill; submitting "AAPL" navigates to `/explore?q=AAPL` | PASS |
-| A3 | Connect button | Renders "Connect"; opens the wallet-adapter modal listing Phantom/Solflare | PASS |
-| A4 | Side rail (≥lg) | Home/Reels/Trending/Create/Activity icons, each a distinct glyph, all resolve 200 | PASS |
-| A5 | Rail active state | Current route's icon has a raised background | PASS |
-| A6 | Mobile nav (<lg) | Bottom bar visible at 402px; side rail hidden | PASS |
-| A7 | Get-the-App card | Renders a **scannable** QR (real encoder, not noise); dismiss removes it; absent on `/coin/*` and `/reels` | PASS |
-| A8 | Theme scope | Juno routes are dark (`#0d0b12`); Norr's 18+ gate never appears on any Juno route | PASS |
+**A 503 is not a failure of the app.** Juno runs on the public devnet RPC by
+decision (D13). When that endpoint refuses, the correct behaviour is a 503 with
+a message saying the RPC is rate-limiting, and a retry affordance — not a 500,
+not a fabricated number, not an empty state claiming "no coins". Items below
+that touch chain reads are judged on *that* contract, and are re-run after a
+pause before being marked FAIL.
 
-## B. `/explore`
-
-| # | Item | Correct means | Status |
-|---|---|---|---|
-| B1 | Default list | Lists exactly the 4 devnet pools, newest first, each with real market cap from chain | PASS |
-| B2 | Tile figures | AAPL shows `$1k` MC; NVDA shows a **SOL-denominated** cap (not `$`) | PASS |
-| B3 | Reel badge | Only `format = reel` tiles show the badge; none currently, so none shown | PASS |
-| B4 | Trending sort | `?sort=trending` reorders by 24h volume; unknown-volume pools sort last, not as zero | PASS |
-| B5 | Search hit | `?q=AAPL` returns only AAPLx, heading reads `1 result for "AAPL"` | PASS |
-| B6 | Search miss | `?q=zzzz` shows `Nothing matches "zzzz"`, no crash | PASS |
-| B7 | Tile navigation | Clicking a post tile opens `/coin/<mint>` | PASS |
-| B8 | Empty state | With zero pools, shows "No coins yet on devnet" + a Launch CTA (verified by query, not by deleting data) | PASS |
-
-## C. `/coin/[address]`
-
-| # | Item | Correct means | Status |
-|---|---|---|---|
-| C1 | Header | Creator wallet short-form, holders count or nothing (never a false `0`) | PASS |
-| C2 | Title + description | Exactly the values recorded at launch | PASS |
-| C3 | Stat block | Market Cap from chain; 24H Volume renders `—`; Creator Rewards a real figure | PASS |
-| C4 | Curve bar | Raised and threshold match a direct SDK read of the same pool to 2dp | PASS |
-| C5 | Graduated pool | GRAD shows the graduated notice **instead of** a curve bar | PASS |
-| C6 | Explorer links | Pool/Mint/Config/Launch tx/Meteora all present and resolve to the right addresses | PASS |
-| C7 | Trade panel default | Quote token defaults to the **pool's own** mint (USDC for AAPL, SOL for NVDA) | PASS |
-| C8 | Buy quote | Typing an amount produces a non-zero estimate from the real DBC quoter | PASS |
-| C9 | Sell mode | Presets switch to 25/50/75/Max; input labelled in the coin, not dollars | PASS |
-| C10 | Disconnected CTA | Reads "Buy" (not "Insufficient balance") with no wallet connected | PASS |
-| C11 | Tabs | Activity/Holders/Comments/Details all switch; arrow keys move between them | PASS |
-| C12 | Activity rows | Real signatures linking to Solscan; no fabricated size/direction | PASS |
-| C13 | Details tab | Curve preset, addresses, threshold, progress, all matching chain | PASS |
-| C14 | Creator panel | Hidden when disconnected (it is creator-only) | PASS |
-| C15 | Unknown mint | `/coin/<valid-but-unregistered>` renders not-found, never fake data | PASS |
-| C16 | Malformed mint | `/coin/abc` renders not-found without a server exception | PASS |
-
-## D. `/reels`
-
-| # | Item | Correct means | Status |
-|---|---|---|---|
-| D1 | Empty state | No reel-format pools exist → "No reels yet" + Create CTA | PASS |
-| D2 | No console errors | Empty state renders without a video element or media error | PASS |
-
-## E. `/creator/[handle]`
-
-| # | Item | Correct means | Status |
-|---|---|---|---|
-| E1 | Real creator | Creator wallet shows 4 pools under Posts, aggregate MC | PASS |
-| E2 | Tabs | Posts populated; Reels/Collected/Activity show honest empty states | PASS |
-| E3 | Invalid handle | `/creator/notawallet` → not-found, no exception | PASS |
-
-## F. `/create`
-
-| # | Item | Correct means | Status |
-|---|---|---|---|
-| F1 | Format toggle | Post/Reel switches; Reel changes the upload frame to 9:16 | PASS |
-| F2 | Curve picker | All 4 presets listed with real fee ranges; selecting one updates the rationale | PASS |
-| F3 | Ticker input | Lowercase input is uppercased; symbols stripped | PASS |
-| F4 | Valuation guard | migration ≤ initial shows the error and disables submit | PASS |
-| F5 | Summary | Reflects live selections (format, curve, quote, valuations) | PASS |
-| F6 | Disconnected CTA | Reads "Connect wallet to launch" | PASS |
-| F7 | Media upload | Selecting a real image uploads to Pinata and previews it; CID shown | PASS |
-| F8 | Upload rejection | A non-image/video file is rejected with a stated reason | PASS |
-
-## G. API endpoints
-
-| # | Item | Correct means | Status |
-|---|---|---|---|
-| G1 | `GET /api/juno/pools` | 200, JSON array of 4 devnet rows | PASS |
-| G2 | `POST /api/juno/pools` valid | 201 and a persisted row | PASS |
-| G3 | `POST` bad address | 400 `is not an address` | PASS |
-| G4 | `POST` unknown pool | 404 `No such pool on this cluster` | PASS |
-| G5 | `POST` creator mismatch | 400 — chain is authoritative over the client's claim | PASS |
-| G6 | `POST` bad preset | 400 `Unknown curve preset` | PASS |
-| G7 | `POST` non-JSON | 400, not a 500 | PASS |
-| G8 | `POST /api/juno/metadata` | 201 with cid/uri/url; JSON fetchable from the gateway | PASS |
-| G9 | `POST /api/juno/metadata` no name | 400 | PASS |
-| G10 | `POST /api/juno/upload` no file | 400 `No file` | PASS |
-| G11 | `POST /api/juno/upload` wrong type | 415 | PASS |
-| G12 | `POST /api/juno/upload` real image | 201 with a working gateway URL | PASS |
-
-## H. On-chain (verified against devnet, not mocked)
-
-| # | Item | Correct means | Status |
-|---|---|---|---|
-| H1 | Pool read | `fetchPoolSnapshot` returns price/progress/threshold matching Solscan | PASS |
-| H2 | Quote | `quoteTrade` returns non-zero out, fee, impact | PASS |
-| H3 | Launch | 2-tx path both under 1232 bytes for all 4 presets | PASS |
-| H4 | Swap | A signed buy confirms and moves curve progress | PASS |
-| H5 | Partial fill | `swap2`/PartialFill completes a curve exact-in cannot | PASS |
-| H6 | Fee claim | `claimCreatorTradingFee` moves the balance to zero | PASS |
-| H7 | Migration | `migrateToDammV2` yields a real DAMM v2 account | PASS |
-| H8 | Token metadata | Mint's Metaplex account carries the `ipfs://` URI | PASS |
-
-## I. External integrations
-
-| # | Item | Correct means | Status |
-|---|---|---|---|
-| I1 | Pinata auth | `testAuthentication` 200 | PASS |
-| I2 | Pinata pin + fetch | Pinned JSON retrievable from the gateway | PASS |
-| I3 | Postgres | Rows persist across a server restart | PASS |
-| I4 | MongoDB | Connects; driver installed | PASS |
-| I5 | Pyth | **Untestable** — Hermes price endpoints require a key not present in the repo | **UNTESTED** |
-| I6 | Solana RPC | Reads succeed; note any 429s from the public endpoint | PASS |
-
+**The mobile app cannot be driven by Chrome.** Expo runs natively. Those items
+are executed on the iOS Simulator via `simctl` and are marked as such rather
+than skipped.
 
 ---
 
-## Fixes made during this run
+## 1. Web pages (Chrome, localhost:3000)
 
-| Item | Root cause | Fix |
+| # | Item | Correct means |
 |---|---|---|
-| A4b, A5 | `SideRail` and `MobileNav` both used `aria-label="Primary"` — two identical landmarks, and both marked a tab active | Relabelled the mobile bar `Primary mobile` |
-| A6-console | Duplicate React keys: `ITEMS` already had `/create`, and the disconnected profile slot appended `/create` again | Disconnected slot now opens the wallet modal instead of duplicating a tab |
-| A-console | Public devnet RPC 429s. One `/explore` render made ~24 calls; web3.js then retried each 4× with backoff, logging every attempt | Cached immutable pool configs and mint decimals; derived curve progress from data already held instead of two more round trips; bounded hydration concurrency; `disableRetryOnRateLimit` so an already-handled failure fails fast instead of spamming |
-| A-console | `pg` warned that `sslmode` aliases change meaning in v9 | Strip `sslmode` from the connection string; the explicit `ssl` object already decides policy |
-| C-console | **Uncaught `Virtual pool is completed`** — the trade panel rendered on a graduated pool and the quoter threw, because a migrated curve cannot be swapped | Graduated pools now render `GraduatedNotice` with a derived DAMM v2 link instead of a trade panel |
-| C-console | Client-side 429: the trade panel read the pool on mount for every visitor, most of whom never trade | Snapshot is fetched lazily on the first quote, and invalidated after a trade |
+| W1 | `/explore` loads | Grid of coin tiles, each with a name, ticker, preset badge and a market cap in a labelled currency. No console errors. |
+| W2 | `/explore` with pools unreadable | Says the pools exist but could not be read, **not** "No coins yet". |
+| W3 | `/explore` sort `?sort=trending` | Reorders without error; every tile still priced. |
+| W4 | `/explore` search `?q=` | Filters tiles; a no-match query says nothing matches that query. |
+| W5 | `/coin/[address]` loads | Media/glyph, name, ticker, preset, market cap, curve progress with real threshold, Buy/Sell present. |
+| W6 | Coin page price chart | Toggling to the chart draws a line with ≥2 real trades, axis labels, endpoint label. One trade shows "one trade so far"; none shows "no trades yet". |
+| W7 | Coin page NAV band | On an equity-preset coin with a feed: label, price, deviation, and state = live / market closed · last close / stale. Never implies a closed market is live. |
+| W8 | Coin page activity | Rows show a real side (buy **and** sell both appear across the set), size, and time. No row asserts a side it did not read. |
+| W9 | `/coin/<nonexistent>` | 404 page, not a crash. |
+| W10 | `/reels` | Vertical feed of `format=reel` coins; empty state if none. |
+| W11 | `/activity` | Global trade feed, newest first, or "Nothing has traded yet." |
+| W12 | `/create` | Launch form with 4 presets; the curve shape renders. |
+| W13 | `/creator/[wallet]` | Creator's launches; counters that are not real are absent or dashed, never fabricated zeros. |
+| W14 | Light theme | Sage canvas, white cards, dark ink, lime/green actions across every route. No dark-theme leftovers except the reels video scrim. |
 
-Harness defects found and corrected (not app bugs): `clean()` drains its
-buffer, so calling it twice in one assertion reported an empty list; a real
-`qrcode` SVG has a white background path plus one data path, so the shape count
-was the wrong assertion; `networkidle` never settles against a dev server
-because of the HMR socket.
+## 2. API endpoints (curl + Chrome network tab)
 
-## Confirmation
+| # | Item | Correct means |
+|---|---|---|
+| A1 | `GET /api/juno/coins` | 200, `{cluster:"devnet", coins:[…]}`, each coin priced with a currency. |
+| A2 | `GET /api/juno/coins?sort=marketCap` | 200, ordered by market cap descending. |
+| A3 | `GET /api/juno/coins?sort=graduating` | 200, ordered by curve progress descending. |
+| A4 | `GET /api/juno/coins/[mint]` | 200 with coin, activity, holders, launchSignature. `priceHistory` carries `price`, `volume`, `side`. |
+| A5 | `GET /api/juno/coins/<bad>` | **404** `{"error":"Coin not found"}` — not 500. |
+| A6 | `GET /api/juno/feed` | 200, items of kind `trade` and/or `post`, newest first. Post items carry `replyCount`. |
+| A7 | `GET /api/juno/posts` | 200, top-level posts only (no replies leaking into the feed list). |
+| A8 | `POST /api/juno/posts` | 201, row persists, readable back. |
+| A9 | `POST /api/juno/posts` empty body | **400** `"A post needs a body"` — not 500. |
+| A10 | `POST /api/juno/posts` over 500 chars | **400** with the length message. |
+| A11 | `GET /api/juno/posts/[id]` | 200 with post, replies (oldest first), replyCount, and a live coin when the post names one. |
+| A12 | `GET /api/juno/posts/<bad>` | **404** `"Post not found"`. |
+| A13 | Reply flow | `POST` with `parentId` → 201 → parent's `replyCount` increments → reply appears in `replies`, **not** in the feed. |
+| A14 | `GET /api/juno/portfolio/[wallet]` | 200 with positions, totalValue, history; `totalPnl` **null** when any holding has no recorded cost. |
+| A15 | `GET /api/juno/portfolio/<bad>` | **400** `"Not a Solana address"` — not 500. |
+| A16 | `POST /api/juno/tx/swap` | 200 with base64 tx under 1232 bytes, a quote, and a blockhash window. |
+| A17 | `POST /api/juno/tx/swap` amount 0 | **400** `"Amount must be greater than zero"`. |
+| A18 | `POST /api/juno/tx/swap` on graduated pool | **400** naming graduation, not a broken transaction. |
+| A19 | `POST /api/juno/tx/launch` | 200 with **two** steps, each ≤1232 bytes, each pre-signed by its new account and missing only the payer. |
+| A20 | `POST /api/juno/tx/launch` bad ticker | **400** with the symbol rule. |
+| A21 | `POST /api/juno/tx/launch` unknown preset | **400** listing the valid presets. |
+| A22 | `POST /api/juno/tx/submit` | Accepts a signed tx, confirms, returns a signature. |
+| A23 | `GET /api/ipfs/[cid]` bad cid | **400** `"Not a content hash"`. |
+| A24 | `GET /api/juno/pools` | 200, registry rows for this cluster only. |
+| A25 | RPC-busy contract | Under throttling every chain-backed route returns **503** with the rate-limit message — never 500, never fabricated data. |
+| A26 | CORS | Every `/api/juno/*` route answers `OPTIONS` with permissive CORS headers. |
 
-- **Zero mocks, stubs, fakes or TODOs** in `lib/juno`, `components/juno`,
-  `app/(juno)` or `app/api/juno` — verified by grep. `lib/juno/mock.ts` is
-  deleted.
-- **Zero console errors and zero failed requests** across every tested page,
-  captured per item rather than sampled.
-- Database is real Neon Postgres, rows verified to survive a server restart.
-- On-chain actions are real signed transactions on devnet against the live DBC
-  program; every figure the UI shows was cross-checked against a direct SDK read.
-- Pinata is called with real credentials; uploaded media and pinned metadata
-  were fetched back from the public gateway.
+## 3. On-chain (real network, no mocks)
 
-**I5 (Pyth NAV) is UNTESTED, not passed.** Hermes moved its price endpoints
-behind an API key that does not exist in this repo. The client code is written
-and feed ids are verified; the UI shows no NAV rather than a fabricated one.
+| # | Item | Correct means |
+|---|---|---|
+| C1 | Swap transaction is signable and lands | Server-built bytes, signed locally, submitted, cluster confirms, `meta.err` null. |
+| C2 | Launch splits into two packet-sized txs | Both ≤1232 bytes; config + mint pre-signed. |
+| C3 | Swap decoding | Buys **and** sells both decode from vault deltas with exact amounts. |
+| C4 | Non-trades excluded | Pool creation, fee claims and migration never appear as trades. |
+| C5 | Pyth feeds | All 9 shipped feed ids resolve to real on-chain accounts with sane prices. |
+| C6 | Pyth shard freshness | Crypto fresh on shard 0, equities on shard 1; the fresher is chosen. |
+| C7 | Equity market hours | A weekend equity mark reports `closed`, not `live` and not `stale`. |
+| C8 | Graduated pool rejects swaps | Build refuses with a graduation message. |
+| C9 | Curve presets valid | All 4 pass Meteora's own `validateConfigParameters`. |
+
+## 4. Mobile (iOS Simulator — not Chrome-testable)
+
+| # | Item | Correct means |
+|---|---|---|
+| M1 | Onboarding | Illustration, title, subtitle, lime Get Started. |
+| M2 | Get Started → Social | Feed of real posts/trades. |
+| M3 | Tab bar | 5 slots, no labels, lime pill on active, dark centre Post. |
+| M4 | Trade tab | Real coins, market caps, curve progress, working sorts. |
+| M5 | Coin screen | Price, candles with OHLC readout + live-price badge, stats, NAV, activity. |
+| M6 | Candle bucketing | Trades minutes apart do not collapse into one candle. |
+| M7 | Post screen | Post, live coin card, replies, pinned composer. |
+| M8 | Reply from the app | Posts, persists, count increments. |
+| M9 | Profile | Identity, three-up stats, portfolio value, time ranges, chart, holdings. |
+| M10 | Empty wallet | `$0` and "No history yet" — honest, not an error. |
+| M11 | Launch screen | Form + 4 presets, each drawing its own curve. |
+| M12 | No SVG-data-URI images | No "URI parsing error" redbox anywhere. |
+| M13 | RPC-busy state | Clear "rate-limiting" message with a Try again button, not a generic failure. |
+
+## 5. Unit / integration suites
+
+| # | Item | Correct means |
+|---|---|---|
+| T1 | `npm run test:unit` | All pass. |
+| T2 | `tests/integration/juno-tx.test.ts` | Signs server-built bytes and lands a real devnet buy. |
+| T3 | `tests/integration/juno-pyth.test.ts` | Every shipped feed id resolves on-chain. |
+| T4 | `tests/integration/juno-swaps.test.ts` | Decoder agrees with real history; tolerant of partial reads. |
+| T5 | `npx tsc --noEmit` (both apps) | Clean. |
+| T6 | `npm run build` | Production build green. |
+
+## 6. Anti-mock audit
+
+| # | Item | Correct means |
+|---|---|---|
+| X1 | No mock/stub/fake/placeholder in Juno surfaces | Grep returns only legitimate `placeholder=` input props. |
+| X2 | No fabricated zeros | Unknown values render as `—`, never as `0` or `0.00%`. |
+| X3 | No hardcoded trade sides | Every side comes from a vault delta. |
+| X4 | Real DB | Postgres, persisted across restarts. |
+
+---
+
+## Results
+
+Filled in during Phase 2. Nothing is marked PASS without the stated observable.

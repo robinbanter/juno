@@ -1,4 +1,4 @@
-import { createPost, listPosts, MAX_POST_LENGTH } from "@/lib/juno/posts";
+import { createPost, listPosts } from "@/lib/juno/posts";
 import {
   junoHandler,
   junoJson,
@@ -39,7 +39,15 @@ export async function POST(request: Request) {
 
     const post = await createPost({
       authorWallet: requireString(body.authorWallet, "authorWallet"),
-      body: requireString(body.body, "body").slice(0, MAX_POST_LENGTH),
+      /*
+       * Not truncated here.
+       *
+       * Slicing to the limit made an over-length post return 201 having
+       * silently thrown away the tail — the author was told it worked and the
+       * end of what they wrote was gone. `createPost` rejects it instead, so
+       * the caller finds out.
+       */
+      body: requireString(body.body, "body"),
       baseMint: typeof body.baseMint === "string" ? body.baseMint : null,
       mediaUrl: typeof body.mediaUrl === "string" ? body.mediaUrl : null,
       mediaMime: typeof body.mediaMime === "string" ? body.mediaMime : null,
