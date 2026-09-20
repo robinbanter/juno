@@ -1,0 +1,276 @@
+import { useRouter } from "expo-router";
+import { useState } from "react";
+import {
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+
+import { Button, Card, Pill } from "../../components/ui";
+import { juno, WSOL_MINT } from "../../lib/api";
+import { useWallet } from "../../lib/wallet";
+import { colors, radius, spacing, type } from "../../theme/tokens";
+
+/**
+ * Post — which here means launching a real market.
+ *
+ * This is Juno's whole claim in one screen. Publishing does not create a row in
+ * a table; it creates a Meteora bonding curve pool on Solana, with a sixteen
+ * segment curve chosen from a preset, and the post *is* that market.
+ *
+ * ## Two signatures, and why it cannot be one
+ *
+ * A launch is two transactions: create the curve config, then open the pool
+ * against it. They cannot be bundled — a sixteen-segment curve plus the pool
+ * init serialises to about 1488 bytes against Solana's 1232 byte packet limit,
+ * and dropping curve points to fit would gut the exact thing that makes these
+ * presets worth anything.
+ *
+ * So the second signature can fail after the first has landed, leaving a config
+ * on-chain with no pool. That is a real state and the screen says so plainly
+ * rather than reporting a generic failure, because the config is not lost — it
+ * is a usable account, and the retry is cheap.
+ */
+
+const PRESETS = [
+  {
+    id: "content",
+    label: "Content",
+    blurb: "Back-loaded. Cheap to enter, steepens as attention arrives.",
+  },
+  {
+    id: "thin-name",
+    label: "Thin name",
+    blurb: "Front-loaded. Deep at the issue price so early size fills.",
+  },
+  {
+    id: "ipo-book",
+    label: "IPO book",
+    blurb: "Deep at both ends, thin in the middle. Book-building.",
+  },
+  {
+    id: "tight-nav",
+    label: "Tight NAV",
+    blurb: "Uniform. Tracks an underlying like a spread, not a launch.",
+  },
+] as const;
+
+export default function PostScreen() {
+  const router = useRouter();
+  const wallet = useWallet();
+
+  const [name, setName] = useState("");
+  const [symbol, setSymbol] = useState("");
+  const [preset, setPreset] = useState<string>("content");
+  const [status, setStatus] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const symbolOk = /^[A-Z0-9]{2,10}$/.test(symbol.trim().toUpperCase());
+  const canLaunch = name.trim().length > 0 && symbolOk && !busy;
+
+  async function launch() {
+    setBusy(true);
+    setError(null);
+    try {
+      const address = wallet.address ?? (await wallet.connect());
+
+      setStatus("Building the launch…");
+      const built = await juno.buildLaunch({
+        creator: address,
+        name: name.trim(),
+        symbol: symbol.trim().toUpperCase(),
+        preset,
+      });
+
+      // In order, and each must confirm before the next is valid: the pool
+      // cannot be opened against a config that does not exist yet.
+      let poolSignature = "";
+      for (const [index, step] of built.steps.entries()) {
+        setStatus(`${step.label}… (${index + 1}/${built.steps.length})`);
+        const signed = await wallet.sign(step.transaction);
+        try {
+          const { signature } = await juno.submit({
+            transaction: signed,
+            window: built.window,
+          });
+          // The last step opens the pool, and its signature is the receipt a
+          // judge clicks.
+          poolSignature = signature;
+        } catch (stepError) {
+          if (index > 0) {
+            throw new Error(
+              `The curve config was created, but opening the pool failed: ${
+                stepError instanceof Error ? stepError.message : "unknown error"
+              }. Nothing is lost — try again.`,
+            );
+          }
+          throw stepError;
+        }
+      }
+
+      setStatus("Recording the launch…");
+      await juno
+        .recordLaunch({
+          baseMint: built.baseMint,
+          poolAddress: built.pool,
+          configAddress: built.config,
+          quoteMint: WSOL_MINT,
+          creatorWallet: address,
+          name: name.trim(),
+          symbol: symbol.trim().toUpperCase(),
+          format: "post",
+          curvePreset: preset,
+          createSignature: poolSignature,
+        })
+        .catch(() => {
+          // The pool exists on-chain either way. A failed index write means it
+          // is missing from the app's list, not that the launch failed.
+        });
+
+      setStatus(null);
+      router.push(`/coin/${built.baseMint}`);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Launch failed");
+      setStatus(null);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <SafeAreaView style={styles.screen} edges={["top"]}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        style={{ flex: 1 }}
+      >
+        <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
+          <Text style={styles.title}>Launch a coin</Text>
+          <Text style={styles.lede}>
+            Publishing opens a real Meteora bonding curve on Solana. The post is
+            the market.
+          </Text>
+
+          <Card style={styles.form}>
+            <Field label="Name">
+              <TextInput
+                value={name}
+                onChangeText={setName}
+                placeholder="Night Market"
+                placeholderTextColor={colors.faint}
+                style={styles.input}
+                maxLength={64}
+              />
+            </Field>
+
+            <Field label="Ticker" hint={symbol.length > 0 && !symbolOk ? "2–10 letters or digits" : undefined}>
+              <TextInput
+                value={symbol}
+                onChangeText={(next) => setSymbol(next.toUpperCase())}
+                placeholder="NIGHT"
+                placeholderTextColor={colors.faint}
+                autoCapitalize="characters"
+                style={styles.input}
+                maxLength={10}
+              />
+            </Field>
+          </Card>
+
+          <Text style={styles.sectionTitle}>Curve</Text>
+          <Text style={styles.sectionLede}>
+            Sixteen liquidity-weighted segments. The weights decide how the price
+            behaves, not just where it starts.
+          </Text>
+
+          <View style={styles.presets}>
+            {PRESETS.map((option) => {
+              const on = preset === option.id;
+              return (
+                <Pressable key={option.id} onPress={() => setPreset(option.id)}>
+                  <Card style={[styles.preset, on && styles.presetOn]}>
+                    <View style={styles.presetHead}>
+                      <Text style={styles.presetLabel}>{option.label}</Text>
+                      {on && <Pill label="Selected" tone="primary" />}
+                    </View>
+                    <Text style={styles.presetBlurb}>{option.blurb}</Text>
+                  </Card>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          {error && (
+            <Card style={styles.errorCard}>
+              <Text style={styles.errorText}>{error}</Text>
+            </Card>
+          )}
+
+          <Button
+            label={status ?? "Launch coin"}
+            onPress={launch}
+            loading={busy}
+            disabled={!canLaunch}
+          />
+          <Text style={styles.footnote}>
+            Two signatures: one to create the curve config, one to open the pool.
+            They cannot be combined — a sixteen-segment curve does not fit in a
+            single Solana packet with the pool init.
+          </Text>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
+}
+
+function Field({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <View style={{ gap: 6 }}>
+      <Text style={styles.fieldLabel}>{label}</Text>
+      {children}
+      {hint ? <Text style={styles.fieldHint}>{hint}</Text> : null}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: colors.bg },
+  body: { paddingHorizontal: spacing.lg, paddingBottom: 140, gap: spacing.md },
+  title: { ...type.title, color: colors.ink },
+  lede: { ...type.body, color: colors.muted, lineHeight: 21 },
+  form: { gap: spacing.lg },
+  fieldLabel: { ...type.label, color: colors.muted },
+  fieldHint: { ...type.caption, color: colors.neg },
+  input: {
+    height: 48,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceSunken,
+    paddingHorizontal: spacing.lg,
+    ...type.body,
+    color: colors.ink,
+  },
+  sectionTitle: { ...type.heading, color: colors.ink, marginTop: spacing.sm },
+  sectionLede: { ...type.label, color: colors.muted, lineHeight: 19 },
+  presets: { gap: spacing.sm },
+  preset: { gap: 6, padding: spacing.lg },
+  presetOn: { borderWidth: 2, borderColor: colors.primary },
+  presetHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  presetLabel: { ...type.bodyStrong, color: colors.ink },
+  presetBlurb: { ...type.label, color: colors.muted, lineHeight: 19 },
+  errorCard: { backgroundColor: "rgba(217,45,32,0.08)" },
+  errorText: { ...type.body, color: colors.neg, lineHeight: 21 },
+  footnote: { ...type.caption, color: colors.faint, lineHeight: 16, marginTop: spacing.sm },
+});

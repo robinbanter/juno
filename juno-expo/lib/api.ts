@@ -1,0 +1,322 @@
+import Constants from "expo-constants";
+
+/**
+ * The Juno API client.
+ *
+ * Every read and every transaction comes from the Next.js app. The phone never
+ * builds a Solana transaction — it asks for bytes, signs them with the embedded
+ * wallet, and posts them back. See `lib/juno/tx.ts` on the server for why.
+ *
+ * ## Finding the server from a simulator
+ *
+ * `localhost` inside an iOS Simulator is the simulator, not the Mac running the
+ * dev server, so a hardcoded localhost fails in exactly the environment this
+ * app is demoed in. Expo already knows the host it was served from
+ * (`hostUri`), which is the machine running Metro — and that is the same
+ * machine running Next. So the default is derived rather than guessed, and
+ * `EXPO_PUBLIC_API_URL` overrides it for a deployed backend.
+ */
+
+function inferredHost(): string | null {
+  const hostUri =
+    Constants.expoConfig?.hostUri ??
+    // Older/dev-client shapes keep it in different places.
+    (Constants.expoGoConfig as { debuggerHost?: string } | undefined)?.debuggerHost;
+  if (!hostUri) return null;
+  const host = hostUri.split(":")[0];
+  if (!host) return null;
+  return `http://${host}:3000`;
+}
+
+export const API_URL =
+  process.env.EXPO_PUBLIC_API_URL?.replace(/\/$/, "") ??
+  inferredHost() ??
+  "http://localhost:3000";
+
+export class ApiError extends Error {
+  readonly status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
+/**
+ * One request.
+ *
+ * A phone loses its network mid-request far more often than a browser does, so
+ * a timeout is mandatory rather than optional: without one a dropped connection
+ * leaves a spinner on screen forever with nothing to cancel it.
+ */
+async function request<T>(
+  path: string,
+  init: RequestInit & { timeoutMs?: number } = {},
+): Promise<T> {
+  const { timeoutMs = 45_000, ...rest } = init;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(`${API_URL}${path}`, {
+      ...rest,
+      signal: controller.signal,
+      headers: {
+        accept: "application/json",
+        ...(rest.body ? { "content-type": "application/json" } : {}),
+        ...rest.headers,
+      },
+    });
+
+    const text = await response.text();
+    let body: unknown = null;
+    try {
+      body = text ? JSON.parse(text) : null;
+    } catch {
+      // A non-JSON body from a 500 is still worth surfacing as a message.
+      if (!response.ok) throw new ApiError(text.slice(0, 200) || "Request failed", response.status);
+      throw new ApiError("The server sent something that was not JSON", response.status);
+    }
+
+    if (!response.ok) {
+      const message =
+        (body as { error?: string } | null)?.error ?? `Request failed (${response.status})`;
+      throw new ApiError(message, response.status);
+    }
+
+    return body as T;
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new ApiError("The request timed out. Check your connection.", 0);
+    }
+    throw new ApiError(
+      `Could not reach Juno at ${API_URL}. Is the server running?`,
+      0,
+    );
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export const api = {
+  get: <T>(path: string, timeoutMs?: number) => request<T>(path, { timeoutMs }),
+  post: <T>(path: string, body: unknown, timeoutMs?: number) =>
+    request<T>(path, { method: "POST", body: JSON.stringify(body), timeoutMs }),
+};
+
+/* ------------------------------------------------------------------ */
+/* Shapes, mirroring the server's own types                            */
+/* ------------------------------------------------------------------ */
+
+export const WSOL_MINT = "So11111111111111111111111111111111111111112";
+
+export type CurveState = {
+  progress: number;
+  raisedUsd: number;
+  thresholdUsd: number;
+  graduated: boolean;
+};
+
+export type NavReference = {
+  feed: string;
+  priceUsd: number;
+  deviation: number;
+  updatedAt: string;
+  bandBps: number;
+  withinBand: boolean;
+  state: "live" | "closed" | "stale";
+  ageSeconds: number;
+};
+
+export type Coin = {
+  address: string;
+  format: "post" | "reel";
+  name: string;
+  symbol: string;
+  description?: string;
+  media: { kind: "image" | "video"; url: string; posterUrl?: string; width: number; height: number };
+  creator: { handle: string; displayName: string; avatarUrl: string; wallet: string };
+  createdAt: string;
+  pool: string;
+  config: string;
+  quote: { mint: string; symbol: string; decimals: number };
+  marketCap: number;
+  marketCapCurrency: string;
+  marketCapChangePct: number | null;
+  volume24h: number | null;
+  totalVolume: number | null;
+  creatorRewards: number;
+  holders: number | null;
+  priceUsd: number;
+  priceHistory?: Array<{ t: string; price: number }>;
+  nav?: NavReference | null;
+  curve: CurveState;
+  curvePreset: string;
+};
+
+export type Activity = {
+  id: string;
+  side: "buy" | "sell";
+  actor: { handle: string; avatarUrl: string };
+  amount: number;
+  valueUsd: number;
+  timestamp: string;
+  signature?: string;
+};
+
+export type Holder = {
+  rank: number;
+  actor: { handle: string; avatarUrl: string };
+  wallet: string;
+  balance: number;
+  share: number;
+};
+
+export type FeedItem =
+  | {
+      kind: "trade";
+      id: string;
+      timestamp: string;
+      side: "buy" | "sell";
+      amount: number;
+      valueUsd: number;
+      signature?: string;
+      actor: { handle: string; avatarUrl: string };
+      coin: { address: string; name: string; symbol: string; mediaUrl: string | null; mediaKind: string };
+    }
+  | {
+      kind: "post";
+      id: string;
+      timestamp: string;
+      body: string;
+      author: { wallet: string; handle: string; avatarUrl: string };
+      mediaUrl: string | null;
+      mediaKind: string | null;
+      coin: { address: string; name: string; symbol: string } | null;
+    };
+
+export type Position = {
+  baseMint: string;
+  poolAddress: string;
+  name: string;
+  symbol: string;
+  mediaUrl: string | null;
+  mediaMime: string | null;
+  curvePreset: string;
+  balance: number;
+  price: number;
+  value: number;
+  averageCost: number | null;
+  unrealisedPnl: number | null;
+  unrealisedPnlPct: number | null;
+  realisedPnl: number;
+  currency: string;
+  graduated: boolean;
+};
+
+export type Portfolio = {
+  wallet: string;
+  positions: Position[];
+  totalValue: number;
+  totalPnl: number | null;
+  totalPnlPct: number | null;
+  currency: string;
+  partial: boolean;
+};
+
+export type UnsignedTransaction = { transaction: string; label: string; bytes: number };
+export type BlockhashWindow = { blockhash: string; lastValidBlockHeight: number };
+
+export type SwapBuild = {
+  unsigned: UnsignedTransaction;
+  window: BlockhashWindow;
+  quote: { amountOut: number; minimumAmountOut: number; fee: number; priceImpact: number };
+  quoteSymbol: string;
+  quoteUsdRate: number | null;
+  pool: string;
+  symbol: string;
+};
+
+export type LaunchBuild = {
+  steps: UnsignedTransaction[];
+  window: BlockhashWindow;
+  config: string;
+  baseMint: string;
+  pool: string;
+};
+
+/* ------------------------------------------------------------------ */
+/* Calls                                                               */
+/* ------------------------------------------------------------------ */
+
+export const juno = {
+  feed: (limit = 40) => api.get<{ cluster: string; items: FeedItem[] }>(`/api/juno/feed?limit=${limit}`),
+
+  coins: (sort?: "marketCap" | "graduating") =>
+    api.get<{ cluster: string; coins: Coin[] }>(
+      `/api/juno/coins?limit=40${sort ? `&sort=${sort}` : ""}`,
+    ),
+
+  coin: (mint: string) =>
+    api.get<{ coin: Coin; activity: Activity[]; holders: Holder[]; launchSignature: string }>(
+      `/api/juno/coins/${mint}`,
+    ),
+
+  portfolio: (wallet: string) => api.get<Portfolio>(`/api/juno/portfolio/${wallet}`),
+
+  posts: (limit = 30) =>
+    api.get<{ posts: Array<{ id: string; body: string; authorWallet: string; createdAt: string }> }>(
+      `/api/juno/posts?limit=${limit}`,
+    ),
+
+  createPost: (input: { authorWallet: string; body: string; baseMint?: string | null }) =>
+    api.post<{ post: { id: string } }>("/api/juno/posts", input),
+
+  /**
+   * Index a launch after its pool transaction has confirmed.
+   *
+   * The server re-reads the pool from chain before writing the row, so this
+   * cannot be used to claim a pool that does not exist.
+   */
+  recordLaunch: (input: {
+    baseMint: string;
+    poolAddress: string;
+    configAddress: string;
+    quoteMint: string;
+    creatorWallet: string;
+    name: string;
+    symbol: string;
+    format: "post" | "reel";
+    curvePreset: string;
+    createSignature: string;
+  }) => api.post<{ pool: unknown }>("/api/juno/pools", input),
+
+  buildSwap: (input: {
+    mint: string;
+    owner: string;
+    side: "buy" | "sell";
+    amountIn: number;
+    slippageBps?: number;
+  }) => api.post<SwapBuild>("/api/juno/tx/swap", input),
+
+  buildLaunch: (input: {
+    creator: string;
+    name: string;
+    symbol: string;
+    preset: string;
+    uri?: string;
+    quoteMint?: string;
+  }) => api.post<LaunchBuild>("/api/juno/tx/launch", input),
+
+  submit: (input: { transaction: string; window?: BlockhashWindow; poolAddress?: string }) =>
+    // Submitting waits for confirmation, which is slower than a read.
+    api.post<{ signature: string }>("/api/juno/tx/submit", input, 90_000),
+
+  /** Media is served through the app's own IPFS gateway, which fails over. */
+  media: (url: string | null | undefined): string | null =>
+    !url ? null : url.startsWith("http") ? url : `${API_URL}${url}`,
+
+  explorer: (kind: "tx" | "account" | "token", id: string, cluster = "devnet") =>
+    `https://solscan.io/${kind}/${id}${cluster === "devnet" ? "?cluster=devnet" : ""}`,
+};

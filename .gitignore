@@ -63,3 +63,10 @@ __pycache__/
 # *.tmp.* and it cannot happen again.
 *.tmp.*
 .juno/
+
+# The Expo app keeps its own dependencies and build output.
+/juno-expo/node_modules
+/juno-expo/.expo
+/juno-expo/ios
+/juno-expo/android
+/juno-expo/dist
