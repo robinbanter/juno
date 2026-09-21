@@ -362,8 +362,21 @@ export async function curvePoint(): Promise<BN> {
    * has quoted anything. Against the public endpoint that was enough to earn
    * an intermittent 503 on a route whose whole job is local arithmetic.
    */
+  /*
+   * Retried, because a single refusal here costs the whole request.
+   *
+   * Everything downstream is local arithmetic over an already-fetched
+   * account; this one read is the only thing standing between a depth chart
+   * and a 503, and on a cold cache one 429 from the public endpoint was
+   * enough to fail the route. It is a cheap call, so it is worth asking
+   * twice.
+   */
   return pointCache.get("now", () =>
-    getCurrentPoint(getConnection(), ActivationType.Timestamp),
+    withRetry(() => getCurrentPoint(getConnection(), ActivationType.Timestamp), {
+      attempts: 3,
+      baseDelayMs: 250,
+      maxDelayMs: 1_500,
+    }),
   );
 }
 
