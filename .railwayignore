@@ -1,0 +1,28 @@
+# Build and dependency output — Railway installs and builds on its own.
+node_modules
+.next
+out
+dist
+
+# The Expo app. It is a separate React Native client with its own 600MB of
+# dependencies and is distributed through Expo, not served by this Next app.
+juno-expo
+
+# Local-only state.
+.git
+.claude
+.juno
+.vercel
+tempo-onlyfans
+
+# Nothing here is needed to serve the app.
+tests
+docs
+drizzle/meta
+*.log
+.DS_Store
+
+# Secrets live in Railway's own variables, never in the uploaded bundle.
+.env
+.env.local
+.env.*.local
