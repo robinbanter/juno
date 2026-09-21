@@ -64,6 +64,19 @@ export default function ProfileScreen() {
   const data = portfolio.data;
   const currency = data?.currency === "mixed" ? "USD" : (data?.currency ?? "USD");
 
+  /*
+   * P&L, or null when there is nothing to stand behind.
+   *
+   * `totalPnl` is already null when a holding has no recorded cost. The case
+   * it does not cover is a partial walk that found no positions at all: the
+   * sum over an empty list is zero, and zero here reads as "you are flat"
+   * rather than "we did not finish looking".
+   */
+  const pnl =
+    !data || data.totalPnl === null || (data.partial && data.positions.length === 0)
+      ? null
+      : data.totalPnl;
+
   const series = useMemo(
     () => withinRange(data?.history ?? [], range),
     [data?.history, range],
@@ -127,28 +140,23 @@ export default function ProfileScreen() {
         </Identity>
 
         {/* Three-up stats, the reference's Trackers / PnL / WR row — but the
-            three figures this app can actually stand behind. */}
+            three figures this app can actually stand behind.
+
+            Three states, not two. `data` undefined is a read that failed.
+            `data.partial` with nothing found is a read that did not finish
+            looking — and "0 Positions, 0 Trades, $0" beside a badge admitting
+            some history could not be read is the screen contradicting itself.
+            Only a complete read of an empty wallet earns a zero. */}
         <Card>
           <Row>
-            {/* `data` is undefined when the portfolio read failed, and "0
-                Positions" there is a measurement nobody took. A dash is. */}
-            <Stat value={data ? String(data.positions.length) : "—"} label="Positions" />
+            <Stat value={counted(data?.positions.length, data?.partial)} label="Positions" />
             <Stat
-              value={
-                data?.totalPnl === null || data?.totalPnl === undefined
-                  ? "—"
-                  : money(data.totalPnl, currency)
-              }
+              value={pnl === null ? "—" : money(pnl, currency)}
+              // Zero is neither a gain nor a loss, and it was rendering green.
+              tone={pnl === null || pnl === 0 ? undefined : pnl > 0 ? "pos" : "neg"}
               label="P&L"
-              tone={
-                data?.totalPnl === null || data?.totalPnl === undefined
-                  ? undefined
-                  : data.totalPnl >= 0
-                    ? "pos"
-                    : "neg"
-              }
             />
-            <Stat value={data ? String(data.history.length) : "—"} label="Trades" />
+            <Stat value={counted(data?.history.length, data?.partial)} label="Trades" />
           </Row>
         </Card>
 
@@ -161,9 +169,11 @@ export default function ProfileScreen() {
               <Skeleton h={42} w="60%" />
             ) : (
               // A wallet holding nothing really is worth $0 and should say so.
-              // A wallet whose value could not be read is not, and must not.
+              // A wallet whose pools could not all be read is not, and must not.
               <Display>
-                {data ? money(data.totalValue, currency, { compact: false }) : "—"}
+                {data && !(data.partial && data.positions.length === 0)
+                  ? money(data.totalValue, currency, { compact: false })
+                  : "—"}
               </Display>
             )}
             <DeltaBadge pct={data?.totalPnlPct ?? null} />
@@ -177,10 +187,24 @@ export default function ProfileScreen() {
             points={series}
             bars={volumes}
             format={(v) => money(v, currency, { compact: true })}
+            emptyLabel={
+              data?.partial
+                ? "Some pools would not load — history unknown."
+                : undefined
+            }
           />
         </Card>
 
-        {data?.partial ? <Pill label="Some history could not be read" tone="neg" /> : null}
+        {data?.partial ? (
+          <Pill
+            label={
+              data.positions.length === 0
+                ? "Some pools could not be read — holdings unknown"
+                : "Some pools could not be read — this may not be everything"
+            }
+            tone="neg"
+          />
+        ) : null}
 
         <Tabs items={TABS} value={tab} onChange={setTab} />
 
@@ -200,7 +224,9 @@ export default function ProfileScreen() {
           ) : data.positions.length === 0 ? (
             <Card>
               <Body muted>
-                Nothing held yet. Buy a coin from the Trade tab and it shows up here.
+                {data.partial
+                  ? "Some pools would not load, so whether this wallet holds anything is unknown. Pull to retry."
+                  : "Nothing held yet. Buy a coin from the Trade tab and it shows up here."}
               </Body>
             </Card>
           ) : (
@@ -304,3 +330,18 @@ const Side = styled.Text<{ $buy: boolean }>`
   width: 38px;
   color: ${(p) => (p.$buy ? p.theme.colors.pos : p.theme.colors.neg)};
 `;
+
+/**
+ * A count, or a dash when nobody finished counting.
+ *
+ * Undefined is a read that failed outright. Zero from a *partial* read is the
+ * subtler case and the one that shipped: the walk stopped early and found
+ * nothing, which is not the same as there being nothing. A non-zero count from
+ * a partial read is still a real count of real positions — a floor, and the
+ * badge under this row says so.
+ */
+function counted(value: number | undefined, partial: boolean | undefined): string {
+  if (value === undefined) return "—";
+  if (value === 0 && partial) return "—";
+  return String(value);
+}

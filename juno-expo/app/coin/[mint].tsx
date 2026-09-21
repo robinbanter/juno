@@ -82,7 +82,7 @@ export default function CoinScreen() {
       ) : (
         <>
           <ScrollView
-            contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 210, gap: 12 }}
+            contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 140, gap: 12 }}
             showsVerticalScrollIndicator={false}
             refreshControl={
               <RefreshControl
@@ -398,15 +398,26 @@ const LinkText = styled.Text`
  * whatever card happened to be scrolled underneath showed through between and
  * around them, which read as a rendering fault rather than as a layer.
  */
+/**
+ * Buy and Sell, pinned to the bottom of the screen.
+ *
+ * `bottom` was 86px, which is the height of the tab bar — but this route is
+ * pushed on top of the tabs and has no tab bar under it. The result was an
+ * 86px strip below the action bar where the page's own scrolling content
+ * showed through, so the bar read as floating over a half-drawn screen rather
+ * than sitting on the edge of it.
+ */
 const Actions = styled.View`
   position: absolute;
   left: 0;
   right: 0;
-  bottom: 86px;
+  bottom: 0;
   flex-direction: row;
   gap: ${(p) => p.theme.space(3)}px;
   padding-horizontal: ${(p) => p.theme.space(4)}px;
-  padding-vertical: ${(p) => p.theme.space(3)}px;
+  padding-top: ${(p) => p.theme.space(3)}px;
+  /* Clear of the home indicator. */
+  padding-bottom: ${(p) => p.theme.space(7)}px;
   background-color: ${(p) => p.theme.colors.bg};
   border-top-width: 1px;
   border-top-color: ${(p) => p.theme.colors.line};

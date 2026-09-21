@@ -71,11 +71,20 @@ export function AreaChart({
   points,
   format,
   bars,
+  emptyLabel,
 }: {
   points: Point[];
   format: (value: number) => string;
   /** Optional per-point magnitude, drawn as the strip beneath. */
   bars?: number[];
+  /**
+   * What an empty series means here.
+   *
+   * The default says "No history yet", which is a claim about the wallet. When
+   * the caller knows the read did not finish, that claim is not available and
+   * it passes the one that is.
+   */
+  emptyLabel?: string;
 }) {
   const [active, setActive] = useState<number | null>(null);
 
@@ -110,7 +119,7 @@ export function AreaChart({
         <Caption>
           {points.length === 1
             ? "One data point so far — a line needs two."
-            : "No history yet."}
+            : (emptyLabel ?? "No history yet.")}
         </Caption>
       </Empty>
     );
