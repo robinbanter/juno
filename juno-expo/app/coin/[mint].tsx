@@ -255,10 +255,21 @@ export default function CoinScreen() {
               detail.data!.activity.slice(0, 12).map((row) => (
                 <Card key={row.id}>
                   <Row gap={10}>
-                    <Identicon seed={row.actor.handle} size={22} />
-                    <Label numberOfLines={1} style={{ width: 84 }}>
-                      {row.actor.handle}
-                    </Label>
+                    {/* Seeded on the wallet, not the handle: the handle is four
+                        characters from each end of it, and two different
+                        wallets that happen to share those would draw the same
+                        mark. It is also what makes the row lead anywhere. */}
+                    <Trader
+                      onPress={() => router.push(`/trader/${row.wallet}` as never)}
+                      hitSlop={8}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Open ${row.actor.handle}`}
+                    >
+                      <Identicon seed={row.wallet} size={22} />
+                      <Label numberOfLines={1} style={{ width: 84 }}>
+                        {row.actor.handle}
+                      </Label>
+                    </Trader>
                     <Side $buy={row.side === "buy"}>{row.side}</Side>
                     <Mono muted style={{ flex: 1, textAlign: "right" }}>
                       {tokens(row.amount)}
@@ -453,6 +464,12 @@ const Nav = styled.View`
 
 const NavGrow = styled.View`
   flex: 1;
+`;
+
+const Trader = styled.Pressable`
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
 `;
 
 const Back = styled.Pressable`

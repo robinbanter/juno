@@ -25,6 +25,7 @@ import {
   Title,
 } from "../../components/kit";
 import { juno, type FeedItem } from "../../lib/api";
+import { useWallet } from "../../lib/wallet";
 import { useFeedRevision } from "../../lib/refresh";
 import { money, since, tokens, useApi } from "../../lib/useApi";
 import { theme } from "../../theme";
@@ -69,13 +70,26 @@ const FILTERS = [
 
 type Filter = (typeof FILTERS)[number]["id"];
 
+type Scope = "everyone" | "following";
+
 export default function SocialScreen() {
   const router = useRouter();
   // Re-reads when this device posts. Not on every focus: the feed walks every
   // pool against a rate-limited RPC and costs the better part of fifteen
   // seconds, which is not a price to pay for switching tabs.
   const revision = useFeedRevision();
-  const feed = useApi(() => juno.feed(40), [revision]);
+  const wallet = useWallet();
+  /*
+   * Who the feed is of, and what kind of thing it shows, are separate
+   * questions — and only the first one changes what the server walks. Scope
+   * is in the fetch's deps; the kind filter never refetches.
+   */
+  const [scope, setScope] = useState<Scope>("everyone");
+  const onlyFollowing = scope === "following" && !!wallet.address;
+  const feed = useApi(
+    () => juno.feed(40, onlyFollowing ? wallet.address! : undefined),
+    [revision, onlyFollowing, wallet.address],
+  );
   const [filter, setFilter] = useState<Filter>("all");
 
   const items = useMemo(() => {
@@ -102,16 +116,26 @@ export default function SocialScreen() {
             <Title>juno</Title>
             <Label muted>Every post is a market</Label>
           </Col>
-          {/* What is actually on screen, counted rather than claimed. Absent
-              while loading, because "0 live" would be a reading nobody took. */}
-          {feed.data ? (
-            <LiveChip>
-              <Dot />
-              <LiveText>
-                {counts.trades} {counts.trades === 1 ? "trade" : "trades"} · {counts.posts}{" "}
-                {counts.posts === 1 ? "post" : "posts"}
-              </LiveText>
-            </LiveChip>
+          {/* Whose feed this is. A wallet is needed to have a following list
+              at all, so before there is one the switch is simply absent
+              rather than present and refusing. */}
+          {wallet.address ? (
+            <Tappable
+              onPress={() => setScope((current) => (current === "everyone" ? "following" : "everyone"))}
+              to={0.94}
+            >
+              <ScopeChip
+                $on={scope === "following"}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  scope === "following" ? "Showing wallets you follow" : "Showing everyone"
+                }
+              >
+                <ScopeText $on={scope === "following"}>
+                  {scope === "following" ? "Following" : "Everyone"}
+                </ScopeText>
+              </ScopeChip>
+            </Tappable>
           ) : null}
         </Row>
 
@@ -122,6 +146,20 @@ export default function SocialScreen() {
         <FilterRow>
           <Segmented items={FILTERS} value={filter} onChange={feed.data ? setFilter : () => {}} />
         </FilterRow>
+
+        {/* What is actually on screen, counted rather than claimed. Absent
+            while loading, because "0 live" would be a reading nobody took. */}
+        {feed.data ? (
+          <LiveText>
+            {counts.trades} {counts.trades === 1 ? "trade" : "trades"} · {counts.posts}{" "}
+            {counts.posts === 1 ? "post" : "posts"}
+            {feed.data.scope === "following" && feed.data.followingCount !== null
+              ? ` · from ${feed.data.followingCount} ${
+                  feed.data.followingCount === 1 ? "wallet" : "wallets"
+                } you follow`
+              : ""}
+          </LiveText>
+        ) : null}
       </Header>
 
       {feed.loading ? (
@@ -174,7 +212,37 @@ export default function SocialScreen() {
           }
         >
           {items.length === 0 ? (
-            filter !== "all" && (feed.data?.items.length ?? 0) > 0 ? (
+            feed.data?.scope === "following" ? (
+              // Two different nothings. Following nobody is a thing to fix by
+              // going and following someone; following people who have been
+              // quiet is a thing to fix by waiting — and the count is the only
+              // way to tell them apart.
+              <Placeholder
+                title={
+                  feed.data.followingCount === 0
+                    ? "You are not following anyone yet"
+                    : "Quiet in here"
+                }
+                detail={
+                  feed.data.followingCount === 0
+                    ? "Open the Traders board, find someone worth watching, and follow them. Their trades and posts land here."
+                    : `Nothing recent from the ${feed.data.followingCount} ${
+                        feed.data.followingCount === 1 ? "wallet" : "wallets"
+                      } you follow.`
+                }
+                action={
+                  <Button
+                    label={feed.data.followingCount === 0 ? "Find traders" : "Show everyone"}
+                    variant="quiet"
+                    onPress={() =>
+                      feed.data!.followingCount === 0
+                        ? router.push("/(tabs)/trade?sort=traders" as never)
+                        : setScope("everyone")
+                    }
+                  />
+                }
+              />
+            ) : filter !== "all" && (feed.data?.items.length ?? 0) > 0 ? (
               // A filter finding nothing is a fact about the filter, not about
               // the cluster, and must not borrow the cluster's error copy.
               <Placeholder
@@ -202,6 +270,7 @@ export default function SocialScreen() {
                   first={index === 0}
                   onOpen={(mint) => router.push(`/coin/${mint}`)}
                   onOpenPost={(postId) => router.push(`/post/${postId}`)}
+                  onOpenTrader={(target) => router.push(`/trader/${target}` as never)}
                 />
               ))}
             </Ledger>
@@ -227,12 +296,14 @@ function FeedRow({
   first,
   onOpen,
   onOpenPost,
+  onOpenTrader,
 }: {
   item: FeedItem;
   /** The first entry carries no rule above it. */
   first: boolean;
   onOpen: (mint: string) => void;
   onOpenPost: (postId: string) => void;
+  onOpenTrader: (wallet: string) => void;
 }) {
   if (item.kind === "trade") {
     const buying = item.side === "buy";
@@ -243,10 +314,22 @@ function FeedRow({
       <Tappable onPress={() => onOpen(item.coin.address)} to={0.985}>
         <Entry $first={first}>
           <Row gap={8}>
-            <Identicon seed={item.actor.handle} size={22} />
-            <Label numberOfLines={1} style={{ fontWeight: "700", maxWidth: 104 }}>
-              {item.actor.handle}
-            </Label>
+            {/* The name is the way to the person; the rest of the row is the
+                way to the coin. Two destinations on one card, and which is
+                which follows from what you touched. The identicon is seeded on
+                the wallet rather than the handle so it matches the trader
+                screen it leads to — a shortened address is not a stable key. */}
+            <Byline
+              onPress={() => onOpenTrader(item.actor.wallet)}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel={`Open ${item.actor.handle}`}
+            >
+              <Identicon seed={item.actor.wallet} size={22} />
+              <Label numberOfLines={1} style={{ fontWeight: "700", maxWidth: 104 }}>
+                {item.actor.handle}
+              </Label>
+            </Byline>
             {/* The verb, in the direction's colour. Colour and word together —
                 neither carries it alone. */}
             <Verb $tone={buying ? theme.colors.pos : theme.colors.neg}>
@@ -305,10 +388,17 @@ function FeedRow({
     <Tappable onPress={() => onOpenPost(item.id)} to={0.985}>
       <Entry $first={first}>
         <Row gap={10}>
-          <Identicon seed={item.author.wallet} size={26} />
-          <Label numberOfLines={1} style={{ fontWeight: "700" }}>
-            {item.author.handle}
-          </Label>
+          <Byline
+            onPress={() => onOpenTrader(item.author.wallet)}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={`Open ${item.author.handle}`}
+          >
+            <Identicon seed={item.author.wallet} size={26} />
+            <Label numberOfLines={1} style={{ fontWeight: "700" }}>
+              {item.author.handle}
+            </Label>
+          </Byline>
           <Grow />
           <Caption>{since(item.timestamp)}</Caption>
         </Row>
@@ -385,21 +475,24 @@ const FilterRow = styled.View`
   align-self: flex-start;
 `;
 
-const LiveChip = styled.View`
+const Byline = styled.Pressable`
   flex-direction: row;
   align-items: center;
-  gap: 6px;
-  padding-horizontal: ${(p) => p.theme.space(3)}px;
-  padding-vertical: 6px;
-  border-radius: ${(p) => p.theme.radius.pill}px;
-  background-color: ${(p) => p.theme.colors.surface};
+  gap: 8px;
 `;
 
-const Dot = styled.View`
-  width: 6px;
-  height: 6px;
-  border-radius: 3px;
-  background-color: ${(p) => p.theme.colors.pos};
+const ScopeChip = styled.View<{ $on: boolean }>`
+  padding-horizontal: ${(p) => p.theme.space(3)}px;
+  padding-vertical: 7px;
+  border-radius: ${(p) => p.theme.radius.pill}px;
+  background-color: ${(p) => (p.$on ? p.theme.colors.ink : p.theme.colors.surface)};
+`;
+
+const ScopeText = styled.Text<{ $on: boolean }>`
+  font-size: ${(p) => p.theme.type.caption.size}px;
+  font-weight: 700;
+  letter-spacing: ${(p) => p.theme.type.caption.tracking}px;
+  color: ${(p) => (p.$on ? p.theme.colors.onInk : p.theme.colors.muted)};
 `;
 
 const LiveText = styled.Text`

@@ -4,7 +4,8 @@ import { identicon } from "@/lib/juno/identicon";
 import { shortAddress } from "@/lib/juno/format";
 import { listPosts, replyCounts } from "@/lib/juno/posts";
 import { listPools } from "@/lib/juno/registry";
-import { junoHandler, junoJson, junoOptions } from "@/lib/juno/api";
+import { junoError, junoHandler, junoJson, junoOptions } from "@/lib/juno/api";
+import { following } from "@/lib/juno/social-graph";
 import { cluster } from "@/lib/juno/cluster";
 
 export const dynamic = "force-dynamic";
@@ -35,7 +36,7 @@ type FeedItem =
       priceNow: number | null;
       currency: string;
       signature?: string;
-      actor: { handle: string; avatarUrl: string };
+      actor: { wallet: string; handle: string; avatarUrl: string };
       coin: {
         address: string;
         name: string;
@@ -71,6 +72,26 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const limit = Math.min(Number(url.searchParams.get("limit") ?? 40) || 40, 80);
 
+    /*
+     * `?following=<wallet>` narrows the feed to wallets that one follows.
+     *
+     * Filtered here rather than on the client for one reason that matters:
+     * the client would have to ask for enough rows to be sure the filter had
+     * something to work with, and "enough" is unknowable — a wallet following
+     * three people might need the whole cluster walked to find one of their
+     * trades. The walk is the same either way; only what comes back differs.
+     *
+     * A wallet that follows nobody gets an empty feed and a flag saying so,
+     * which is a different screen from "nobody has traded".
+     */
+    const viewer = url.searchParams.get("following");
+    let allowed: Set<string> | null = null;
+    if (viewer !== null) {
+      if (!viewer) return junoError("`following` needs a wallet");
+      const list = await following(viewer);
+      allowed = new Set(list);
+    }
+
     const pools = await listPools(POOLS_SCANNED);
     const byMint = new Map(pools.map((row) => [row.baseMint, row]));
 
@@ -94,6 +115,7 @@ export async function GET(request: Request) {
     const items: FeedItem[] = [];
 
     for (const trade of trades) {
+      if (allowed && !allowed.has(trade.wallet)) continue;
       const row = byMint.get(trade.coinAddress);
       items.push({
         kind: "trade",
@@ -107,7 +129,7 @@ export async function GET(request: Request) {
         priceNow: live.get(trade.coinAddress)?.price ?? null,
         currency: live.get(trade.coinAddress)?.currency ?? "USD",
         signature: trade.signature,
-        actor: trade.actor,
+        actor: { wallet: trade.wallet, ...trade.actor },
         coin: {
           address: trade.coinAddress,
           name: trade.coinName,
@@ -127,6 +149,7 @@ export async function GET(request: Request) {
     );
 
     for (const post of posts) {
+      if (allowed && !allowed.has(post.authorWallet)) continue;
       const row = post.baseMint ? byMint.get(post.baseMint) : undefined;
       items.push({
         kind: "post",
@@ -152,6 +175,14 @@ export async function GET(request: Request) {
     return junoJson({
       cluster: cluster(),
       items: items.slice(0, limit),
+      /*
+       * Whether this is the following-only feed, and how many wallets it
+       * covers. The client needs both: an empty following feed reads
+       * differently when you follow nobody than when the people you follow
+       * have simply been quiet, and only the count distinguishes them.
+       */
+      scope: allowed ? ("following" as const) : ("everyone" as const),
+      followingCount: allowed ? allowed.size : null,
       /*
        * The trade half of this feed is not everything that traded.
        *

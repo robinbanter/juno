@@ -223,6 +223,16 @@ export type Activity = {
   id: string;
   side: TradeSide;
   actor: Pick<Creator, "handle" | "avatarUrl">;
+  /**
+   * Who signed it.
+   *
+   * The handle beside a trade is a shortened address and the avatar is derived
+   * from it, so the wallet was always *in* the row — but only as four
+   * characters at each end, which is enough to look at and not enough to link
+   * to or filter on. A social feed that cannot say whose trade this is cannot
+   * have a following filter, and tapping a row had nowhere to go.
+   */
+  wallet: string;
   /** Coin amount, in UI units. */
   amount: number;
   /** Quote value of the trade, in USD. */

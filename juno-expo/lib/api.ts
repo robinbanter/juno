@@ -171,6 +171,8 @@ export type Activity = {
   id: string;
   side: "buy" | "sell";
   actor: { handle: string; avatarUrl: string };
+  /** Who signed it. The handle is a shortened form of this, not a key. */
+  wallet: string;
   amount: number;
   valueUsd: number;
   timestamp: string;
@@ -197,7 +199,7 @@ export type FeedItem =
       priceNow: number | null;
       currency: string;
       signature?: string;
-      actor: { handle: string; avatarUrl: string };
+      actor: { wallet: string; handle: string; avatarUrl: string };
       coin: {
         address: string;
         name: string;
@@ -432,13 +434,24 @@ export const juno = {
   setPlanActive: (id: string, active: boolean) =>
     api.patch<{ id: string; active: boolean }>("/api/juno/plans", { id, active }),
 
-  feed: (limit = 40) =>
+  /**
+   * The feed, optionally narrowed to wallets `following` follows.
+   *
+   * Filtered server-side: a client cannot know how many rows to ask for to be
+   * sure the filter has something to work with.
+   */
+  feed: (limit = 40, following?: string) =>
     api.get<{
       cluster: string;
       items: FeedItem[];
       /** The trade half was walked against a refusing endpoint — not the whole cluster. */
       tradesPartial: boolean;
-    }>(`/api/juno/feed?limit=${limit}`),
+      scope: "everyone" | "following";
+      /** How many wallets the following feed covers. Null on the everyone feed. */
+      followingCount: number | null;
+    }>(
+      `/api/juno/feed?limit=${limit}${following ? `&following=${following}` : ""}`,
+    ),
 
   coins: (sort?: "marketCap" | "graduating") =>
     api.get<{

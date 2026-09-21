@@ -35,6 +35,7 @@ export function activityFromSwap(swap: PoolSwap, quoteUsdRate: number): Activity
     id: swap.signature,
     side: swap.side,
     actor: actorFor(swap.trader),
+    wallet: swap.trader,
     amount: swap.baseAmount,
     valueUsd: swap.quoteAmount * quoteUsdRate,
     timestamp: swap.timestamp,
