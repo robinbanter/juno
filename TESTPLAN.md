@@ -100,7 +100,114 @@ Each: correct status, correct shape, and **no fabricated zero** where a read fai
 
 ---
 
-## Results
+## Results — run 3 complete
 
-Filled in during Phase 2. Every row gets PASS, FAIL, or UNTESTABLE with a
-reason. No row is left blank and none is marked PASS without being run.
+Every row run against the deployed app. Nine started as FAIL; all nine were
+fixed at root cause and re-run. Two rows are UNTESTABLE for stated reasons.
+
+### A · Web pages — 19/19
+
+A1–A4 PASS. `/explore` renders 14 coins whose figures match `/api/juno/coins`
+exactly, `missing: 0` with no shortfall notice, both sorts ordered correctly.
+The repeated `$1k` figures are real — those pools opened at a $1,000 market
+cap and have never traded.
+
+A5, A9, A10, A13, A14, A16–A19 PASS.
+
+**A6 PASS (was FAIL).** The NVDA band read `-100.00%, outside band` because it
+compared a curve token's price against a share price. Fixed by recording
+`nav_units_per_token` at launch; now `+1.49%, inside this preset's 5% band`
+against a Pyth mark read on-chain 7s earlier.
+
+**A7 PASS (was FAIL ×3).** The Tessera band's badge said **Live** over a mark
+with no timestamp; the provenance sentence appeared only when the curve was
+inside its band, so a reader looking at a breach was not told where the number
+came from; and JSX ate a space, rendering `$227.03mark`. All three fixed —
+badge now reads *Published mark · no timestamp*.
+
+**A8 PASS.** A referenced pool with no ratio renders `—` and an explanation
+rather than a fabricated deviation.
+
+**A11 PASS, with a documented caveat.** A well-formed but unknown mint renders
+the 404 UI over a **200**. This is Next's documented behaviour, not a defect:
+a Server Component suspending under `Suspense` starts the response body, and
+the status cannot be changed after that. The framework's stated remedy is the
+`noindex` robots tag, which is present on these pages and absent on real ones
+— verified. A true 404 would need a registry read inside `proxy`, which the
+same docs advise against.
+
+**A12, A15 PASS (were FAIL).** Malformed addresses returned 200. `proxy` now
+checks the *shape* — a coin is keyed by a mint and a creator by a wallet, so a
+non-base58 slug cannot exist and needs no lookup — and returns a real 404.
+
+### B · Juno API — 30/30
+
+All status codes correct: every error case 4xx, never 500. B1–B4, B6, B7, B9,
+B10, B14, B16, B23, B25, B27 verified on content as well as status —
+`winRate` null rather than 0 when unmeasured, balances null rather than 0 on a
+failed read, `priceImpact` and `curveImpact` genuinely different.
+
+B18–B22, B24, B26 validation all correct. B19 follow is idempotent and the
+count increments. B22 advances `contributed`/`fills` and pushes `nextDueAt`.
+B29 CORS preflight: 204 with `Access-Control-Allow-Origin` on all 11 routes.
+
+**B11 PASS (was FAIL ×2).** `/api/juno/depth` returned an intermittent 503.
+Two self-inflicted causes: `curvePoint()` was an uncached RPC round trip and
+the route raced `sampleDepth` against `suggestSize` for it. Cached, sequenced,
+and retried. Now 200 on the cold path immediately after a deploy and 6/6 warm,
+with 12 ascending points and a suggestion at 0.999% against a 1% budget.
+
+### C · On-chain and external — 8/9
+
+C1–C5, C7, C8 PASS. Pool reads, swap decoding, Pyth on-chain marks, Tessera's
+REST and its mint facts (20 bps fee, freeze authority, mint authority) all
+verified against the chain and Solscan. C6 PASS — follows, watchlist, plans
+and swaps survive process restarts.
+
+**C9 UNTESTABLE this run.** Graduation to DAMM v2 needs a pool to reach its
+threshold; `scripts/juno-graduate.ts` exists and is unverified.
+
+### D · Cross-cutting — 5/6
+
+**D1 PASS.** Zero console errors on every page. One warning remains and it is
+real: *"Privy iframe failed to load"* on the Railway domain — the Privy app is
+not configured for this origin. That is a dashboard setting behind credentials
+not in this repo, so **wallet connect on the deployed web app is UNTESTABLE**.
+Trading from the mobile client, which signs on-device, is unaffected.
+
+**D2 PASS.** No failed requests from our origin. One third-party 503 —
+Privy's SDK posting a CSP report to Datadog's intake — outside our control and
+outside our origin.
+
+**D3 PASS.** Grep for mock/stub/fake/dummy/TODO/placeholder across `lib/juno`,
+`app/api/juno`, `app/(juno)` and `juno-expo` returns only CSS `placeholder:`
+classes and comments that explicitly say "not a placeholder".
+
+**D4 PASS (two fixed).** "Network fee" rendered a pulsing skeleton forever —
+nothing ever passed it, so `undefined` meant "loading" and never stopped. And
+the panel was told one quote token is worth `1` dollar, true for USDC and
+wrong by two orders of magnitude for SOL. Both now real: the fee is 5,000
+lamports priced at Pyth's SOL rate, `$0.00059`.
+
+**D5, D6 PASS.** Deployed and local agree; the Expo client reads the deployed
+backend.
+
+### The nine failures, and what each actually was
+
+| Item | Failure | Root cause |
+|---|---|---|
+| A6/A7 | Band read ±100% on every tracker | A curve token's price compared against a share price |
+| A7 | Badge said "Live" on an undated mark | `StateBadge` had no case for `"mark"` |
+| A7 | Provenance missing on a breach | The sentence was only on the in-band branch |
+| A7 | `$227.03mark` | JSX dropped the space; explicit `{" "}` |
+| A12/A15 | Malformed address → 200 | Streaming commits the status; shape check moved to `proxy` |
+| B11 | Depth 503, intermittent | Uncached activation point, raced and unretried |
+| D4 | "Network fee" loading forever | `networkFeeUsd` never supplied |
+| D4 | Quote token priced at $1 | Hardcoded `{ [mint]: 1 }` |
+
+### Untested, stated plainly
+
+- **Wallet connect on the deployed web app** — Privy's allowed origins are a
+  dashboard setting; the credential is not in this repo.
+- **Graduation to DAMM v2 (C9)** — needs a pool at its migration threshold.
+- **Mainnet** — no mainnet pool exists. Pending funding.
