@@ -48,8 +48,45 @@ const PUBLIC_API = [
 
 const matches = (list: RegExp[], path: string) => list.some((re) => re.test(path));
 
+/**
+ * Routes whose slug must be a Solana address, and the shape one has.
+ *
+ * A coin is keyed by its mint and a creator by their wallet, so anything that
+ * is not base58 in the right length cannot exist — no lookup required to know
+ * it.
+ */
+const ADDRESS_ROUTES = [/^\/coin\/([^/]+)/, /^\/creator\/([^/]+)/];
+const BASE58 = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+
+/**
+ * Give a malformed address a real 404 status.
+ *
+ * Next streams every one of these routes — a Server Component suspending
+ * under `Suspense` starts the response body — and once the body is streaming
+ * the status is already sent, so a `notFound()` in the page renders the right
+ * UI over a 200. That is Next's documented behaviour, and it handles crawlers
+ * by injecting `<meta name="robots" content="noindex">`; the docs name the
+ * proxy as the place to run the check if a real status is wanted.
+ *
+ * Only the *shape* is checked here, deliberately. The same docs say to keep
+ * proxy checks fast and not to fetch content in them, so a well-formed address
+ * that simply is not in the registry still resolves to the streamed soft 404 —
+ * that one needs a database read, and the page is the right place for it.
+ */
+function malformedAddress(pathname: string): boolean {
+  for (const route of ADDRESS_ROUTES) {
+    const slug = route.exec(pathname)?.[1];
+    if (slug !== undefined) return !BASE58.test(decodeURIComponent(slug));
+  }
+  return false;
+}
+
 export default async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
+
+  if (malformedAddress(pathname)) {
+    return NextResponse.rewrite(new URL("/not-found", req.url), { status: 404 });
+  }
 
   if (matches(PUBLIC_API, pathname)) return NextResponse.next();
   if (!matches(PROTECTED, pathname)) return NextResponse.next();
