@@ -2,6 +2,7 @@ import { hydratePools } from "@/lib/juno/chain";
 import { listPools } from "@/lib/juno/registry";
 import { junoHandler, junoJson, junoOptions } from "@/lib/juno/api";
 import { cluster } from "@/lib/juno/cluster";
+import type { Coin } from "@/lib/juno/types";
 
 export const dynamic = "force-dynamic";
 export const OPTIONS = junoOptions;
@@ -19,7 +20,7 @@ export async function GET(request: Request) {
     const limit = Math.min(Number(url.searchParams.get("limit") ?? 40) || 40, 60);
     const sort = url.searchParams.get("sort");
 
-    const coins = await hydratePools(await listPools(limit));
+    const { coins, missing } = await hydratePools(await listPools(limit));
 
     if (sort === "marketCap") {
       coins.sort((a, b) => b.marketCap - a.marketCap);
@@ -34,11 +35,22 @@ export async function GET(request: Request) {
        * started correctly reporting 100% progress, at which point the API
        * started leading with pools that had already finished.
        */
-      const rank = (coin: (typeof coins)[number]) =>
+      const rank = (coin: Coin) =>
         coin.curve.graduated ? -1 : coin.curve.progress;
       coins.sort((a, b) => rank(b) - rank(a));
     }
 
-    return junoJson({ cluster: cluster(), coins });
+    return junoJson({
+      cluster: cluster(),
+      coins,
+      /*
+       * Registry rows this read could not resolve.
+       *
+       * Without it the list presents itself as the whole market while it is
+       * quietly two coins short, which is what a throttled endpoint produces
+       * most of the time. The client shows the number; it does not guess.
+       */
+      missing,
+    });
   });
 }

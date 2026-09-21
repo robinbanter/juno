@@ -5,6 +5,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import styled from "styled-components/native";
 
 import {
+  Body,
   Caption,
   Card,
   Col,
@@ -82,8 +83,28 @@ export default function TradeScreen() {
               tintColor={theme.colors.muted}
             />
           }
+          ListHeaderComponent={
+            // Eleven pools in and nine rows out is a market list two coins
+            // short of itself. It says so rather than looking complete.
+            (coins.data?.missing ?? 0) > 0 && (coins.data?.coins.length ?? 0) > 0 ? (
+              <Card>
+                <Body muted>
+                  {coins.data!.missing} more{" "}
+                  {coins.data!.missing === 1 ? "coin is" : "coins are"} listed but
+                  could not be priced — the RPC is rate-limiting. Pull to retry.
+                </Body>
+              </Card>
+            ) : null
+          }
           ListEmptyComponent={
-            <Placeholder title="No coins yet" detail="Launch one from the Post tab." />
+            (coins.data?.missing ?? 0) > 0 ? (
+              <Placeholder
+                title="Could not read the market"
+                detail={`${coins.data!.missing} pools are listed on this cluster but none would load. The RPC is rate-limiting — pull to retry.`}
+              />
+            ) : (
+              <Placeholder title="No coins yet" detail="Launch one from the Post tab." />
+            )
           }
           renderItem={({ item }) => (
             <CoinRow coin={item} onPress={() => router.push(`/coin/${item.address}`)} />

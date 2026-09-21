@@ -318,7 +318,20 @@ export async function poolActivityRead(
 }
 
 /** The merged feed moves only when someone trades. */
-const feedCache = ttlCache<Array<Activity & { coinName: string; coinAddress: string }>>(60_000);
+type FeedItem = Activity & { coinName: string; coinAddress: string };
+type Feed = {
+  items: FeedItem[];
+  /**
+   * The walk did not see every trade on the cluster.
+   *
+   * True when a pool's history was refused or cut short, or when the item cap
+   * stopped the walk before the registry ran out. The page above says "every
+   * trade against a Juno pool"; with this flag set, it is not entitled to.
+   */
+  partial: boolean;
+};
+
+const feedCache = ttlCache<Feed>(60_000);
 
 /**
  * The global trade feed: recent trades across every pool, newest first.
@@ -350,31 +363,41 @@ export async function globalActivity(
    * newest-first, which is also most-likely-to-have-traded-first.
    */
   enough = 40,
-): Promise<Array<Activity & { coinName: string; coinAddress: string }>> {
+): Promise<Feed> {
   const key = rows.map((row) => row.baseMint).join(",");
 
   return feedCache.get(
     key,
     async () => {
-    const out: Array<Activity & { coinName: string; coinAddress: string }> = [];
+    const out: FeedItem[] = [];
     let cursor = 0;
+    let partial = false;
 
     async function worker() {
       while (cursor < rows.length && out.length < enough) {
         const row = rows[cursor++];
-        const rowsForPool = await poolActivity(row, perPool).catch(() => []);
-        for (const entry of rowsForPool) {
+        // Both halves count as incomplete: a read that threw, and a read that
+        // came back short. Either one means a trade may exist that this feed
+        // is not showing.
+        const read = await poolActivityRead(row, perPool).catch(() => null);
+        if (read === null || read.partial) partial = true;
+        for (const entry of read?.items ?? []) {
           out.push({ ...entry, coinName: row.name, coinAddress: row.baseMint });
         }
       }
     }
 
     await Promise.all(Array.from({ length: Math.min(width, rows.length) }, worker));
-    return out.sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp));
+    // Stopping at the cap also leaves pools unwalked.
+    if (cursor < rows.length) partial = true;
+    return {
+      items: out.sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp)),
+      partial,
+    };
   },
     // An empty feed is almost always a throttled read rather than a quiet
     // market, so it is trusted for seconds instead of a minute.
-    (items) => (items.length > 0 ? 60_000 : 8_000),
+    (feed) => (feed.items.length > 0 ? 60_000 : 8_000),
   );
 }
 
@@ -384,8 +407,16 @@ export async function globalActivity(
  * Bounded concurrency rather than `Promise.all`: firing every pool read
  * simultaneously is the burst the public devnet RPC answers with 429s, and a
  * grid of four pools does not need to be four times as rude as one.
+ *
+ * `missing` is how many rows the registry had and this read could not resolve.
+ * It is returned rather than swallowed because a list that quietly shrinks from
+ * eleven to nine presents itself as the whole market: the caller has to be able
+ * to say "two could not be read", and it cannot say that from a shorter array.
  */
-export async function hydratePools(rows: JunoPoolRow[], width = 2): Promise<Coin[]> {
+export async function hydratePools(
+  rows: JunoPoolRow[],
+  width = 2,
+): Promise<{ coins: Coin[]; missing: number }> {
   const out: Array<Coin | null> = new Array(rows.length).fill(null);
   let cursor = 0;
 
@@ -397,5 +428,6 @@ export async function hydratePools(rows: JunoPoolRow[], width = 2): Promise<Coin
   }
 
   await Promise.all(Array.from({ length: Math.min(width, rows.length) }, worker));
-  return out.filter((coin): coin is Coin => coin !== null);
+  const coins = out.filter((coin): coin is Coin => coin !== null);
+  return { coins, missing: rows.length - coins.length };
 }

@@ -19,16 +19,28 @@ const POOLS_SCANNED = 12;
 
 export default async function ActivityPage() {
   const pools = await listPools(POOLS_SCANNED);
-  const feed = await globalActivity(pools, 10);
+  const { items, partial } = await globalActivity(pools, 10);
 
   return (
     <div className="mx-auto w-full max-w-[600px] px-4 pt-4 lg:px-8">
       <h1 className="mb-1 text-[24px] font-bold tracking-tight">Activity</h1>
+      {/* The standfirst used to promise "every trade". It walks pools against
+          an endpoint that refuses, so on a throttled read it was promising
+          something it had not done. It now says which it did. */}
       <p className="mb-4 text-[14px] text-j-muted">
-        Every trade against a Juno pool on {cluster()}, newest first — decoded
-        from each pool&rsquo;s own vault movements.
+        {partial
+          ? `Trades against Juno pools on ${cluster()}, newest first — decoded from each pool's own vault movements. Some pools would not load just now, so this is not the whole cluster.`
+          : `Every trade against a Juno pool on ${cluster()}, newest first — decoded from each pool's own vault movements.`}
       </p>
-      <ActivityList items={feed} showCoin empty="Nothing has traded yet." />
+      <ActivityList
+        items={items}
+        showCoin
+        empty={
+          partial
+            ? "No trades could be read — the RPC is rate-limiting. Reload to try again."
+            : "Nothing has traded yet."
+        }
+      />
     </div>
   );
 }

@@ -31,7 +31,7 @@ export default async function CreatorPage({
   if (!BASE58.test(handle)) notFound();
 
   const rows = await listPoolsByCreator(handle);
-  const coins = await hydratePools(rows);
+  const { coins, missing } = await hydratePools(rows);
 
   /*
    * This creator has launches on record that could not be priced.
@@ -69,7 +69,12 @@ export default async function CreatorPage({
 
   return (
     <div className="mx-auto w-full max-w-[600px] px-0 pt-4 sm:px-4">
-      <ProfileView creator={creator} coins={coins} unreadable={unreadable} />
+      <ProfileView
+        creator={creator}
+        coins={coins}
+        unreadable={unreadable}
+        missing={missing}
+      />
     </div>
   );
 }

@@ -76,11 +76,30 @@ export default function SocialScreen() {
               tintColor={theme.colors.muted}
             />
           }
+          ListFooterComponent={
+            // Posts are complete; trades are walked against an endpoint that
+            // refuses. Saying so is cheaper than a feed that looks quiet.
+            feed.data?.tradesPartial && (feed.data?.items.length ?? 0) > 0 ? (
+              <Card>
+                <Body muted>
+                  Some pools would not load, so the trades above are not every
+                  trade on this cluster. Pull to retry.
+                </Body>
+              </Card>
+            ) : null
+          }
           ListEmptyComponent={
-            <Placeholder
-              title="Nothing here yet"
-              detail="Trades and posts appear as they happen."
-            />
+            feed.data?.tradesPartial ? (
+              <Placeholder
+                title="Could not read the cluster"
+                detail="The RPC is rate-limiting, so neither trades nor posts could be listed. Pull to retry."
+              />
+            ) : (
+              <Placeholder
+                title="Nothing here yet"
+                detail="Trades and posts appear as they happen."
+              />
+            )
           }
           renderItem={({ item }) => (
             <FeedRow

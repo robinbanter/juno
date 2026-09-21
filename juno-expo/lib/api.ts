@@ -271,10 +271,21 @@ export type LaunchBuild = {
 /* ------------------------------------------------------------------ */
 
 export const juno = {
-  feed: (limit = 40) => api.get<{ cluster: string; items: FeedItem[] }>(`/api/juno/feed?limit=${limit}`),
+  feed: (limit = 40) =>
+    api.get<{
+      cluster: string;
+      items: FeedItem[];
+      /** The trade half was walked against a refusing endpoint — not the whole cluster. */
+      tradesPartial: boolean;
+    }>(`/api/juno/feed?limit=${limit}`),
 
   coins: (sort?: "marketCap" | "graduating") =>
-    api.get<{ cluster: string; coins: Coin[] }>(
+    api.get<{
+      cluster: string;
+      coins: Coin[];
+      /** Registry rows the server could not price — the list is short by this many. */
+      missing: number;
+    }>(
       `/api/juno/coins?limit=40${sort ? `&sort=${sort}` : ""}`,
     ),
 

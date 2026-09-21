@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 
 export default async function ReelsPage() {
   const rows = await listPools();
-  const coins = await hydratePools(rows);
+  const { coins, missing } = await hydratePools(rows);
   const reels = coins.filter((coin) => coin.format === "reel");
 
   // Rows in the registry with nothing hydrated means the reads failed, not
@@ -44,6 +44,20 @@ export default async function ReelsPage() {
           There are pools on {cluster()}, but the RPC would not serve them just
           now. Juno runs on the public endpoint, which rate-limits. Try again in
           a moment.
+        </p>
+      </div>
+    );
+  }
+
+  // "No reels yet" is only true when every pool was read and none was a reel.
+  // With rows still unresolved the honest answer is that we do not know.
+  if (reels.length === 0 && missing > 0) {
+    return (
+      <div className="flex h-[calc(100dvh-8rem)] flex-col items-center justify-center px-6 text-center">
+        <p className="text-[15px] font-semibold">Could not read every pool</p>
+        <p className="mt-1 max-w-[320px] text-[14px] text-j-muted">
+          {missing} of {rows.length} pools on {cluster()} would not load, so
+          whether any of them is a reel is unknown. Try again in a moment.
         </p>
       </div>
     );

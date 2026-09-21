@@ -67,10 +67,11 @@ export async function GET(request: Request) {
     const pools = await listPools(POOLS_SCANNED);
     const byMint = new Map(pools.map((row) => [row.baseMint, row]));
 
-    const [trades, posts] = await Promise.all([
+    const [feed, posts] = await Promise.all([
       globalActivity(pools, 8, 2, limit),
       listPosts({ limit }),
     ]);
+    const trades = feed.items;
 
     // One hydration per coin that appears, not per row: a feed shows the same
     // coin several times and each hydration is a pool read.
@@ -137,6 +138,18 @@ export async function GET(request: Request) {
 
     items.sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp));
 
-    return junoJson({ cluster: cluster(), items: items.slice(0, limit) });
+    return junoJson({
+      cluster: cluster(),
+      items: items.slice(0, limit),
+      /*
+       * The trade half of this feed is not everything that traded.
+       *
+       * Posts come from Postgres and are always complete; trades are walked
+       * per pool against an endpoint that refuses. Without this flag a client
+       * cannot tell a quiet cluster from a throttled one, and both of Juno's
+       * clients were rendering the second as the first.
+       */
+      tradesPartial: feed.partial,
+    });
   });
 }

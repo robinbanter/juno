@@ -24,13 +24,19 @@ export default async function ExplorePage({
   const query = q?.trim().toLowerCase() ?? "";
 
   const rows = await listPools();
-  let coins: Coin[] = await hydratePools(rows);
+  const read = await hydratePools(rows);
+  let coins: Coin[] = read.coins;
 
   // The registry holding rows while nothing hydrates means the reads failed,
   // not that the market is empty. Those are different claims and only one of
   // them is ours to make — on a public RPC a burst of 429s produces exactly
   // this, and "no coins yet" would be a confident lie about a busy cluster.
   const unreadable = rows.length > 0 && coins.length === 0;
+
+  // The same lie, one size smaller: eleven rows in and nine tiles out is a
+  // grid that presents itself as the whole market while two coins are simply
+  // absent. The count is stated rather than quietly dropped.
+  const missing = read.missing;
 
   if (query) {
     coins = coins.filter(
@@ -76,6 +82,14 @@ export default async function ExplorePage({
           </nav>
         )}
       </div>
+
+      {missing > 0 && coins.length > 0 && (
+        <p className="mb-3 rounded-j border border-j-line bg-j-surface px-3 py-2 text-[12px] text-j-muted">
+          {missing} more {missing === 1 ? "coin is" : "coins are"} listed on this
+          cluster but could not be priced — the RPC is rate-limiting. Reload to
+          try again.
+        </p>
+      )}
 
       {coins.length === 0 ? (
         <EmptyState query={q} unreadable={unreadable} />
@@ -177,6 +191,11 @@ function CoinTile({ coin }: { coin: Coin }) {
       <div className="mt-2 flex items-center gap-1.5">
         <Avatar src={coin.creator.avatarUrl} alt={coin.creator.handle} size={18} />
         <span className="truncate text-[13px] font-medium">{coin.name}</span>
+        {/* The ticker is how anyone actually refers to a coin, and a market
+            grid without it makes the reader open a tile to find out. */}
+        <span className="shrink-0 text-[11px] font-semibold tracking-wide text-j-faint tabular-nums">
+          ${coin.symbol}
+        </span>
       </div>
       <div className="mt-0.5 flex items-center gap-2 text-[12px]">
         <Delta value={coin.marketCap} direction={coin.marketCapChangePct} currency={coin.marketCapCurrency} />
