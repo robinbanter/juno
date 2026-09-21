@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Linking, Modal } from "react-native";
+import { Linking, Modal, TextInput } from "react-native";
+import Svg, { Circle, Path } from "react-native-svg";
 import styled from "styled-components/native";
 
-import { Button, Caption, Col, ExternalGlyph, Label, Pill, Row } from "./kit";
+import { Tappable } from "./Press";
+import { Button, Caption, Col, ExternalGlyph, Label, Row } from "./kit";
 import { juno, type Coin } from "../lib/api";
 import { money, tokens } from "../lib/useApi";
 import { useWallet } from "../lib/wallet";
@@ -27,6 +29,17 @@ import { theme } from "../theme";
  *
  * Debounced, because a quote is an RPC round trip and typing "125" should not
  * cost three of them.
+ *
+ * ## Saying so afterwards
+ *
+ * Juno is a social app and a trade was the one thing you could not talk about:
+ * the comment box here attaches your words to the fill, with the side and the
+ * signature on the row. That is what makes it an announcement rather than a
+ * boast — anyone reading it can check it on an explorer.
+ *
+ * Posted only after the signature lands, and a failure to post says so without
+ * pretending the trade failed. The two are different events and only one of
+ * them moved money.
  */
 
 /**
@@ -37,20 +50,25 @@ import { theme } from "../theme";
  */
 const STALE_QUOTE_MS = 30_000;
 
-const QUICK_BUY = [0.1, 0.25, 0.5, 1];
+/** Dollar sizes, converted at the quote token's rate. */
+const QUICK_USD = [2, 20, 50, 100];
+/** What a buy offers when no USD feed answered, in quote units. */
+const QUICK_QUOTE = [0.1, 0.25, 0.5, 1];
+/** A sell is a fraction of what you hold; absolute sizes mean nothing there. */
 const QUICK_SELL = [0.25, 0.5, 0.75, 1];
 
 type Stage = "entry" | "confirming" | "done";
 
 export function TradeSheet({
   coin,
-  side,
+  side: initialSide,
   onClose,
   onDone,
   holding = null,
   quoteBalance = null,
   initialAmount = "",
   onFilled,
+  onCommented,
 }: {
   coin: Coin;
   side: "buy" | "sell";
@@ -76,14 +94,19 @@ export function TradeSheet({
    * transaction that never made it into a block.
    */
   onFilled?: (quoteAmount: number) => void;
+  /** An announcement was posted alongside the fill. */
+  onCommented?: () => void;
 }) {
   const wallet = useWallet();
+  const [side, setSide] = useState<"buy" | "sell">(initialSide);
   const [amount, setAmount] = useState(initialAmount);
   const [quote, setQuote] = useState<Awaited<ReturnType<typeof juno.buildSwap>> | null>(null);
   const [quoting, setQuoting] = useState(false);
   const [stage, setStage] = useState<Stage>("entry");
   const [error, setError] = useState<string | null>(null);
   const [signature, setSignature] = useState<string | null>(null);
+  const [note, setNote] = useState("");
+  const [noteError, setNoteError] = useState<string | null>(null);
   /**
    * When the quote on screen was built.
    *
@@ -98,6 +121,7 @@ export function TradeSheet({
   const value = Number(amount || "0");
   const valid = Number.isFinite(value) && value > 0;
   const unit = side === "buy" ? coin.quote.symbol : coin.symbol;
+  const rate = coin.quoteUsdRate;
 
   /**
    * What the wallet can actually spend on this side.
@@ -113,10 +137,10 @@ export function TradeSheet({
 
   const usdEquivalent = useMemo(() => {
     if (!valid) return null;
-    const rate = quote?.quoteUsdRate ?? null;
-    if (side === "buy") return rate === null ? null : money(value * rate, "USD", { compact: false });
+    const live = quote?.quoteUsdRate ?? rate;
+    if (side === "buy") return live === null ? null : money(value * live, "USD", { compact: false });
     return coin.priceUsd > 0 ? money(value * coin.priceUsd, coin.marketCapCurrency, { compact: false }) : null;
-  }, [valid, value, side, quote?.quoteUsdRate, coin.priceUsd, coin.marketCapCurrency]);
+  }, [valid, value, side, quote?.quoteUsdRate, rate, coin.priceUsd, coin.marketCapCurrency]);
 
   useEffect(() => {
     if (!valid || !wallet.address) {
@@ -156,6 +180,7 @@ export function TradeSheet({
   }, [amount, valid, value, side, coin.address, wallet.address]);
 
   const press = useCallback((key: string) => {
+    setError(null);
     setSignature(null);
     setAmount((current) => {
       if (key === "back") return current.slice(0, -1);
@@ -206,6 +231,30 @@ export function TradeSheet({
       setSignature(landed);
       setStage("done");
       onFilled?.(value);
+
+      // The announcement, if one was written. Its failure is reported on its
+      // own line: the trade is already on chain and saying "the trade failed"
+      // here would be false.
+      const body = note.trim();
+      if (body) {
+        try {
+          await juno.addComment({
+            coin: coin.address,
+            wallet: address,
+            body,
+            side,
+            signature: landed,
+          });
+          setNote("");
+          onCommented?.();
+        } catch (caught) {
+          setNoteError(
+            caught instanceof Error
+              ? `The trade landed; your note did not post: ${caught.message}`
+              : "The trade landed; your note did not post.",
+          );
+        }
+      }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "The trade failed");
       setStage("entry");
@@ -219,6 +268,32 @@ export function TradeSheet({
       : money(quote.quote.amountOut, coin.quote.symbol, { compact: false });
   }, [quote, side, coin.symbol, coin.quote.symbol]);
 
+  /**
+   * The quick sizes, in whatever unit the trade is actually denominated in.
+   *
+   * Dollars when a feed gives a rate to convert them at, because "$20" is the
+   * size someone has in mind and "0.175 SOL" is the same thought after
+   * arithmetic they should not have to do. Without a rate the dollar labels
+   * would be a guess, so the presets fall back to quote units and say so by
+   * showing the symbol.
+   */
+  const quickSizes = useMemo(() => {
+    if (side === "sell") {
+      return QUICK_SELL.map((fraction) => ({
+        label: `${fraction * 100}%`,
+        // Null when the balance is unknown: a percentage of an unknown number
+        // is not a number, and the pill is disabled rather than guessing.
+        amount: balance === null ? null : balance * fraction,
+      }));
+    }
+    if (rate === null || rate <= 0) {
+      return QUICK_QUOTE.map((size) => ({ label: `${size} ${coin.quote.symbol}`, amount: size }));
+    }
+    return QUICK_USD.map((dollars) => ({ label: `$${dollars}`, amount: dollars / rate }));
+  }, [side, balance, rate, coin.quote.symbol]);
+
+  const done = stage === "done" && signature !== null;
+
   return (
     <Modal visible animationType="slide" transparent onRequestClose={onClose}>
       <Scrim onPress={onClose} />
@@ -226,29 +301,44 @@ export function TradeSheet({
       <Sheet>
         <Grabber />
 
-        <Row justify="space-between">
-          <Row gap={16}>
-            <HeadTab $on={side === "buy"}>Buy</HeadTab>
-            <HeadTab $on={side === "sell"}>Sell</HeadTab>
+        <Row justify="space-between" align="center">
+          <Row gap={8}>
+            <SideTap
+              $on={side === "buy"}
+              $buy
+              onPress={() => setSide("buy")}
+              accessibilityRole="button"
+              accessibilityState={{ selected: side === "buy" }}
+            >
+              <SideText $on={side === "buy"} $buy>
+                Buy
+              </SideText>
+            </SideTap>
+            <SideTap
+              $on={side === "sell"}
+              $buy={false}
+              onPress={() => setSide("sell")}
+              accessibilityRole="button"
+              accessibilityState={{ selected: side === "sell" }}
+            >
+              <SideText $on={side === "sell"} $buy={false}>
+                Sell
+              </SideText>
+            </SideTap>
           </Row>
           <Close onPress={onClose} accessibilityRole="button" accessibilityLabel="Close">
             <CloseMark>✕</CloseMark>
           </Close>
         </Row>
 
-        {/* Balance first, as in the reference — the number that decides whether
-            any of the rest is possible. */}
-        <Balance>
-          Balance: {balance === null ? "—" : `${tokens(balance)} ${unit}`}
-        </Balance>
-
-        {stage === "done" && signature ? (
+        {done ? (
           <Done>
             <DoneTitle>Done</DoneTitle>
             <Label muted style={{ textAlign: "center" }}>
               {side === "buy" ? "Bought" : "Sold"} {receiving ?? ""} — confirmed on Solana.
             </Label>
-            <LinkTap onPress={() => Linking.openURL(juno.explorer("tx", signature))}>
+            {noteError ? <ErrorText>{noteError}</ErrorText> : null}
+            <LinkTap onPress={() => Linking.openURL(juno.explorer("tx", signature!))}>
               <LinkText>View the transaction</LinkText>
               <ExternalGlyph />
             </LinkTap>
@@ -256,43 +346,94 @@ export function TradeSheet({
           </Done>
         ) : (
           <>
-            <Amount>
-              <AmountRow>
-                <AmountValue>{amount || "0"}</AmountValue>
-                <AmountUnit>{unit}</AmountUnit>
-              </AmountRow>
-              {/* The dollar equivalent under the amount, and the receive line
-                  under that — both from the server's quote, never multiplied
-                  out from spot, because a curve moves as it fills. */}
-              <Caption>
-                {usdEquivalent ? `~${usdEquivalent}` : " "}
-              </Caption>
-              <Receive>
-                {quoting
-                  ? "Quoting against the curve…"
-                  : receiving
-                    ? `You'll receive ${receiving}`
-                    : valid
-                      ? " "
-                      : "Enter an amount"}
-              </Receive>
-              {quote && quote.quote.priceImpact > 0.02 ? (
-                <Pill
-                  label={`Price impact ${(quote.quote.priceImpact * 100).toFixed(1)}%`}
-                  tone="neg"
-                />
-              ) : null}
-            </Amount>
+            {/* The field, the token it is denominated in, and what you have to
+                spend — the three things the number has to be read against, in
+                one box. */}
+            <Field $live={valid}>
+              <Col gap={2} style={{ flex: 1 }}>
+                <AmountRow>
+                  <AmountValue numberOfLines={1}>{amount || "0"}</AmountValue>
+                  <Caret />
+                </AmountRow>
+                <Caption>{usdEquivalent ? `~${usdEquivalent}` : " "}</Caption>
+              </Col>
+              <Col gap={4} style={{ alignItems: "flex-end" }}>
+                <TokenChip>
+                  <TokenDot />
+                  <TokenText>{unit}</TokenText>
+                </TokenChip>
+                <Caption>
+                  Balance: {balance === null ? "—" : `${tokens(balance)} ${unit}`}
+                </Caption>
+              </Col>
+            </Field>
 
             <Row gap={8}>
-              {(side === "buy" ? QUICK_BUY : QUICK_SELL).map((preset) => (
-                <Quick key={preset} onPress={() => setAmount(String(preset))}>
-                  <QuickLabel>
-                    {side === "buy" ? preset : `${preset * 100}%`}
-                  </QuickLabel>
+              {quickSizes.map((preset) => (
+                <Quick
+                  key={preset.label}
+                  disabled={preset.amount === null}
+                  onPress={() =>
+                    preset.amount === null
+                      ? undefined
+                      : setAmount(trimTrailingZeros(preset.amount))
+                  }
+                >
+                  <QuickLabel $off={preset.amount === null}>{preset.label}</QuickLabel>
                 </Quick>
               ))}
             </Row>
+
+            {/* Network fee, and the curve's own cost beside it. They are
+                different things and a trader deciding on size needs the second
+                one: the fee does not grow with the order, the curve does. */}
+            <Line>
+              <Row gap={6}>
+                <Label muted>Trading fee</Label>
+                <Info />
+              </Row>
+              <Mono_>
+                {quote
+                  ? `${tokens(quote.quote.fee)} ${coin.quote.symbol}`
+                  : quoting
+                    ? "…"
+                    : "—"}
+              </Mono_>
+            </Line>
+            <Line>
+              <Label muted>Price impact</Label>
+              <Mono_
+                $warn={(quote?.quote.priceImpact ?? 0) > 0.02}
+              >
+                {quote ? `${(quote.quote.priceImpact * 100).toFixed(2)}%` : quoting ? "…" : "—"}
+              </Mono_>
+            </Line>
+
+            {/* What the curve will actually give you, quoted rather than
+                multiplied out from spot. Blank rather than instructional when
+                there is no amount yet: the caret in the field is already
+                saying "type here", and a second voice saying it sat between
+                two rows of figures where a figure belongs. */}
+            <Receive>
+              {quoting ? "Quoting against the curve…" : receiving ? `You'll receive ${receiving}` : " "}
+            </Receive>
+
+            {/* The announcement. Optional, and never the default — a trade is
+                not a post unless you say so. */}
+            <Note>
+              <TextInput
+                value={note}
+                onChangeText={setNote}
+                placeholder="Add a comment..."
+                placeholderTextColor={theme.colors.faint}
+                maxLength={280}
+                style={{
+                  flex: 1,
+                  fontSize: theme.type.body.size,
+                  color: theme.colors.text,
+                }}
+              />
+            </Note>
 
             <Button
               label={stage === "confirming" ? "Confirming…" : side === "buy" ? "Buy" : "Sell"}
@@ -301,6 +442,7 @@ export function TradeSheet({
               onPress={confirm}
               loading={stage === "confirming" || wallet.signing}
               disabled={!quote || quoting}
+              style={{ alignSelf: "stretch" }}
             />
 
             {error ? <ErrorText>{error}</ErrorText> : null}
@@ -321,6 +463,28 @@ export function TradeSheet({
         )}
       </Sheet>
     </Modal>
+  );
+}
+
+/**
+ * A size as a typed amount rather than a float's decimal expansion.
+ *
+ * `20 / 114.03` is `0.17539244058581952`, which is not something anyone typed
+ * and reads as noise in a field. Six significant figures is more precision
+ * than any curve quote needs and still exact enough that the dollar figure
+ * beside it rounds to the preset.
+ */
+function trimTrailingZeros(value: number): string {
+  return String(Number(value.toPrecision(6)));
+}
+
+function Info() {
+  return (
+    <Svg width={14} height={14} viewBox="0 0 16 16" fill="none">
+      <Circle cx={8} cy={8} r={6.6} stroke={theme.colors.faint} strokeWidth={1.6} />
+      <Path d="M8 7.2v4" stroke={theme.colors.faint} strokeWidth={1.8} strokeLinecap="round" />
+      <Circle cx={8} cy={4.9} r={0.95} fill={theme.colors.faint} />
+    </Svg>
   );
 }
 
@@ -354,10 +518,19 @@ const Grabber = styled.View`
   align-self: center;
 `;
 
-const HeadTab = styled.Text<{ $on: boolean }>`
-  font-size: ${(p) => p.theme.type.title.size}px;
-  font-weight: ${(p) => (p.$on ? 800 : 500)};
-  color: ${(p) => (p.$on ? p.theme.colors.text : p.theme.colors.faint)};
+const SideTap = styled.Pressable<{ $on: boolean; $buy: boolean }>`
+  padding: 9px 18px;
+  border-radius: ${(p) => p.theme.radius.md}px;
+  background-color: ${(p) =>
+    !p.$on ? "transparent" : p.$buy ? p.theme.colors.lime : p.theme.colors.negSoft};
+`;
+
+const SideText = styled.Text<{ $on: boolean; $buy: boolean }>`
+  font-size: ${(p) => p.theme.type.lead.size}px;
+  font-weight: 800;
+  letter-spacing: ${(p) => p.theme.type.lead.tracking}px;
+  color: ${(p) =>
+    !p.$on ? p.theme.colors.faint : p.$buy ? p.theme.colors.onLime : p.theme.colors.neg};
 `;
 
 const Close = styled.Pressable`
@@ -374,11 +547,74 @@ const CloseMark = styled.Text`
   color: ${(p) => p.theme.colors.muted};
 `;
 
-const Balance = styled.Text`
+const Field = styled.View<{ $live: boolean }>`
+  flex-direction: row;
+  align-items: center;
+  gap: ${(p) => p.theme.space(3)}px;
+  padding: ${(p) => p.theme.space(4)}px;
+  border-radius: ${(p) => p.theme.radius.lg}px;
+  border-width: 1.5px;
+  border-color: ${(p) => (p.$live ? p.theme.colors.ink : p.theme.colors.line)};
+  background-color: ${(p) => p.theme.colors.surface};
+`;
+
+const AmountRow = styled.View`
+  flex-direction: row;
+  align-items: center;
+  gap: 2px;
+`;
+
+const AmountValue = styled.Text`
+  font-size: ${(p) => p.theme.type.heading.size}px;
+  line-height: ${(p) => p.theme.type.heading.height}px;
+  letter-spacing: ${(p) => p.theme.type.heading.tracking}px;
+  font-weight: 800;
+  font-variant: tabular-nums;
+  color: ${(p) => p.theme.colors.text};
+`;
+
+/* The caret. The pad is the keyboard, so the field never takes focus and
+   never draws one of its own — without this the box reads as a label. */
+const Caret = styled.View`
+  width: 2px;
+  height: ${(p) => p.theme.type.heading.size}px;
+  background-color: ${(p) => p.theme.colors.focus};
+  margin-left: 2px;
+`;
+
+const TokenChip = styled.View`
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border-radius: ${(p) => p.theme.radius.pill}px;
+  background-color: ${(p) => p.theme.colors.surfaceAlt};
+`;
+
+const TokenDot = styled.View`
+  width: 14px;
+  height: 14px;
+  border-radius: 7px;
+  background-color: ${(p) => p.theme.colors.ink};
+`;
+
+const TokenText = styled.Text`
+  font-size: ${(p) => p.theme.type.caption.size}px;
+  font-weight: 800;
+  color: ${(p) => p.theme.colors.text};
+`;
+
+const Line = styled.View`
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+`;
+
+const Mono_ = styled.Text<{ $warn?: boolean }>`
   font-size: ${(p) => p.theme.type.label.size}px;
-  font-weight: 500;
-  color: ${(p) => p.theme.colors.muted};
-  text-align: center;
+  font-weight: 700;
+  font-variant: tabular-nums;
+  color: ${(p) => (p.$warn ? p.theme.colors.neg : p.theme.colors.text)};
 `;
 
 const Receive = styled.Text`
@@ -388,43 +624,30 @@ const Receive = styled.Text`
   min-height: 18px;
 `;
 
-const Amount = styled.View`
-  align-items: center;
-  gap: 6px;
-  padding-vertical: ${(p) => p.theme.space(3)}px;
-`;
-
-const AmountRow = styled.View`
+const Note = styled.View`
   flex-direction: row;
-  align-items: baseline;
-  gap: 8px;
-`;
-
-const AmountValue = styled.Text`
-  font-size: ${(p) => p.theme.type.display.size}px;
-  font-weight: 800;
-  letter-spacing: -1.4px;
-  color: ${(p) => p.theme.colors.text};
-`;
-
-const AmountUnit = styled.Text`
-  font-size: ${(p) => p.theme.type.title.size}px;
-  font-weight: 600;
-  color: ${(p) => p.theme.colors.faint};
+  align-items: center;
+  padding-horizontal: ${(p) => p.theme.space(4)}px;
+  padding-vertical: 12px;
+  border-radius: ${(p) => p.theme.radius.md}px;
+  border-width: ${(p) => p.theme.hairline}px;
+  border-color: ${(p) => p.theme.colors.line};
+  background-color: ${(p) => p.theme.colors.surface};
 `;
 
 const Quick = styled.Pressable`
   flex: 1;
   padding-vertical: ${(p) => p.theme.space(3)}px;
-  border-radius: ${(p) => p.theme.radius.pill}px;
-  background-color: ${(p) => p.theme.colors.surfaceAlt};
+  border-radius: ${(p) => p.theme.radius.md}px;
+  border-width: ${(p) => p.theme.hairline}px;
+  border-color: ${(p) => p.theme.colors.line};
   align-items: center;
 `;
 
-const QuickLabel = styled.Text`
+const QuickLabel = styled.Text<{ $off?: boolean }>`
   font-size: ${(p) => p.theme.type.label.size}px;
-  font-weight: 600;
-  color: ${(p) => p.theme.colors.text};
+  font-weight: 700;
+  color: ${(p) => (p.$off ? p.theme.colors.faint : p.theme.colors.text)};
 `;
 
 const Pad = styled.View`
@@ -434,9 +657,8 @@ const Pad = styled.View`
 
 const Key = styled.Pressable`
   width: 33.33%;
-  height: 54px;
+  padding-vertical: ${(p) => p.theme.space(3)}px;
   align-items: center;
-  justify-content: center;
 `;
 
 const KeyLabel = styled.Text`
@@ -445,17 +667,10 @@ const KeyLabel = styled.Text`
   color: ${(p) => p.theme.colors.text};
 `;
 
-const ErrorText = styled.Text`
-  font-size: ${(p) => p.theme.type.label.size}px;
-  color: ${(p) => p.theme.colors.neg};
-  text-align: center;
-`;
-
 const Done = styled.View`
   align-items: center;
   gap: ${(p) => p.theme.space(2)}px;
   padding-vertical: ${(p) => p.theme.space(6)}px;
-  align-self: stretch;
 `;
 
 const DoneTitle = styled.Text`
@@ -464,11 +679,21 @@ const DoneTitle = styled.Text`
   color: ${(p) => p.theme.colors.pos};
 `;
 
-const LinkTap = styled.Pressable``;
+const LinkTap = styled.Pressable`
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  margin-top: ${(p) => p.theme.space(2)}px;
+`;
 
 const LinkText = styled.Text`
   font-size: ${(p) => p.theme.type.label.size}px;
-  font-weight: 600;
+  font-weight: 700;
   color: ${(p) => p.theme.colors.focus};
-  margin-top: 6px;
+`;
+
+const ErrorText = styled.Text`
+  font-size: ${(p) => p.theme.type.label.size}px;
+  color: ${(p) => p.theme.colors.neg};
+  text-align: center;
 `;

@@ -265,6 +265,48 @@ export type PostDetail = {
   mediaKind: string | null;
 };
 
+/** A comment on a coin. `side` and `signature` are set when it came with a trade. */
+export type CoinComment = {
+  id: string;
+  coinMint: string;
+  wallet: string;
+  body: string;
+  side?: "buy" | "sell";
+  signature?: string;
+  createdAt: string;
+};
+
+/** Who else is in this market, derived from the fills the chart is drawn from. */
+export type Crowd = {
+  /** USD per quote token, or 1 when no feed answered. Flow figures are in quote units. */
+  quoteUsdRate: number;
+  traders: number;
+  holdersStill: number;
+  firstBuyer: {
+    wallet: string;
+    price: number;
+    timestamp: string;
+    multiple: number | null;
+  } | null;
+  netFlow24h: number;
+  netFlow7d: number;
+  fills24h: number;
+  biggestBuy: number | null;
+  /** The swap walk was cut short — these are floors, not totals. */
+  partial: boolean;
+};
+
+export type DepthPoint = {
+  amountIn: number;
+  amountOut: number;
+  averagePrice: number;
+  /** Total shortfall against spot, fee included. */
+  priceImpact: number;
+  /** The part the curve caused, fee excluded. */
+  curveImpact: number;
+  fee: number;
+};
+
 export type UnsignedTransaction = { transaction: string; label: string; bytes: number };
 export type BlockhashWindow = { blockhash: string; lastValidBlockHeight: number };
 
@@ -465,6 +507,7 @@ export const juno = {
 
   coin: (mint: string) =>
     api.get<{
+      cluster: string;
       coin: Coin;
       activity: Activity[];
       /** The swap walk was cut short — an empty `activity` is not "no trades". */
@@ -472,10 +515,55 @@ export const juno = {
       holders: Holder[];
       /** The holder read was refused — an empty `holders` is not "no holders". */
       holdersUnreadable: boolean;
+      /** Null when the swap history could not be read at all — not "nobody traded". */
+      crowd: Crowd | null;
       launchSignature: string;
     }>(`/api/juno/coins/${mint}`),
 
   portfolio: (wallet: string) => api.get<Portfolio>(`/api/juno/portfolio/${wallet}`),
+
+  /** Comments on a coin, newest first. */
+  comments: (mint: string) =>
+    api.get<{ comments: CoinComment[] }>(`/api/juno/comments?coin=${mint}`),
+
+  /**
+   * Say something about a coin — optionally alongside a trade you just made.
+   *
+   * `side` and `signature` are what turn a comment into an announcement: the
+   * row then carries which way you went and the transaction that proves it,
+   * so the claim is checkable rather than asserted.
+   */
+  addComment: (input: {
+    coin: string;
+    wallet: string;
+    body: string;
+    side?: "buy" | "sell";
+    signature?: string;
+  }) => api.post<{ comment: CoinComment }>("/api/juno/comments", input),
+
+  /**
+   * What this curve can absorb, and the largest trade inside an impact budget.
+   *
+   * `impact` is a ratio measured on curve movement with the fee excluded —
+   * the fee does not grow with size, so including it would make the answer
+   * mostly a constant.
+   */
+  depth: (mint: string, side: "buy" | "sell" = "buy", impact?: number) =>
+    api.get<{
+      mint: string;
+      side: "buy" | "sell";
+      spot: number;
+      quoteSymbol: string;
+      quoteUsdRate: number | null;
+      max: number;
+      points: DepthPoint[];
+      suggestion:
+        | (DepthPoint & { ceilingReached: boolean })
+        | null;
+    }>(
+      `/api/juno/depth?mint=${mint}&side=${side}${impact ? `&impact=${impact}` : ""}`,
+      60_000,
+    ),
 
   posts: (limit = 30) =>
     api.get<{ posts: Array<{ id: string; body: string; authorWallet: string; createdAt: string }> }>(

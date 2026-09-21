@@ -5,6 +5,7 @@ import { fetchPoolSnapshot, vaultsOf } from "@/lib/juno/dbc";
 import { listSwapHistory } from "@/lib/juno/swaps";
 import { quoteTokenUsdPrice } from "@/lib/juno/pyth";
 import { getPool } from "@/lib/juno/registry";
+import { cluster } from "@/lib/juno/cluster";
 import { junoError, junoHandler, junoJson, junoOptions } from "@/lib/juno/api";
 
 export const dynamic = "force-dynamic";
@@ -83,6 +84,10 @@ export async function GET(
     ]);
 
     return junoJson({
+      /* Which network this is. The client renders it in the details, and
+         guessing it there would be the one fact on that list that was not
+         read from anywhere. */
+      cluster: cluster(),
       coin,
       activity: activity.items,
       /** True when the swap walk was cut short: `activity` is not the whole story. */

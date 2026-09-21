@@ -1,31 +1,88 @@
+import * as Clipboard from "expo-clipboard";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useState } from "react";
-import { Linking, RefreshControl, ScrollView } from "react-native";
+import { useEffect, useMemo, useState } from "react";
+import { Linking, RefreshControl, ScrollView, Share } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import Svg, { Path, Rect } from "react-native-svg";
 import styled from "styled-components/native";
 
 import { CoinGlyph, Identicon } from "../../components/art";
-import { Candles } from "../../components/Candles";
-import { Avatar, Body, Button, Caption, Card, ChevronLeft, Col, Delta, Display, ExternalGlyph, Heading, Label, Mono, Pill, Placeholder, Progress, Row, Skeleton, Stat, Title } from "../../components/kit";
-import { AlertSheet, PlanSheet, SaveCard, WatchToggle, type SavedState } from "../../components/Save";
+import { CommentsSheet } from "../../components/CommentsSheet";
+import { PriceLine } from "../../components/PriceLine";
+import { Tappable } from "../../components/Press";
+import {
+  AlertSheet,
+  PlanSheet,
+  SaveCard,
+  WatchToggle,
+  type SavedState,
+} from "../../components/Save";
 import { TradeSheet } from "../../components/TradeSheet";
+import {
+  Body,
+  Button,
+  Caption,
+  Card,
+  ChevronLeft,
+  Col,
+  ExternalGlyph,
+  Label,
+  Mono,
+  Pill,
+  Placeholder,
+  Row,
+  Skeleton,
+  Title,
+} from "../../components/kit";
 import { juno, type NavReference, type Plan } from "../../lib/api";
-import { useWallet } from "../../lib/wallet";
 import { money, since, tokens, useApi } from "../../lib/useApi";
+import { useWallet } from "../../lib/wallet";
 import { theme } from "../../theme";
 
 /**
  * One coin: what it is, what it costs, and how to trade it.
  *
- * The NAV band is the part worth reading closely. Only equity-shaped presets
- * have one, and it exists because a bonding curve has no idea what the asset it
- * claims to track actually costs — Pyth is what closes that loop.
+ * ## Why the chart is the whole top of the screen
+ *
+ * Every other arrangement of this page buried the price in a card among other
+ * cards, which is a claim that the price is one fact of several. It is not —
+ * it is the reason anyone opened the screen. So it is edge to edge, with no
+ * container around it, and everything else is arranged underneath in the order
+ * the questions actually get asked: *what is this*, *how big is it*, *who else
+ * is here*, *what are the details*.
+ *
+ * ## Why the rest is tabbed rather than stacked
+ *
+ * Activity, holders, comments and metadata are four answers to four different
+ * questions, and only one is wanted at a time. Stacked, they made the page
+ * thousands of points long and pushed the buy button off the bottom of it;
+ * tabbed, the action bar is always in reach and the page never changes height
+ * when a slow read lands.
+ *
+ * ## The NAV band and the savings card
+ *
+ * Both live under **Details**, because that is what they are: facts about this
+ * instrument rather than about its market. The watch toggle stays in the nav
+ * bar, where it is one tap from anywhere on the page.
  */
+
+const TABS = [
+  { id: "activity" as const, label: "Activity" },
+  { id: "holders" as const, label: "Holders" },
+  { id: "comments" as const, label: "Comments" },
+  { id: "details" as const, label: "Details" },
+];
+
+type Tab = (typeof TABS)[number]["id"];
+
 export default function CoinScreen() {
   const { mint } = useLocalSearchParams<{ mint: string }>();
   const router = useRouter();
   const [sheet, setSheet] = useState<"buy" | "sell" | null>(null);
   const [savingsSheet, setSavingsSheet] = useState<"alert" | "plan" | null>(null);
+  const [commentsOpen, setCommentsOpen] = useState(false);
+  const [tab, setTab] = useState<Tab>("activity");
+  const [copied, setCopied] = useState(false);
   /**
    * The plan this buy is a contribution to, if any.
    *
@@ -38,6 +95,29 @@ export default function CoinScreen() {
   const wallet = useWallet();
   const detail = useApi(() => juno.coin(mint), [mint]);
   const coin = detail.data?.coin;
+
+  // Only for the count on the tab — the sheet reads its own list when opened,
+  // because a list fetched on mount is stale by the time anyone looks at it.
+  const comments = useApi(() => juno.comments(mint), [mint]);
+
+  // What this wallet holds of this coin, so the sell sheet can show a real
+  // balance instead of a dash. Read from the portfolio rather than a second
+  // chain call — it is the same figure, already fetched.
+  const portfolio = useApi(
+    async () => (wallet.address ? juno.portfolio(wallet.address) : null),
+    [wallet.address],
+  );
+  const holding =
+    portfolio.data?.positions.find((position) => position.baseMint === mint)?.balance ?? null;
+
+  /* What a buy would spend from. Read separately because it is the quote side,
+     which the portfolio does not cover: it accounts for coins held, not for the
+     SOL that buys them. */
+  const quoteMint = coin?.quote.mint ?? null;
+  const spendable = useApi(
+    async () => (wallet.address && quoteMint ? juno.balance(wallet.address, quoteMint) : null),
+    [wallet.address, quoteMint],
+  );
 
   /*
    * Watching, alerts and plans for this wallet on this coin.
@@ -63,27 +143,20 @@ export default function CoinScreen() {
     });
   }, [savedRead.data]);
 
-  // What this wallet holds of this coin, so the sell sheet can show a real
-  // balance instead of a dash. Read from the portfolio rather than a second
-  // chain call — it is the same figure, already fetched.
-  const portfolio = useApi(
-    async () => (wallet.address ? juno.portfolio(wallet.address) : null),
-    [wallet.address],
-  );
-  const holding =
-    portfolio.data?.positions.find((position) => position.baseMint === mint)?.balance ?? null;
-
-  /* What a buy would spend from. Read separately because it is the quote side,
-     which the portfolio does not cover: it accounts for coins held, not for the
-     SOL that buys them. */
-  const quoteMint = coin?.quote.mint ?? null;
-  const spendable = useApi(
-    async () =>
-      wallet.address && quoteMint ? juno.balance(wallet.address, quoteMint) : null,
-    [wallet.address, quoteMint],
-  );
+  // "Copied" is a state that has to expire on its own: nothing else on the
+  // screen changes to clear it.
+  useEffect(() => {
+    if (!copied) return;
+    const timer = setTimeout(() => setCopied(false), 1600);
+    return () => clearTimeout(timer);
+  }, [copied]);
 
   const art = coin ? juno.still(coin.media) : null;
+  const ticks = useMemo(
+    () => (coin?.priceHistory ?? []).map((point) => ({ t: point.t, price: point.price })),
+    [coin?.priceHistory],
+  );
+  const commentCount = comments.data?.comments.length ?? null;
 
   return (
     <Page edges={["top"]}>
@@ -101,21 +174,19 @@ export default function CoinScreen() {
       </Nav>
 
       {detail.loading ? (
-        /* Shaped like the screen it precedes — identity row, price and chart
-           card, stats row, description — rather than one big block over an
-           empty screen. A coin read can take fifteen seconds against the
-           public endpoint, which is a long time to look at nothing. */
+        /* Shaped like the screen it precedes — a chart, an identity row, a
+           stats band — rather than one big block over an empty screen. A coin
+           read can take fifteen seconds against the public endpoint, which is
+           a long time to look at nothing. */
         <Loading>
-          <Row gap={12}>
-            <Skeleton h={76} w={76} round={22} />
-            <Col gap={8} style={{ flex: 1 }}>
-              <Skeleton h={22} w="80%" />
-              <Skeleton h={14} w="45%" />
-            </Col>
+          <Skeleton h={40} w="52%" />
+          <Skeleton h={210} round={18} style={{ marginTop: 18 }} />
+          <Row gap={12} style={{ marginTop: 22 }}>
+            <Skeleton h={34} w={34} round={17} />
+            <Skeleton h={14} w="40%" />
           </Row>
-          <Skeleton h={300} round={22} />
-          <Skeleton h={78} round={22} />
-          <Skeleton h={64} round={22} />
+          <Skeleton h={26} w="80%" style={{ marginTop: 14 }} />
+          <Skeleton h={64} round={16} style={{ marginTop: 18 }} />
         </Loading>
       ) : detail.error || !coin ? (
         <Placeholder
@@ -126,188 +197,208 @@ export default function CoinScreen() {
       ) : (
         <>
           <ScrollView
-            contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 140, gap: 12 }}
+            contentContainerStyle={{ width: "100%", paddingBottom: 150 }}
             showsVerticalScrollIndicator={false}
             refreshControl={
               <RefreshControl
                 refreshing={detail.refreshing}
-                onRefresh={detail.refresh}
+                onRefresh={() => {
+                  detail.refresh();
+                  comments.refresh();
+                }}
                 tintColor={theme.colors.muted}
               />
             }
           >
-            {/* Identity first, compact. The old layout opened with a square
-                the height of the screen that was usually empty — a coin with no
-                artwork got a huge white void where the price should be. */}
-            <Row gap={12}>
-              {art ? (
-                <Thumb source={{ uri: art }} />
-              ) : (
-                <ThumbEmpty>
-                  <CoinGlyph size={56} seed={coin.address} />
-                </ThumbEmpty>
-              )}
-              <Col gap={6} style={{ flex: 1 }}>
-                <Title numberOfLines={2}>{coin.name}</Title>
-                <Row gap={6}>
-                  <Pill label={`$${coin.symbol}`} tone="lime" />
-                  <Pill label={coin.curvePreset} />
-                  {coin.curve.graduated ? <Pill label="Graduated" tone="pos" /> : null}
-                </Row>
-              </Col>
-            </Row>
-
-            {/* The price, then the chart. This is a trading screen. */}
-            <Card>
-              <Row justify="space-between" align="flex-end">
-                <Col gap={2}>
-                  <Caption>Price</Caption>
-                  <Display style={{ fontSize: theme.type.screen.size }}>
-                    {price(coin.priceUsd, coin.marketCapCurrency)}
-                  </Display>
-                </Col>
-                <Col gap={4} style={{ alignItems: "flex-end" }}>
-                  <Delta pct={coin.marketCapChangePct} />
-                  <Caption>24h</Caption>
-                </Col>
-              </Row>
-
-              <Divider />
-
-              <Candles
-                ticks={coin.priceHistory}
-                partial={coin.priceHistoryPartial === true}
-                livePrice={coin.priceUsd}
-                format={(v: number) => price(v, coin.marketCapCurrency)}
-              />
-            </Card>
-
-            <Card>
-              <Row>
-                <Stat
-                  value={money(coin.marketCap, coin.marketCapCurrency)}
-                  label="Market cap"
-                />
-                <Stat
-                  value={money(coin.volume24h, coin.marketCapCurrency)}
-                  label="24h volume"
-                />
-                <Stat
-                  value={
-                    coin.holders === null ? "—" : String(coin.holders)
-                  }
-                  label="Holders"
-                />
-              </Row>
-            </Card>
-
-            {coin.description ? (
-              <Card>
-                <Body muted>{coin.description}</Body>
-              </Card>
-            ) : null}
-
-            {!coin.curve.graduated ? (
-              <Card>
-                <Row justify="space-between">
-                  <Label muted>Curve progress</Label>
-                  <Mono>{(coin.curve.progress * 100).toFixed(2)}%</Mono>
-                </Row>
-                <Spacer />
-                <Progress pct={coin.curve.progress * 100} />
-                <Caption style={{ marginTop: 8 }}>
-                  {money(coin.curve.raisedUsd, coin.marketCapCurrency)} of{" "}
-                  {money(coin.curve.thresholdUsd, coin.marketCapCurrency)} to graduate into a
-                  DAMM v2 pool
-                </Caption>
-              </Card>
-            ) : null}
-
-            {coin.nav ? <NavBand nav={coin.nav} /> : null}
-
-            <SaveCard
-              coin={coin}
-              saved={savedLocal}
-              wallet={wallet.address}
-              error={savedError}
-              onEditAlert={() => setSavingsSheet("alert")}
-              onNewPlan={() => setSavingsSheet("plan")}
-              onContribute={(plan) => {
-                setContributing(plan);
-                setSheet("buy");
-              }}
-              onTogglePlan={(plan) => void togglePlan(plan)}
+            <PriceLine
+              ticks={ticks}
+              livePrice={coin.priceUsd}
+              partial={coin.priceHistoryPartial === true}
+              format={(value) => price(value, coin.marketCapCurrency)}
             />
 
-            <Heading style={{ marginTop: 6 }}>Activity</Heading>
-            {(detail.data?.activity.length ?? 0) === 0 ? (
-              <Card>
-                {/* An empty list that was never successfully read is not an
-                    empty market. Saying "No trades yet" there is a claim the
-                    app did not earn. */}
-                <Body muted>
-                  {detail.data?.activityPartial
-                    ? "Trade history could not be read — the RPC is rate-limiting."
-                    : "No trades yet."}
-                </Body>
-              </Card>
-            ) : (
-              detail.data!.activity.slice(0, 12).map((row) => (
-                <Card key={row.id}>
-                  <Row gap={10}>
-                    {/* Seeded on the wallet, not the handle: the handle is four
-                        characters from each end of it, and two different
-                        wallets that happen to share those would draw the same
-                        mark. It is also what makes the row lead anywhere. */}
-                    <Trader
-                      onPress={() => router.push(`/trader/${row.wallet}` as never)}
-                      hitSlop={8}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Open ${row.actor.handle}`}
-                    >
-                      <Identicon seed={row.wallet} size={22} />
-                      <Label numberOfLines={1} style={{ width: 84 }}>
-                        {row.actor.handle}
-                      </Label>
-                    </Trader>
-                    <Side $buy={row.side === "buy"}>{row.side}</Side>
-                    <Mono muted style={{ flex: 1, textAlign: "right" }}>
-                      {tokens(row.amount)}
-                    </Mono>
-                    <Caption>{since(row.timestamp)}</Caption>
+            <Padded>
+              {/* Who made it, how many hold it, and a way to pass it on. */}
+              <Row gap={10} align="center">
+                <Tappable
+                  onPress={() => router.push(`/trader/${coin.creator.wallet}` as never)}
+                  to={0.95}
+                >
+                  <Row gap={8} align="center">
+                    {art ? <Thumb source={{ uri: art }} /> : <CoinGlyph size={30} seed={coin.address} />}
+                    <Label style={{ fontWeight: "700" }} numberOfLines={1}>
+                      {coin.creator.handle}
+                    </Label>
                   </Row>
-                </Card>
-              ))
-            )}
+                </Tappable>
+                <NavGrow />
+                <Caption numberOfLines={1}>
+                  {coin.holders === null
+                    ? "— holders"
+                    : `${coin.holders} ${coin.holders === 1 ? "holder" : "holders"}`}
+                </Caption>
+                <Tappable onPress={() => void share(coin.address, coin.name)} to={0.86}>
+                  <IconTap hitSlop={8} accessibilityRole="button" accessibilityLabel="Share">
+                    <ShareGlyph />
+                  </IconTap>
+                </Tappable>
+              </Row>
 
-            <LinkTap onPress={() => Linking.openURL(juno.explorer("account", coin.pool))}>
-              <LinkText>View the pool on Solscan</LinkText>
-              <ExternalGlyph />
-            </LinkTap>
+              <Title style={{ marginTop: 12 }}>{coin.name}</Title>
+              {coin.description ? (
+                <Body muted style={{ marginTop: 6 }}>
+                  {coin.description}
+                </Body>
+              ) : null}
+
+              <Row gap={8} style={{ marginTop: 12 }}>
+                <Chip>
+                  <ChipMark>$</ChipMark>
+                  <ChipText numberOfLines={1}>{coin.symbol}</ChipText>
+                </Chip>
+                <Tappable
+                  onPress={async () => {
+                    await Clipboard.setStringAsync(coin.address);
+                    setCopied(true);
+                  }}
+                  to={0.95}
+                >
+                  <Chip accessibilityRole="button" accessibilityLabel="Copy the coin address">
+                    <CopyGlyph />
+                    <ChipText>{copied ? "Copied" : "Copy address"}</ChipText>
+                  </Chip>
+                </Tappable>
+              </Row>
+
+              {/* Three figures, ruled apart rather than boxed — the band is one
+                  reading of size, not three separate cards. */}
+              <Band>
+                <Cell>
+                  <CellValue>{money(coin.marketCap, coin.marketCapCurrency)}</CellValue>
+                  <Caption numberOfLines={1}>Market cap</Caption>
+                </Cell>
+                <Divider />
+                <Cell>
+                  <CellValue>
+                    {coin.totalVolume === null ? "—" : money(coin.totalVolume, coin.marketCapCurrency)}
+                  </CellValue>
+                  <Caption numberOfLines={1}>Total volume</Caption>
+                </Cell>
+                <Divider />
+                <Cell>
+                  <CellValue>
+                    {money(coin.creatorRewards, coin.marketCapCurrency, { compact: false })}
+                  </CellValue>
+                  <Caption numberOfLines={1}>Creator rewards</Caption>
+                </Cell>
+              </Band>
+
+              {/* Raised against threshold, with both ends labelled. A bar with
+                  no numbers on it is a mood. */}
+              {!coin.curve.graduated ? (
+                <RaisedRow>
+                  <End>{money(coin.curve.raisedUsd, coin.marketCapCurrency)}</End>
+                  <Track>
+                    {/* A floor of 1.5% so a curve 0.02% of the way along still
+                        reads as started — but only above zero, where drawing
+                        anything would claim a raise nobody made. */}
+                    {coin.curve.progress > 0 ? (
+                      <FillBar
+                        style={{
+                          width: `${Math.min(100, Math.max(1.5, coin.curve.progress * 100))}%`,
+                        }}
+                      />
+                    ) : null}
+                  </Track>
+                  <End>{money(coin.curve.thresholdUsd, coin.marketCapCurrency)}</End>
+                </RaisedRow>
+              ) : (
+                <Row gap={8} style={{ marginTop: 16 }}>
+                  <Pill label="Graduated" tone="pos" />
+                  <Caption style={{ flex: 1 }}>
+                    Trading continues in this coin&rsquo;s DAMM v2 pool.
+                  </Caption>
+                </Row>
+              )}
+
+              <TabBar>
+                {TABS.map((option) => (
+                  <TabTap
+                    key={option.id}
+                    onPress={() =>
+                      option.id === "comments" ? setCommentsOpen(true) : setTab(option.id)
+                    }
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: tab === option.id }}
+                  >
+                    <TabLabel $on={tab === option.id}>
+                      {option.label}
+                      {option.id === "comments" && commentCount !== null && commentCount > 0
+                        ? ` ${commentCount}`
+                        : ""}
+                    </TabLabel>
+                    <TabRule $on={tab === option.id} />
+                  </TabTap>
+                ))}
+              </TabBar>
+
+              {tab === "activity" ? (
+                <ActivityTab
+                  rows={detail.data!.activity}
+                  partial={detail.data!.activityPartial}
+                  currency={coin.marketCapCurrency}
+                  onOpenTrader={(target) => router.push(`/trader/${target}` as never)}
+                />
+              ) : tab === "holders" ? (
+                <HoldersTab
+                  rows={detail.data!.holders}
+                  unreadable={detail.data!.holdersUnreadable}
+                  onOpenTrader={(target) => router.push(`/trader/${target}` as never)}
+                />
+              ) : (
+                <DetailsTab
+                  coin={coin}
+                  cluster={detail.data!.cluster}
+                  launchSignature={detail.data!.launchSignature}
+                  saveCard={
+                    <SaveCard
+                      coin={coin}
+                      saved={savedLocal}
+                      wallet={wallet.address}
+                      error={savedError}
+                      onEditAlert={() => setSavingsSheet("alert")}
+                      onNewPlan={() => setSavingsSheet("plan")}
+                      onContribute={(plan) => {
+                        setContributing(plan);
+                        setSheet("buy");
+                      }}
+                      onTogglePlan={(plan) => void togglePlan(plan)}
+                    />
+                  }
+                />
+              )}
+            </Padded>
           </ScrollView>
 
+          {/* Say something, or take a position. The two things this screen is
+              for, always within reach of a thumb. */}
           <Actions>
+            <Tappable onPress={() => setCommentsOpen(true)} to={0.97} style={{ flex: 1 }}>
+              <PostTap accessibilityRole="button" accessibilityLabel="Comment on this coin">
+                <PostGlyph />
+                <PostText>Post</PostText>
+              </PostTap>
+            </Tappable>
             {coin.curve.graduated ? (
-              <GraduatedNote>
-                This curve has graduated. Trading continues in its DAMM v2 pool.
-              </GraduatedNote>
+              <GraduatedNote>Trading continues in its DAMM v2 pool.</GraduatedNote>
             ) : (
-              <>
-                <Button
-                  label="Buy"
-                  variant="lime"
-                  tall
-                  onPress={() => setSheet("buy")}
-                  style={{ flex: 1 }}
-                />
-                <Button
-                  label="Sell"
-                  variant="quiet"
-                  tall
-                  onPress={() => setSheet("sell")}
-                  style={{ flex: 1 }}
-                />
-              </>
+              <Button
+                label="Buy"
+                variant="lime"
+                tall
+                onPress={() => setSheet("buy")}
+                style={{ flex: 1.4 }}
+              />
             )}
           </Actions>
 
@@ -319,6 +410,7 @@ export default function CoinScreen() {
               quoteBalance={spendable.data?.balance ?? null}
               initialAmount={sheet === "buy" && contributing ? String(contributing.amount) : ""}
               onFilled={(spent) => void recordFill(spent)}
+              onCommented={() => comments.refresh()}
               onClose={() => {
                 setSheet(null);
                 setContributing(null);
@@ -330,6 +422,14 @@ export default function CoinScreen() {
               }}
             />
           ) : null}
+
+          <CommentsSheet
+            visible={commentsOpen}
+            onClose={() => setCommentsOpen(false)}
+            mint={mint}
+            symbol={coin.symbol}
+            onPosted={() => comments.refresh()}
+          />
 
           <AlertSheet
             visible={savingsSheet === "alert"}
@@ -405,6 +505,219 @@ export default function CoinScreen() {
   }
 }
 
+async function share(mint: string, name: string) {
+  await Share.share({ message: `${name} on Juno — ${juno.explorer("token", mint)}` }).catch(
+    () => undefined,
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Tabs                                                                */
+/* ------------------------------------------------------------------ */
+
+function ActivityTab({
+  rows,
+  partial,
+  currency,
+  onOpenTrader,
+}: {
+  rows: import("../../lib/api").Activity[];
+  partial: boolean;
+  currency: string;
+  onOpenTrader: (wallet: string) => void;
+}) {
+  if (rows.length === 0) {
+    return (
+      <Empty>
+        {/* An empty list that was never successfully read is not an empty
+            market. Saying "No trades yet" there is a claim the app did not
+            earn. */}
+        <Body muted>
+          {partial
+            ? "Trade history could not be read — the RPC is rate-limiting."
+            : "No trades yet."}
+        </Body>
+      </Empty>
+    );
+  }
+
+  return (
+    <>
+      {rows.slice(0, 20).map((row) => (
+        <Line key={row.id}>
+          <Tappable onPress={() => onOpenTrader(row.wallet)} to={0.97}>
+            <Row gap={8} align="center">
+              <Identicon seed={row.wallet} size={26} />
+              <Label numberOfLines={1} style={{ maxWidth: 96 }}>
+                {row.actor.handle}
+              </Label>
+            </Row>
+          </Tappable>
+          <Verb $buy={row.side === "buy"}>{row.side === "buy" ? "Buy" : "Sell"}</Verb>
+          <Mono style={{ flex: 1, textAlign: "right" }}>{tokens(row.amount)}</Mono>
+          <Mono muted style={{ width: 66, textAlign: "right" }}>
+            {money(row.valueUsd, currency)}
+          </Mono>
+          <Caption style={{ width: 34, textAlign: "right" }}>{since(row.timestamp)}</Caption>
+        </Line>
+      ))}
+      {partial ? (
+        <Caption style={{ marginTop: 12 }}>
+          Some of this pool&rsquo;s history would not load — these are the fills that did.
+        </Caption>
+      ) : null}
+    </>
+  );
+}
+
+function HoldersTab({
+  rows,
+  unreadable,
+  onOpenTrader,
+}: {
+  rows: import("../../lib/api").Holder[];
+  unreadable: boolean;
+  onOpenTrader: (wallet: string) => void;
+}) {
+  if (rows.length === 0) {
+    return (
+      <Empty>
+        <Body muted>
+          {unreadable
+            ? "The holder list is one of the calls the public RPC refuses outright. It could not be read — which is not the same as nobody holding this."
+            : "Nobody holds this yet."}
+        </Body>
+      </Empty>
+    );
+  }
+
+  return (
+    <>
+      {rows.map((row) => (
+        <Line key={row.wallet}>
+          <Rank>{row.rank}</Rank>
+          <Tappable onPress={() => onOpenTrader(row.wallet)} to={0.97}>
+            <Row gap={8} align="center">
+              <Identicon seed={row.wallet} size={26} />
+              <Label numberOfLines={1} style={{ maxWidth: 96 }}>
+                {row.actor.handle}
+              </Label>
+            </Row>
+          </Tappable>
+          <Mono style={{ flex: 1, textAlign: "right" }}>{tokens(row.balance)}</Mono>
+          <Mono muted style={{ width: 56, textAlign: "right" }}>
+            {(row.share * 100).toFixed(1)}%
+          </Mono>
+        </Line>
+      ))}
+      <Caption style={{ marginTop: 12 }}>
+        The twenty largest token accounts — the most the RPC will return.
+      </Caption>
+    </>
+  );
+}
+
+function DetailsTab({
+  coin,
+  cluster,
+  launchSignature,
+  saveCard,
+}: {
+  coin: import("../../lib/api").Coin;
+  cluster: string;
+  launchSignature: string;
+  saveCard: React.ReactNode;
+}) {
+  const [copied, setCopied] = useState<string | null>(null);
+  useEffect(() => {
+    if (copied === null) return;
+    const timer = setTimeout(() => setCopied(null), 1400);
+    return () => clearTimeout(timer);
+  }, [copied]);
+
+  async function copy(key: string, value: string) {
+    await Clipboard.setStringAsync(value);
+    setCopied(key);
+  }
+
+  return (
+    <Col gap={0}>
+      {saveCard ? <SaveSlot>{saveCard}</SaveSlot> : null}
+
+      {coin.nav ? <NavBand nav={coin.nav} /> : null}
+
+      <Rows>
+        <DetailRow
+          label="Created"
+          value={new Date(coin.createdAt).toLocaleString()}
+          shaded={false}
+        />
+        <DetailRow
+          label="Mint address"
+          value={`${coin.address.slice(0, 6)}…${coin.address.slice(-4)}`}
+          shaded
+          copied={copied === "mint"}
+          onCopy={() => void copy("mint", coin.address)}
+        />
+        <DetailRow label="Ticker" value={coin.symbol} shaded={false} copied={copied === "ticker"} onCopy={() => void copy("ticker", coin.symbol)} />
+        <DetailRow label="Network" value={`Solana · ${cluster}`} shaded />
+        <DetailRow label="Quote" value={coin.quote.symbol} shaded={false} />
+        <DetailRow label="Curve" value={coin.curvePreset} shaded />
+        <DetailRow label="Format" value={coin.format === "reel" ? "Reel" : "Post"} shaded={false} />
+        <DetailRow
+          label="Pool"
+          value={`${coin.pool.slice(0, 6)}…${coin.pool.slice(-4)}`}
+          shaded
+          copied={copied === "pool"}
+          onCopy={() => void copy("pool", coin.pool)}
+        />
+      </Rows>
+
+      <LinkTap onPress={() => Linking.openURL(juno.explorer("account", coin.pool))}>
+        <LinkText>View the pool on Solscan</LinkText>
+        <ExternalGlyph />
+      </LinkTap>
+      {launchSignature ? (
+        <LinkTap onPress={() => Linking.openURL(juno.explorer("tx", launchSignature))}>
+          <LinkText>The transaction that launched it</LinkText>
+          <ExternalGlyph />
+        </LinkTap>
+      ) : null}
+    </Col>
+  );
+}
+
+function DetailRow({
+  label,
+  value,
+  shaded,
+  onCopy,
+  copied,
+}: {
+  label: string;
+  value: string;
+  shaded: boolean;
+  onCopy?: () => void;
+  copied?: boolean;
+}) {
+  const body = (
+    <DetailBox $shaded={shaded}>
+      <Label muted>{label}</Label>
+      <Row gap={6} align="center">
+        <DetailValue numberOfLines={1}>{copied ? "Copied" : value}</DetailValue>
+        {onCopy ? <CopyGlyph /> : null}
+      </Row>
+    </DetailBox>
+  );
+  return onCopy ? (
+    <Tappable onPress={onCopy} to={0.985} accessibilityRole="button" accessibilityLabel={`Copy ${label}`}>
+      {body}
+    </Tappable>
+  ) : (
+    body
+  );
+}
+
 /**
  * Where the curve sits against the underlying.
  *
@@ -418,7 +731,7 @@ function NavBand({ nav }: { nav: NavReference }) {
     nav.state === "live" ? "Live" : nav.state === "closed" ? "Market closed · last close" : "Stale";
 
   return (
-    <Card>
+    <Card style={{ marginTop: 14 }}>
       <Row justify="space-between">
         <Label style={{ fontWeight: "700" }}>{label} reference</Label>
         <Caption
@@ -435,7 +748,9 @@ function NavBand({ nav }: { nav: NavReference }) {
         </Caption>
       </Row>
       <Row justify="space-between" align="baseline" style={{ marginTop: 8 }}>
-        <Heading>{money(nav.priceUsd, "USD", { compact: false })}</Heading>
+        <CellValue style={{ fontSize: theme.type.heading.size }}>
+          {money(nav.priceUsd, "USD", { compact: false })}
+        </CellValue>
         <Mono style={{ color: nav.withinBand ? theme.colors.pos : theme.colors.neg }}>
           {nav.deviation >= 0 ? "+" : ""}
           {(nav.deviation * 100).toFixed(2)}%
@@ -448,6 +763,71 @@ function NavBand({ nav }: { nav: NavReference }) {
       </Caption>
     </Card>
   );
+}
+
+/* ------------------------------------------------------------------ */
+/* Glyphs                                                              */
+/* ------------------------------------------------------------------ */
+
+function ShareGlyph() {
+  return (
+    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M12 15V3.8M12 3.8 8.3 7.5M12 3.8l3.7 3.7"
+        stroke={theme.colors.text}
+        strokeWidth={1.9}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M5.5 12.6v5.9a1.6 1.6 0 0 0 1.6 1.6h9.8a1.6 1.6 0 0 0 1.6-1.6v-5.9"
+        stroke={theme.colors.text}
+        strokeWidth={1.9}
+        strokeLinecap="round"
+      />
+    </Svg>
+  );
+}
+
+function CopyGlyph() {
+  return (
+    <Svg width={15} height={15} viewBox="0 0 24 24" fill="none">
+      <Rect x={8.6} y={8.6} width={11.4} height={11.4} rx={2.6} stroke={theme.colors.muted} strokeWidth={1.9} />
+      <Path
+        d="M15.4 5.6a2 2 0 0 0-2-1.6H6.6A2.6 2.6 0 0 0 4 6.6v6.8a2 2 0 0 0 1.6 2"
+        stroke={theme.colors.muted}
+        strokeWidth={1.9}
+        strokeLinecap="round"
+      />
+    </Svg>
+  );
+}
+
+function PostGlyph() {
+  return (
+    <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M20 12.4c0 3.9-3.6 7-8 7a9 9 0 0 1-2.4-.3L5 21l1.2-3.3A6.6 6.6 0 0 1 4 12.4c0-3.9 3.6-7 8-7s8 3.1 8 7z"
+        stroke={theme.colors.text}
+        strokeWidth={1.9}
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+
+/**
+ * Prices on a bonding curve start far below a cent, so a two-decimal format
+ * would render most of this app's markets as "$0.00". Three significant
+ * figures keeps the reading true at any magnitude.
+ */
+function price(value: number, currency: string): string {
+  if (!Number.isFinite(value)) return "—";
+  if (value >= 0.01) return money(value, currency, { compact: false });
+  const figure = value.toPrecision(3);
+  return currency === "USD" ? `$${figure}` : `${figure} ${currency}`;
 }
 
 const Page = styled(SafeAreaView)`
@@ -466,12 +846,6 @@ const NavGrow = styled.View`
   flex: 1;
 `;
 
-const Trader = styled.Pressable`
-  flex-direction: row;
-  align-items: center;
-  gap: 10px;
-`;
-
 const Back = styled.Pressable`
   width: 36px;
   height: 36px;
@@ -481,84 +855,197 @@ const Back = styled.Pressable`
   justify-content: center;
 `;
 
-
 const Loading = styled.View`
   padding-horizontal: ${(p) => p.theme.space(4)}px;
-  gap: ${(p) => p.theme.space(4)}px;
+`;
+
+const Padded = styled.View`
+  padding-horizontal: ${(p) => p.theme.space(4)}px;
+  padding-top: ${(p) => p.theme.space(5)}px;
 `;
 
 const Thumb = styled.Image`
-  width: 76px;
-  height: 76px;
-  border-radius: ${(p) => p.theme.radius.lg}px;
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
   background-color: ${(p) => p.theme.colors.surfaceAlt};
 `;
 
-const ThumbEmpty = styled.View`
-  width: 76px;
-  height: 76px;
-  border-radius: ${(p) => p.theme.radius.lg}px;
-  background-color: ${(p) => p.theme.colors.surface};
+const IconTap = styled.View`
+  padding: 4px;
+`;
+
+const Chip = styled.View`
+  flex-direction: row;
   align-items: center;
-  justify-content: center;
+  gap: 6px;
+  padding: 9px 14px;
+  border-radius: ${(p) => p.theme.radius.pill}px;
+  background-color: ${(p) => p.theme.colors.surfaceAlt};
+`;
+
+const ChipMark = styled.Text`
+  font-size: ${(p) => p.theme.type.label.size}px;
+  font-weight: 800;
+  color: ${(p) => p.theme.colors.muted};
+`;
+
+const ChipText = styled.Text`
+  font-size: ${(p) => p.theme.type.label.size}px;
+  font-weight: 700;
+  letter-spacing: ${(p) => p.theme.type.label.tracking}px;
+  color: ${(p) => p.theme.colors.text};
+`;
+
+const Band = styled.View`
+  flex-direction: row;
+  align-items: stretch;
+  margin-top: ${(p) => p.theme.space(5)}px;
+  padding-vertical: ${(p) => p.theme.space(3)}px;
+  border-top-width: ${(p) => p.theme.hairline}px;
+  border-bottom-width: ${(p) => p.theme.hairline}px;
+  border-color: ${(p) => p.theme.colors.line};
+`;
+
+const Cell = styled.View`
+  flex: 1;
+  gap: 3px;
+  padding-horizontal: 4px;
+`;
+
+const CellValue = styled.Text`
+  font-size: ${(p) => p.theme.type.lead.size}px;
+  font-weight: 800;
+  font-variant: tabular-nums;
+  letter-spacing: ${(p) => p.theme.type.lead.tracking}px;
+  color: ${(p) => p.theme.colors.text};
 `;
 
 const Divider = styled.View`
-  height: 1px;
+  width: ${(p) => p.theme.hairline}px;
   background-color: ${(p) => p.theme.colors.line};
-  margin-vertical: ${(p) => p.theme.space(3)}px;
 `;
 
-/**
- * Prices on a bonding curve start far below a cent, so a two-decimal format
- * collapses them all to zero. Significant digits are what make an early curve
- * readable at all.
- */
-function price(value: number, currency: string): string {
-  if (!Number.isFinite(value)) return "—";
-  if (value >= 0.01) return money(value, currency, { compact: false });
-  const figure = value.toPrecision(3);
-  return currency === "USD" ? `$${figure}` : `${figure} ${currency}`;
-}
-
-const Spacer = styled.View`
-  height: 8px;
+const RaisedRow = styled.View`
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  margin-top: ${(p) => p.theme.space(4)}px;
 `;
 
-const Side = styled.Text<{ $buy: boolean }>`
-  font-size: ${(p) => p.theme.type.label.size}px;
+const End = styled.Text`
+  font-size: ${(p) => p.theme.type.caption.size}px;
   font-weight: 700;
-  text-transform: capitalize;
+  font-variant: tabular-nums;
+  color: ${(p) => p.theme.colors.muted};
+`;
+
+const Track = styled.View`
+  flex: 1;
+  height: 8px;
+  border-radius: 4px;
+  background-color: ${(p) => p.theme.colors.line};
+  overflow: hidden;
+`;
+
+const FillBar = styled.View`
+  height: 8px;
+  background-color: ${(p) => p.theme.colors.pos};
+`;
+
+const TabBar = styled.View`
+  flex-direction: row;
+  gap: ${(p) => p.theme.space(5)}px;
+  margin-top: ${(p) => p.theme.space(5)}px;
+  border-bottom-width: ${(p) => p.theme.hairline}px;
+  border-bottom-color: ${(p) => p.theme.colors.line};
+`;
+
+const TabTap = styled.Pressable`
+  padding-bottom: 10px;
+`;
+
+const TabLabel = styled.Text<{ $on: boolean }>`
+  font-size: ${(p) => p.theme.type.label.size}px;
+  font-weight: ${(p) => (p.$on ? 800 : 600)};
+  letter-spacing: ${(p) => p.theme.type.label.tracking}px;
+  color: ${(p) => (p.$on ? p.theme.colors.text : p.theme.colors.muted)};
+`;
+
+const TabRule = styled.View<{ $on: boolean }>`
+  height: 2px;
+  margin-top: 8px;
+  margin-bottom: -1px;
+  background-color: ${(p) => (p.$on ? p.theme.colors.text : "transparent")};
+`;
+
+const Line = styled.View`
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  padding-vertical: ${(p) => p.theme.space(3)}px;
+  border-bottom-width: ${(p) => p.theme.hairline}px;
+  border-bottom-color: ${(p) => p.theme.colors.line};
+`;
+
+const Verb = styled.Text<{ $buy: boolean }>`
+  font-size: ${(p) => p.theme.type.label.size}px;
+  font-weight: 800;
   width: 38px;
   color: ${(p) => (p.$buy ? p.theme.colors.pos : p.theme.colors.neg)};
 `;
 
+const Rank = styled.Text`
+  font-size: ${(p) => p.theme.type.caption.size}px;
+  font-weight: 700;
+  font-variant: tabular-nums;
+  width: 18px;
+  color: ${(p) => p.theme.colors.faint};
+`;
+
+const Empty = styled.View`
+  padding-vertical: ${(p) => p.theme.space(6)}px;
+`;
+
+const SaveSlot = styled.View`
+  margin-top: ${(p) => p.theme.space(4)}px;
+`;
+
+const Rows = styled.View`
+  margin-top: ${(p) => p.theme.space(4)}px;
+  border-radius: ${(p) => p.theme.radius.md}px;
+  overflow: hidden;
+`;
+
+const DetailBox = styled.View<{ $shaded: boolean }>`
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px ${(p) => p.theme.space(3)}px;
+  background-color: ${(p) => (p.$shaded ? p.theme.colors.surfaceAlt : "transparent")};
+`;
+
+const DetailValue = styled.Text`
+  font-size: ${(p) => p.theme.type.label.size}px;
+  font-weight: 700;
+  font-variant: tabular-nums;
+  color: ${(p) => p.theme.colors.text};
+`;
+
 const LinkTap = styled.Pressable`
-  padding-vertical: ${(p) => p.theme.space(3)}px;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  margin-top: ${(p) => p.theme.space(4)}px;
 `;
 
 const LinkText = styled.Text`
   font-size: ${(p) => p.theme.type.label.size}px;
-  font-weight: 600;
+  font-weight: 700;
   color: ${(p) => p.theme.colors.focus};
 `;
 
-/*
- * The sticky trade bar.
- *
- * Full-bleed with its own surface rather than two floating pills: floating,
- * whatever card happened to be scrolled underneath showed through between and
- * around them, which read as a rendering fault rather than as a layer.
- */
-/**
- * Buy and Sell, pinned to the bottom of the screen.
- *
- * `bottom` was 86px, which is the height of the tab bar — but this route is
- * pushed on top of the tabs and has no tab bar under it. The result was an
- * 86px strip below the action bar where the page's own scrolling content
- * showed through, so the bar read as floating over a half-drawn screen rather
- * than sitting on the edge of it.
- */
 const Actions = styled.View`
   position: absolute;
   left: 0;
@@ -571,16 +1058,31 @@ const Actions = styled.View`
   /* Clear of the home indicator. */
   padding-bottom: ${(p) => p.theme.space(7)}px;
   background-color: ${(p) => p.theme.colors.bg};
-  border-top-width: 1px;
+  border-top-width: ${(p) => p.theme.hairline}px;
   border-top-color: ${(p) => p.theme.colors.line};
 `;
 
+const PostTap = styled.View`
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 54px;
+  border-radius: ${(p) => p.theme.radius.pill}px;
+  background-color: ${(p) => p.theme.colors.surfaceAlt};
+`;
+
+const PostText = styled.Text`
+  font-size: ${(p) => p.theme.type.lead.size}px;
+  font-weight: 800;
+  letter-spacing: ${(p) => p.theme.type.lead.tracking}px;
+  color: ${(p) => p.theme.colors.text};
+`;
+
 const GraduatedNote = styled.Text`
-  flex: 1;
+  flex: 1.4;
   font-size: ${(p) => p.theme.type.label.size}px;
   color: ${(p) => p.theme.colors.muted};
-  background-color: ${(p) => p.theme.colors.surface};
-  padding: ${(p) => p.theme.space(4)}px;
-  border-radius: ${(p) => p.theme.radius.md}px;
   text-align: center;
+  align-self: center;
 `;
