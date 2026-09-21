@@ -37,8 +37,26 @@ export function TradePanelClient({
       if (amountIn <= 0) return null;
       const snapshot = await ensureSnapshot();
       if (!snapshot) return null;
-      // Real curve math against the pool as it stands right now.
-      return quoteTrade({ snapshot, side, amountIn, slippageBps: 100 });
+      try {
+        // Real curve math against the pool as it stands right now.
+        return quoteTrade({ snapshot, side, amountIn, slippageBps: 100 });
+      } catch {
+        /*
+         * A size the curve cannot fill is a normal answer.
+         *
+         * `getSwapResult` throws "Insufficient Liquidity" once the requested
+         * amount runs past what the pool can sell, which is exactly what
+         * happens when someone types a number far larger than the curve — an
+         * ordinary thing for a visitor to try. Returned as a rejection it
+         * became an uncaught promise error in the console on every such
+         * attempt, while the panel sat there showing the previous size's
+         * quote.
+         *
+         * Null is already this callback's documented answer for "no quote",
+         * and the panel renders it as "Not priced".
+         */
+        return null;
+      }
     },
     [ensureSnapshot],
   );

@@ -118,10 +118,32 @@ export function TradePanel({
     }
     const id = ++requestRef.current;
     setQuoting(true);
+    /*
+     * The previous answer is not this question's answer.
+     *
+     * Holding the last quote on screen while a new size is priced meant the
+     * panel kept showing a figure for an amount the visitor had already
+     * changed. Typing 999,999,999 SOL left "16.4m" sitting under "You
+     * receive" — the reply for the 20 SOL that used to be in the field,
+     * indistinguishable from a real one and far more believable than an
+     * obviously silly number would have been. Worse, a quote that failed
+     * never cleared it, so the stale figure stayed indefinitely.
+     */
+    setQuote(null);
     const timer = setTimeout(async () => {
       try {
         const result = await onQuote({ side, amountIn, token });
         if (id === requestRef.current) setQuote(result);
+      } catch {
+        /*
+         * A size the curve will not price is an answer, not a crash.
+         *
+         * With only `finally` here the rejection escaped into an unhandled
+         * promise rejection and a red console error, for the ordinary case of
+         * asking for more than the pool can sell. `quote` stays null and the
+         * row reads "Not priced".
+         */
+        if (id === requestRef.current) setQuote(null);
       } finally {
         if (id === requestRef.current) setQuoting(false);
       }
@@ -157,13 +179,23 @@ export function TradePanel({
     return coin.priceUsd > 0 ? `≈ ${usd(amountIn * coin.priceUsd)}` : "—";
   }, [amountIn, buying, quotePrice, coin.priceUsd]);
 
-  const estimated =
-    quote?.amountOut ??
-    (buying
-      ? coin.priceUsd > 0
-        ? amountIn / coin.priceUsd
-        : 0
-      : amountIn * coin.priceUsd);
+  /*
+   * What this trade actually returns, or nothing.
+   *
+   * This used to fall back to `amountIn / coin.priceUsd` whenever the real
+   * quote had not landed, which was wrong twice over. It is a straight line
+   * through a bonding curve, so it is only ever approximately right for a
+   * trade small enough not to move the price — and it divides an amount in
+   * the quote token by a price in dollars, so the units do not even agree.
+   * Asked for 999,999,999 SOL it answered "7t": seven trillion tokens out of
+   * a pool with a billion in existence, stated in the same confident weight
+   * as every figure this app does read honestly.
+   *
+   * There is no local approximation worth showing here. The curve is the only
+   * thing that knows what a size returns, `onQuote` asks it, and until it
+   * answers the correct display is that nothing has been measured yet.
+   */
+  const estimated = quote?.amountOut ?? null;
 
   function setAmount(next: string) {
     if (next !== "" && !/^\d*\.?\d*$/.test(next)) return;
@@ -312,14 +344,28 @@ export function TradePanel({
         <div className="flex items-center justify-between">
           <dt className="text-j-muted">You receive</dt>
           <dd className="flex items-center gap-1.5">
-            {buying && <CoinMark coin={coin} />}
+            {buying && estimated !== null && <CoinMark coin={coin} />}
             <span
               className={cn(
                 "font-semibold tabular-nums",
                 quoting && "opacity-50 transition-opacity",
               )}
             >
-              {buying ? tokenAmount(estimated) : usd(estimated)}
+              {/* Three states, not two: a measured figure, a read in flight,
+                  and a size the curve could not price. */}
+              {estimated !== null ? (
+                buying ? (
+                  tokenAmount(estimated)
+                ) : (
+                  usd(estimated)
+                )
+              ) : quoting ? (
+                <span className="text-j-faint">Pricing…</span>
+              ) : amountIn > 0 ? (
+                <span className="text-j-faint">Not priced</span>
+              ) : (
+                <span className="text-j-faint">—</span>
+              )}
             </span>
           </dd>
         </div>
