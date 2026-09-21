@@ -164,6 +164,29 @@
   color: var(--j-ink);
 }
 
+/* ------------------------------------------------------------
+   Juno owns the page, not just its own box.
+
+   `.juno` is a descendant of `body`, so scoping the theme to it left
+   `html` and `body` on the Norr app's near-black `--bg` and, worse, on
+   `color-scheme: dark`. Three things show through that a screenshot of
+   the content never catches:
+
+   - the rubber-band area above and below the scroll, which is painted
+     from `html`, so pulling a light page reveals black behind it;
+   - scrollbars and default form controls, which the browser paints from
+     the *root* colour scheme rather than the element's;
+   - on iOS, the area behind a translucent status bar.
+
+   `:has()` keeps this to the Juno routes without giving the root layout
+   knowledge of which section it is rendering.
+   ------------------------------------------------------------ */
+html:has(.juno),
+body:has(.juno) {
+  background: #d3e3cb;
+  color-scheme: light;
+}
+
 @theme inline {
   --color-bg: var(--bg);
   --color-surface: var(--surface);
