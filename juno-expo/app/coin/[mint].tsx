@@ -69,9 +69,21 @@ export default function CoinScreen() {
       </Nav>
 
       {detail.loading ? (
+        /* Shaped like the screen it precedes — identity row, price and chart
+           card, stats row, description — rather than one big block over an
+           empty screen. A coin read can take fifteen seconds against the
+           public endpoint, which is a long time to look at nothing. */
         <Loading>
-          <Skeleton h={260} round={22} />
-          <Skeleton h={18} w="60%" />
+          <Row gap={12}>
+            <Skeleton h={76} w={76} round={22} />
+            <Col gap={8} style={{ flex: 1 }}>
+              <Skeleton h={22} w="80%" />
+              <Skeleton h={14} w="45%" />
+            </Col>
+          </Row>
+          <Skeleton h={300} round={22} />
+          <Skeleton h={78} round={22} />
+          <Skeleton h={64} round={22} />
         </Loading>
       ) : detail.error || !coin ? (
         <Placeholder
