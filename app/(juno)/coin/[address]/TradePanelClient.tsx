@@ -53,7 +53,17 @@ export function TradePanelClient({
         connected={connected}
         balanceUsd={balanceUsd}
         holding={holding}
-        quotePricesUsd={{ [coin.quote.mint]: 1 }}
+        /*
+         * The quote token's real dollar price.
+         *
+         * This was a hardcoded 1 — true for USDC and wrong by two orders of
+         * magnitude for SOL, which is what every Juno pool is quoted in. The
+         * coin already carries the rate Pyth gave us; null when no feed
+         * answered, and the panel renders a dash rather than a guess.
+         */
+        quotePricesUsd={
+          coin.quoteUsdRate === null ? {} : { [coin.quote.mint]: coin.quoteUsdRate }
+        }
         onQuote={onQuote}
         submitting={busy}
         onSubmit={({ side, amountIn, quote }) =>

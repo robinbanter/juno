@@ -28,6 +28,10 @@ export type TradeQuoteResult = {
   priceImpact: number;
 };
 
+/** Solana's base fee, in lamports, per signature. A swap carries one. */
+const BASE_FEE_LAMPORTS = 5_000;
+const WSOL = "So11111111111111111111111111111111111111112";
+
 export function TradePanel({
   coin,
   quoteTokens,
@@ -122,8 +126,25 @@ export function TradePanel({
         if (id === requestRef.current) setQuoting(false);
       }
     }, 250);
+
     return () => clearTimeout(timer);
   }, [onQuote, side, amountIn, token]);
+
+  /**
+   * What the chain charges to land this, in dollars.
+   *
+   * Nothing ever supplied `networkFeeUsd`, so this row rendered a pulsing
+   * skeleton forever — a figure that has been claiming to load since it
+   * shipped. Solana's base fee is 5,000 lamports per signature and a swap
+   * carries one, so it is computable whenever the quote token is SOL. On a
+   * USDC-quoted pool that rate says nothing about what a lamport costs, so the
+   * answer is unknown and renders as a dash.
+   */
+  const fee = useMemo(() => {
+    const solPrice = quotePricesUsd?.[WSOL];
+    if (typeof solPrice !== "number" || !(solPrice > 0)) return null;
+    return (BASE_FEE_LAMPORTS / 1e9) * solPrice;
+  }, [quotePricesUsd]);
 
   // Secondary read-out under the field: the quote-token amount on a buy, the
   // dollar value on a sell.
@@ -270,10 +291,20 @@ export function TradePanel({
             <Info size={13} className="text-j-faint" aria-hidden="true" />
           </dt>
           <dd>
-            {networkFeeUsd === undefined ? (
-              <span className="block h-3.5 w-14 animate-pulse rounded bg-j-surface" />
+            {/*
+              The real base fee, or a dash.
+              
+              Nothing ever passed `networkFeeUsd`, so this rendered a pulsing
+              skeleton forever — a row that has been claiming to be loading
+              since it shipped. Solana charges 5,000 lamports per signature and
+              a swap carries one, so the figure is computable whenever the
+              quote token's dollar price is known; when it is not, the honest
+              answer is a dash rather than an animation.
+            */}
+            {fee === null ? (
+              <span className="text-j-faint">—</span>
             ) : (
-              <span className="tabular-nums">{usd(networkFeeUsd)}</span>
+              <span className="tabular-nums">{usd(fee, { compact: false })}</span>
             )}
           </dd>
         </div>
