@@ -255,7 +255,7 @@ const ReadoutRow = styled.View`
 `;
 
 const Mono = styled.Text<{ $up?: boolean }>`
-  font-size: 11px;
+  font-size: ${(p) => p.theme.type.micro.size}px;
   font-weight: 700;
   font-variant: tabular-nums;
   color: ${(p) =>

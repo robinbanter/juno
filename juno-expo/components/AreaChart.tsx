@@ -250,7 +250,7 @@ const Readout = styled.View`
 `;
 
 const ReadoutValue = styled.Text`
-  font-size: 15px;
+  font-size: ${(p) => p.theme.type.body.size}px;
   font-weight: 700;
   font-variant: tabular-nums;
   color: ${(p) => p.theme.colors.text};

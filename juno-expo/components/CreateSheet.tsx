@@ -128,7 +128,7 @@ export function CreateSheet({
               maxLength={MAX + 40}
               style={{
                 minHeight: 108,
-                fontSize: 17,
+                fontSize: theme.type.lead.size,
                 lineHeight: 24,
                 color: theme.colors.text,
                 textAlignVertical: "top",
@@ -187,7 +187,7 @@ function Option({
       <OptionRow>
         <Disc $accent={accent}>{icon}</Disc>
         <Col gap={3} style={{ flex: 1 }}>
-          <Label style={{ fontWeight: "700", fontSize: 16 }}>{title}</Label>
+          <Label style={{ fontWeight: "700", fontSize: theme.type.body.size }}>{title}</Label>
           <Caption>{blurb}</Caption>
         </Col>
         <Chevron />
@@ -272,7 +272,7 @@ const Composer = styled.View`
 `;
 
 const Count = styled.Text<{ $over: boolean }>`
-  font-size: 12px;
+  font-size: ${(p) => p.theme.type.caption.size}px;
   font-weight: 700;
   font-variant: tabular-nums;
   color: ${(p) => (p.$over ? p.theme.colors.neg : p.theme.colors.faint)};
@@ -285,7 +285,7 @@ const Back = styled.Pressable`
 `;
 
 const BackText = styled.Text`
-  font-size: 16px;
+  font-size: ${(p) => p.theme.type.body.size}px;
   font-weight: 600;
   color: ${(p) => p.theme.colors.muted};
 `;

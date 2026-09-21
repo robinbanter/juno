@@ -145,7 +145,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.28)",
   },
   overlay: { padding: 24, paddingBottom: 130, gap: 8 },
-  reelName: { fontSize: 28, fontWeight: "800", color: "#FFFFFF" },
-  reelMeta: { fontSize: 13, fontWeight: "500", color: "rgba(255,255,255,0.86)" },
+  reelName: { fontSize: theme.type.screen.size, fontWeight: "800", color: "#FFFFFF" },
+  reelMeta: { fontSize: theme.type.label.size, fontWeight: "500", color: "rgba(255,255,255,0.86)" },
   reelCta: { marginTop: 12, alignSelf: "flex-start", paddingHorizontal: 40 },
 });

@@ -294,7 +294,7 @@ const Grabber = styled.View`
 `;
 
 const HeadTab = styled.Text<{ $on: boolean }>`
-  font-size: 19px;
+  font-size: ${(p) => p.theme.type.title.size}px;
   font-weight: ${(p) => (p.$on ? 800 : 500)};
   color: ${(p) => (p.$on ? p.theme.colors.text : p.theme.colors.faint)};
 `;
@@ -309,19 +309,19 @@ const Close = styled.Pressable`
 `;
 
 const CloseMark = styled.Text`
-  font-size: 15px;
+  font-size: ${(p) => p.theme.type.body.size}px;
   color: ${(p) => p.theme.colors.muted};
 `;
 
 const Balance = styled.Text`
-  font-size: 13px;
+  font-size: ${(p) => p.theme.type.label.size}px;
   font-weight: 500;
   color: ${(p) => p.theme.colors.muted};
   text-align: center;
 `;
 
 const Receive = styled.Text`
-  font-size: 13px;
+  font-size: ${(p) => p.theme.type.label.size}px;
   font-weight: 600;
   color: ${(p) => p.theme.colors.text};
   min-height: 18px;
@@ -340,14 +340,14 @@ const AmountRow = styled.View`
 `;
 
 const AmountValue = styled.Text`
-  font-size: 46px;
+  font-size: ${(p) => p.theme.type.display.size}px;
   font-weight: 800;
   letter-spacing: -1.4px;
   color: ${(p) => p.theme.colors.text};
 `;
 
 const AmountUnit = styled.Text`
-  font-size: 22px;
+  font-size: ${(p) => p.theme.type.title.size}px;
   font-weight: 600;
   color: ${(p) => p.theme.colors.faint};
 `;
@@ -361,7 +361,7 @@ const Quick = styled.Pressable`
 `;
 
 const QuickLabel = styled.Text`
-  font-size: 13px;
+  font-size: ${(p) => p.theme.type.label.size}px;
   font-weight: 600;
   color: ${(p) => p.theme.colors.text};
 `;
@@ -379,13 +379,13 @@ const Key = styled.Pressable`
 `;
 
 const KeyLabel = styled.Text`
-  font-size: 25px;
+  font-size: ${(p) => p.theme.type.heading.size}px;
   font-weight: 500;
   color: ${(p) => p.theme.colors.text};
 `;
 
 const ErrorText = styled.Text`
-  font-size: 13px;
+  font-size: ${(p) => p.theme.type.label.size}px;
   color: ${(p) => p.theme.colors.neg};
   text-align: center;
 `;
@@ -398,7 +398,7 @@ const Done = styled.View`
 `;
 
 const DoneTitle = styled.Text`
-  font-size: 26px;
+  font-size: ${(p) => p.theme.type.heading.size}px;
   font-weight: 800;
   color: ${(p) => p.theme.colors.pos};
 `;
@@ -406,7 +406,7 @@ const DoneTitle = styled.Text`
 const LinkTap = styled.Pressable``;
 
 const LinkText = styled.Text`
-  font-size: 13px;
+  font-size: ${(p) => p.theme.type.label.size}px;
   font-weight: 600;
   color: ${(p) => p.theme.colors.focus};
   margin-top: 6px;

@@ -47,6 +47,18 @@ export const Ledger = styled.View`
   background-color: ${(p) => p.theme.colors.surface};
   border-radius: ${(p) => p.theme.radius.lg}px;
   overflow: hidden;
+  /*
+   * Bounded, explicitly.
+   *
+   * A vertical ScrollView's content container does not reliably cap a child's
+   * width, so a Text inside one can measure against an unbounded line and lay
+   * itself out on a single row — which the sheet then clips. The tell was that
+   * the *shortest* post in the feed was the one cut off: the longer bodies
+   * exceeded the over-wide measurement and wrapped anyway, so the bug looked
+   * like one bad string rather than a missing constraint.
+   */
+  align-self: stretch;
+  width: 100%;
 `;
 
 /** One entry. The rule goes above, so the first entry has none. */
@@ -204,7 +216,7 @@ const Touchable = styled(Animated.createAnimatedComponent(Pressable))<{
 `;
 
 const ButtonLabel = styled.Text<{ $fg: string }>`
-  font-size: 16px;
+  font-size: ${(p) => p.theme.type.body.size}px;
   font-weight: 700;
   color: ${(p) => p.$fg};
 `;
@@ -268,7 +280,7 @@ const PillBox = styled.View<{ $bg: string }>`
 `;
 
 const PillText = styled.Text<{ $fg: string }>`
-  font-size: 11px;
+  font-size: ${(p) => p.theme.type.micro.size}px;
   font-weight: 600;
   color: ${(p) => p.$fg};
 `;
@@ -300,7 +312,7 @@ export function Pill({
 /* ------------------------------------------------------------------ */
 
 const DeltaText = styled.Text<{ $fg: string }>`
-  font-size: 13px;
+  font-size: ${(p) => p.theme.type.label.size}px;
   font-weight: 700;
   font-variant: tabular-nums;
   color: ${(p) => p.$fg};
@@ -448,7 +460,7 @@ const StatCol = styled.View`
 `;
 
 const StatValue = styled.Text<{ $fg?: string }>`
-  font-size: 17px;
+  font-size: ${(p) => p.theme.type.lead.size}px;
   font-weight: 700;
   font-variant: tabular-nums;
   color: ${(p) => p.$fg ?? p.theme.colors.text};
@@ -494,7 +506,7 @@ const TabItem = styled.Pressable<{ $on: boolean }>`
 `;
 
 const TabLabel = styled.Text<{ $on: boolean }>`
-  font-size: 14px;
+  font-size: ${(p) => p.theme.type.label.size}px;
   font-weight: ${(p) => (p.$on ? 700 : 500)};
   color: ${(p) => (p.$on ? p.theme.colors.text : p.theme.colors.faint)};
 `;
@@ -539,7 +551,7 @@ const Seg = styled.Pressable<{ $on: boolean }>`
 `;
 
 const SegLabel = styled.Text<{ $on: boolean }>`
-  font-size: 12px;
+  font-size: ${(p) => p.theme.type.caption.size}px;
   font-weight: ${(p) => (p.$on ? 700 : 500)};
   color: ${(p) => (p.$on ? p.theme.colors.onLime : p.theme.colors.muted)};
 `;
@@ -577,14 +589,14 @@ const PlaceholderBox = styled.View`
 `;
 
 const PlaceholderTitle = styled.Text`
-  font-size: 15px;
+  font-size: ${(p) => p.theme.type.body.size}px;
   font-weight: 700;
   color: ${(p) => p.theme.colors.text};
   text-align: center;
 `;
 
 const PlaceholderDetail = styled.Text`
-  font-size: 14px;
+  font-size: ${(p) => p.theme.type.label.size}px;
   line-height: 21px;
   color: ${(p) => p.theme.colors.muted};
   text-align: center;

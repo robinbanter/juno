@@ -152,7 +152,18 @@ export default function SocialScreen() {
         />
       ) : (
         <ScrollView
-          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 130 }}
+          contentContainerStyle={{
+            // `width: "100%"` pins the content container to the scroll
+            // view's own width. Without it a vertical ScrollView sizes its
+            // content box to the widest child, so one long unbroken line
+            // widens the container and every Text then measures against
+            // that wider box — laying out on one line and getting clipped
+            // by the sheet's edge. The tell was that it moved between
+            // entries as the data changed.
+            width: "100%",
+            paddingHorizontal: 16,
+            paddingBottom: 130,
+          }}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
@@ -308,7 +319,7 @@ function FeedRow({
 
         {item.coin ? (
           <CoinChip onPress={() => onOpen(item.coin!.address)}>
-            <Ticker style={{ fontSize: 14 }}>${item.coin.symbol}</Ticker>
+            <Ticker style={{ fontSize: theme.type.label.size }}>${item.coin.symbol}</Ticker>
             <Label muted numberOfLines={1} style={{ flex: 1 }}>
               {item.coin.name}
             </Label>
@@ -392,7 +403,7 @@ const Dot = styled.View`
 `;
 
 const LiveText = styled.Text`
-  font-size: 11px;
+  font-size: ${(p) => p.theme.type.micro.size}px;
   font-weight: 600;
   color: ${(p) => p.theme.colors.muted};
   font-variant: tabular-nums;
@@ -406,21 +417,32 @@ const Loading = styled.View`
 
 
 const Verb = styled.Text<{ $tone: string }>`
-  font-size: 13px;
+  font-size: ${(p) => p.theme.type.label.size}px;
   font-weight: 700;
   color: ${(p) => p.$tone};
 `;
 
 const Ticker = styled.Text`
-  font-size: 16px;
+  font-size: ${(p) => p.theme.type.body.size}px;
   font-weight: 800;
   letter-spacing: -0.2px;
   color: ${(p) => p.theme.colors.text};
 `;
 
+/**
+ * The post's words.
+ *
+ * `width: 100%` is load-bearing, not tidiness. Without it one body in the feed
+ * laid itself out on a single line and was clipped by the sheet's edge while
+ * every other body wrapped — the giveaway being that the *shortest* post was
+ * the one cut off, because the longer ones overflowed the bad measurement far
+ * enough to wrap anyway. Binding the Text to its parent's content width makes
+ * the wrap independent of the string.
+ */
 const PostBody = styled.Text`
+  width: 100%;
   margin-top: ${(p) => p.theme.space(3)}px;
-  font-size: 17px;
+  font-size: ${(p) => p.theme.type.lead.size}px;
   line-height: 24px;
   color: ${(p) => p.theme.colors.text};
 `;

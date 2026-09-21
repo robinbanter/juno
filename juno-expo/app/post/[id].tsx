@@ -130,7 +130,7 @@ export default function PostScreen() {
             ) : null}
 
             <Row justify="space-between" style={{ paddingHorizontal: 4, marginTop: 4 }}>
-              <Heading style={{ fontSize: 17 }}>
+              <Heading style={{ fontSize: theme.type.lead.size }}>
                 {detail.data!.replyCount === 0
                   ? "No replies yet"
                   : `${detail.data!.replyCount} ${detail.data!.replyCount === 1 ? "reply" : "replies"}`}
@@ -211,7 +211,7 @@ const Padded = styled.View`
 `;
 
 const PostBody = styled.Text`
-  font-size: 17px;
+  font-size: ${(p) => p.theme.type.lead.size}px;
   line-height: 25px;
   color: ${(p) => p.theme.colors.text};
   margin-top: ${(p) => p.theme.space(3)}px;
@@ -247,12 +247,12 @@ const Input = styled.TextInput`
   padding-horizontal: ${(p) => p.theme.space(4)}px;
   padding-top: ${(p) => p.theme.space(3)}px;
   padding-bottom: ${(p) => p.theme.space(3)}px;
-  font-size: 15px;
+  font-size: ${(p) => p.theme.type.body.size}px;
   color: ${(p) => p.theme.colors.text};
 `;
 
 const ErrorText = styled.Text`
-  font-size: 13px;
+  font-size: ${(p) => p.theme.type.label.size}px;
   color: ${(p) => p.theme.colors.neg};
   text-align: center;
 `;

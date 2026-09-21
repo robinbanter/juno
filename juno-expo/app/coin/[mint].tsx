@@ -111,7 +111,7 @@ export default function CoinScreen() {
               <Row justify="space-between" align="flex-end">
                 <Col gap={2}>
                   <Caption>Price</Caption>
-                  <Display style={{ fontSize: 30 }}>
+                  <Display style={{ fontSize: theme.type.screen.size }}>
                     {price(coin.priceUsd, coin.marketCapCurrency)}
                   </Display>
                 </Col>
@@ -362,7 +362,7 @@ const Spacer = styled.View`
 `;
 
 const Side = styled.Text<{ $buy: boolean }>`
-  font-size: 13px;
+  font-size: ${(p) => p.theme.type.label.size}px;
   font-weight: 700;
   text-transform: capitalize;
   width: 38px;
@@ -374,7 +374,7 @@ const LinkTap = styled.Pressable`
 `;
 
 const LinkText = styled.Text`
-  font-size: 13px;
+  font-size: ${(p) => p.theme.type.label.size}px;
   font-weight: 600;
   color: ${(p) => p.theme.colors.focus};
 `;
@@ -413,7 +413,7 @@ const Actions = styled.View`
 
 const GraduatedNote = styled.Text`
   flex: 1;
-  font-size: 13px;
+  font-size: ${(p) => p.theme.type.label.size}px;
   color: ${(p) => p.theme.colors.muted};
   background-color: ${(p) => p.theme.colors.surface};
   padding: ${(p) => p.theme.space(4)}px;

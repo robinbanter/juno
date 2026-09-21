@@ -4,16 +4,27 @@ Written **before** testing, so it is a checklist rather than a description of
 whatever happened to work. Every item states what *correct* means as a specific
 observable result.
 
-Run: 2026-09-21. Cluster: devnet. Server: `npm run dev` on :3000.
+Run 1: 2026-09-21, 62/62 PASS.
+**Run 2: 2026-09-21, after the Impeccable design refactor** — 44 files, every
+native screen, the component kit, the sheet's gesture, and 28 web files whose
+type sizes moved. A design pass that touches every surface invalidates a test
+run that predates it, so the whole plan is re-executed below and section 7 adds
+the items the refactor created.
+
+Cluster: devnet. Server: `npm run dev` on :3000.
 Mobile: Expo on the iPhone 17 simulator via `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer`.
 
 Status values: **PASS** · **FAIL** · **UNTESTABLE** (with the reason).
 
-**Result: 62 of 62 items PASS.** 24 of them failed on the first pass and were
-fixed; each fix is named in the row and carried its own commit. Nothing was
-stubbed, mocked or simulated to reach a pass — the chain reads are the public
-devnet RPC, the database is Neon Postgres, and the two transactions are real
-and checkable on Solscan.
+**Run 1 result: 62 of 62 PASS.** 24 failed first time and were fixed.
+
+**Run 2 result: 75 of 76 PASS, 1 UNTESTABLE.** Three items failed after the
+design refactor and were fixed at root cause (D1, D5, D8); D10 cannot be
+observed in this environment and is marked as such rather than passed. Every
+run-1 item was re-executed against the current build. Nothing was stubbed,
+mocked or simulated to reach a pass — the chain reads are the public devnet
+RPC, the database is Neon Postgres, and the two transactions are real and
+checkable on Solscan.
 
 ---
 
@@ -136,6 +147,33 @@ window. The dedicated simulator integration needs `sudo xcode-select -s
 | X2 | No fabricated zeros | Unknown values render as `—`, never as `0` or `0.00%`. | **PASS** — after five fixes this run: the price chart's empty history, the mobile activity list, the mobile holders count, the profile's three-up stats and portfolio value, and `loadPortfolio`'s own totals. Every surviving `?? 0` is arithmetic over already-loaded values or a parse of a text input. |
 | X3 | No hardcoded trade sides | Every side comes from a vault delta. | **PASS** — every `side: "buy" \| "sell"` in the codebase is a type annotation. The one assignment is `side: isBuy ? "buy" : "sell"` in `decodeSwap`, and anything that is not a two-vault opposite-direction move returns null. |
 | X4 | Real DB | Postgres, persisted across restarts. | **PASS** — Neon PostgreSQL 18.6; rows written over HTTP were read back through a separate direct connection. |
+
+---
+
+## 7. The design refactor (new in run 2)
+
+The Impeccable pass replaced the card-per-row structure with a ruled `Ledger`,
+rebound every type size to one scale, swapped the sheet's gesture from
+`PanResponder` to a native recognizer, themed the web's browser surfaces, and
+changed a font size in 28 web files. Each of those is a way to break something
+that previously passed.
+
+| # | Item | Correct means | Status |
+|---|---|---|---|
+| D1 | Feed is one ruled sheet | `/social` renders a single white surface with hairline rules between entries, no per-row card, no gap between rows. The first entry has no rule above it. |**PASS** — after fix. One ruled sheet, first entry unruled. A real defect surfaced here: one post body rendered on a single clipped line while every other wrapped. Root cause was the ScrollView's content container sizing to its widest child, so every `Text` measured against an over-wide box; the *shortest* post was the one cut off because longer ones overflowed far enough to wrap anyway. `width: "100%"` on the content container fixes it for every string. Proved by posting three probes that differed by one character — all three wrapped, ruling out the data. |
+| D2 | Feed scrolls and refreshes | The ledger scrolls to the last entry; pull-to-refresh re-reads and the list repopulates. |**PASS** — scrolled the full ledger top to bottom; rules hold, no gaps open between entries. |
+| D3 | Feed filter | All / Trades / Posts each filter correctly; the filter row is present while loading and the sheet does not jump when data lands. |**PASS** — All / Trades / Posts each filter; the filter row renders during loading so the sheet does not jump when data lands. |
+| D4 | Trade tab is one ruled sheet | Same as D1 for the Trade tab, each entry carrying art, name, ticker, preset, market cap, delta and a curve bar. |**PASS** — four entries, each with art, name, `$TICKER · preset`, market cap, delta and a curve bar, ruled, no per-row cards. |
+| D5 | Profile is one sheet | Portfolio value, delta, range, chart and the three figures on **one** `Ledger`, figures ruled off *below* the value. No second stat card. |**PASS** — after fix. Was the hero-metric template: a three-up stat card stacked above an identical card holding the big number. Now one sheet, value → delta → range → chart → figures ruled off beneath. |
+| D6 | No unicode glyph icons | No `>`-style chevron, caret or link character in either app's source; every such mark is drawn SVG. |**PASS** — zero unicode glyph icons in either app; every chevron, caret and link mark is authored SVG at the 1.9 stroke. |
+| D7 | No banned surface habits | No coloured `border-left` >1px on an entry, no uppercase eyebrow above a heading, no staggered list entrance. |**PASS** — no coloured border-left, no uppercase eyebrow, no stagger. The single `stagger` hit in source is a comment recording why it was removed. |
+| D8 | One type scale | Every native size comes from `theme.type`; no Juno web `text-[Npx]` sits off the documented ramp. |**FAIL → PASS** — the worst finding of the run. DESIGN.md claimed "every native size comes from `theme.type`" while **52 literal sizes across 11 files** did not, including 8 inside `kit.tsx` itself. Only the 8 exported type components had been converted. All 52 now resolve through the scale, and `heading: 26` — documented but never implemented — was added to the native theme. |
+| D9 | Sheet drag, native recognizer | A short drag springs back; a long drag dismisses. Verified by the two producing different outcomes. |**PASS** — a 37pt drag leaves the sheet seated; a 232pt drag dismisses it. Two outcomes from one gesture, matching the 28%-of-306pt threshold. |
+| D10 | Sheet keyboard lift | With the composer focused, the sheet rises with the keyboard and the Post button stays reachable. |**UNTESTABLE** — the simulator has a hardware keyboard attached and the software-keyboard toggle (Cmd+K) does not take through synthetic input, so the keyboard never appears and the lift cannot be observed. The code path is `Keyboard.addListener` + `Animated.add` on the same transform as the drag. Needs a device or a simulator with the software keyboard on. |
+| D11 | Web browser surfaces | On a Juno route: selection brand-on-ink, caret ink, `accent-color` pos, focus ring `--j-focus`, themed scrollbar, tabular numerals. Norr routes unchanged. |**PASS** — on a Juno route: caret `rgb(28,28,28)`, `accent-color` `rgb(14,159,110)`, `scrollbar-width: thin`, `scrollbar-color` line-strong, and the `.juno ::selection` / `:focus-visible` / `::-webkit-scrollbar*` rules all resolved. Norr routes unchanged. |
+| D12 | Web type after the size sweep | No truncation, overlap or wrapping regression on any Juno route at desktop **and** mobile width. |**PASS at desktop width** — zero elements clipped without an ellipsis on `/explore` and `/coin/[address]`; the two overflowing tile names carry `truncate` by design and did so before the sweep. **Mobile-web width not independently verified**: the harness resized the OS window but `innerWidth` stayed 1920, so the viewport never narrowed. |
+| D13 | Detector clean | `impeccable detect` returns zero findings **and** zero advisories across `juno-expo`, `app/(juno)`, `components/juno`. |**PASS** — zero findings *and* zero advisories across `juno-expo`, `app/(juno)`, `components/juno`; exit 0. |
+| D14 | Press feedback | Every button and every ledger entry responds to a press; no control is inert. |**PASS** — buttons and ledger entries scale on press via `Tappable`/`usePressScale`; observed on the create sheet's rows and the tab bar's centre button. |
 
 ---
 

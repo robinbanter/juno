@@ -81,7 +81,18 @@ export default function TradeScreen() {
         />
       ) : (
         <ScrollView
-          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 130 }}
+          contentContainerStyle={{
+            // `width: "100%"` pins the content container to the scroll
+            // view's own width. Without it a vertical ScrollView sizes its
+            // content box to the widest child, so one long unbroken line
+            // widens the container and every Text then measures against
+            // that wider box — laying out on one line and getting clipped
+            // by the sheet's edge. The tell was that it moved between
+            // entries as the data changed.
+            width: "100%",
+            paddingHorizontal: 16,
+            paddingBottom: 130,
+          }}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl

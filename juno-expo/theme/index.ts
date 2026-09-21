@@ -84,6 +84,7 @@ export const theme = {
     body: { size: 16, height: 23, tracking: -0.1 },
     lead: { size: 17, height: 25, tracking: -0.2 },
     title: { size: 21, height: 26, tracking: -0.4 },
+    heading: { size: 26, height: 30, tracking: -0.5 },
     screen: { size: 30, height: 34, tracking: -0.8 },
     display: { size: 40, height: 44, tracking: -1.2 },
   },

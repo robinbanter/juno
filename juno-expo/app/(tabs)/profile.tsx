@@ -338,7 +338,7 @@ const RangeRow = styled.View`
 `;
 
 const Side = styled.Text<{ $buy: boolean }>`
-  font-size: 13px;
+  font-size: ${(p) => p.theme.type.label.size}px;
   font-weight: 700;
   text-transform: capitalize;
   width: 38px;
