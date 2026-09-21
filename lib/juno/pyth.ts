@@ -43,7 +43,7 @@ import { tryRead, ttlCache } from "./rpc";
  * market as a last close rather than implying it is live.
  *
  * Feeds are read from **mainnet** regardless of which cluster Juno is pointed
- * at, because the push oracle does not publish to devnet. A devnet pool priced
+ * at, because the push oracle publishes equities to devnet only as a frozen fork. A devnet pool priced
  * against a real mainnet mark is the intended behaviour: the alternative is no
  * mark at all.
  */
@@ -99,6 +99,20 @@ export const PYTH_FEEDS = {
   "Equity.US.GOOGL/USD": "5a48c03e9b9cb337801073ed9d166817473697efff0d138874e0f6a33d6d5aa6",
   "Equity.US.AMZN/USD": "b5d0e0fa58a1f8b81498ae670ce93c872d14434b72c364885d4fa1b257cbb07a",
   "Equity.US.META/USD": "78a3e3b8e676a8f73c439f5d749737034b139bbbe899ba5775216fba596607fe",
+  /*
+   * SpaceX, on the ordinary equity rail.
+   *
+   * Worth its own note because it is the one pre-IPO name Pyth publishes to
+   * the Solana push oracle. The `Equity.Index.*` family — where OpenAI and
+   * Anthropic live, both 24/7 since 2026-09-17 — is absent from every shard
+   * checked and is reachable only through key-gated Hermes or Pyth Pro. So
+   * SpaceX can be marked against an oracle read on-chain the way NVDA is,
+   * and the other two cannot; Tessera is the reference for those.
+   *
+   * It trades on NYSE hours, so a weekend read is Friday's close. The equity
+   * freshness window already covers that and `marketState` labels it.
+   */
+  "Equity.US.SPCX/USD": "8a593d6edde7a3095213c88116d8840d01e93c2ddeb800bc891772eb8b93bb94",
 } as const;
 
 export type PythFeedName = keyof typeof PYTH_FEEDS;
