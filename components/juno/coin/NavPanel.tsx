@@ -76,8 +76,9 @@ export function NavPanel({ nav, className }: { nav: NavReference; className?: st
           </>
         ) : outside ? (
           <>
-            The curve implies {usd(nav.impliedUsd!, { compact: false })} against
-            a {usd(nav.priceUsd, { compact: false })} mark —{" "}
+            The curve implies {usd(nav.impliedUsd!, { compact: false })} against{" "}
+            a {usd(nav.priceUsd, { compact: false })}{" "}
+            mark —{" "}
             {(Math.abs(nav.deviation!) * 100).toFixed(2)}%{" "}
             {nav.deviation! >= 0 ? "above" : "below"}, outside this
             preset&rsquo;s {nav.bandBps / 100}% band.{" "}
@@ -85,9 +86,9 @@ export function NavPanel({ nav, className }: { nav: NavReference; className?: st
           </>
         ) : (
           <>
-            The curve implies {usd(nav.impliedUsd!, { compact: false })} against
-            a {usd(nav.priceUsd, { compact: false })} mark — inside this
-            preset&rsquo;s {nav.bandBps / 100}% band.{" "}
+            The curve implies {usd(nav.impliedUsd!, { compact: false })} against{" "}
+            a {usd(nav.priceUsd, { compact: false })}{" "}
+            mark — inside this preset&rsquo;s {nav.bandBps / 100}% band.{" "}
             <Provenance nav={nav} />
           </>
         )}
