@@ -199,6 +199,8 @@ export type FeedItem =
       priceNow: number | null;
       currency: string;
       signature?: string;
+      /** What the trader said about this fill when they signed it, if anything. */
+      note: string | null;
       actor: { wallet: string; handle: string; avatarUrl: string };
       coin: {
         address: string;
@@ -218,7 +220,17 @@ export type FeedItem =
       mediaUrl: string | null;
       mediaKind: string | null;
       replyCount: number;
-      coin: { address: string; name: string; symbol: string } | null;
+      /** The market this post is about, priced. Price is null when unread. */
+      coin: {
+        address: string;
+        name: string;
+        symbol: string;
+        priceUsd: number | null;
+        currency: string;
+        changePct: number | null;
+        progress: number | null;
+        graduated: boolean;
+      } | null;
     };
 
 export type PositionTrade = { t: string; side: "buy" | "sell"; base: number; price: number };

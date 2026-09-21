@@ -365,6 +365,11 @@ function FeedRow({
             </Col>
           </Row>
 
+          {/* What they said about it, when they said anything. This is the
+              difference between a ticker tape and a social feed — and the
+              signature on the same row is what makes it checkable. */}
+          {item.note ? <Note>{item.note}</Note> : null}
+
           <Figures>
             <Column>
               <Mono>{tokens(item.amount)}</Mono>
@@ -384,52 +389,110 @@ function FeedRow({
     );
   }
 
+  const art = item.mediaUrl
+    ? juno.still({ kind: item.mediaKind === "video" ? "video" : "image", url: item.mediaUrl })
+    : null;
+
   return (
-    <Tappable onPress={() => onOpenPost(item.id)} to={0.985}>
-      <Entry $first={first}>
-        <Row gap={10}>
-          <Byline
-            onPress={() => onOpenTrader(item.author.wallet)}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel={`Open ${item.author.handle}`}
-          >
-            <Identicon seed={item.author.wallet} size={26} />
-            <Label numberOfLines={1} style={{ fontWeight: "700" }}>
-              {item.author.handle}
-            </Label>
-          </Byline>
+    <Entry $first={first}>
+      <Row gap={10} align="center">
+        <Byline
+          onPress={() => onOpenTrader(item.author.wallet)}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={`Open ${item.author.handle}`}
+        >
+          <Identicon seed={item.author.wallet} size={30} />
+          <Label numberOfLines={1} style={{ fontWeight: "700" }}>
+            {item.author.handle}
+          </Label>
+        </Byline>
+        <Grow />
+        <Caption>{since(item.timestamp)}</Caption>
+      </Row>
+
+      {/* The media, edge to edge inside the entry and square. A post that is a
+          picture should be looked at, not described in a caption beside a
+          thumbnail. */}
+      {art ? (
+        <Tappable onPress={() => onOpenPost(item.id)} to={0.99}>
+          <Media source={{ uri: art }} resizeMode="cover" />
+        </Tappable>
+      ) : null}
+
+      {/* Price, conversation, share — and the thing this app is for. */}
+      {item.coin ? (
+        <ActionRow>
+          <Tappable onPress={() => onOpen(item.coin!.address)} to={0.95}>
+            <Row gap={6} align="center">
+              {/* No arrow when the direction is unknown. `?? 0 >= 0` drew a
+                  green up-arrow beside a dash, which asserts a rise nobody
+                  measured — on a price that had not even been read. */}
+              {item.coin.changePct !== null ? <Arrow $up={item.coin.changePct >= 0} /> : null}
+              <PriceText $tone={priceTone(item.coin.priceUsd, item.coin.changePct)}>
+                {item.coin.priceUsd === null
+                  ? "—"
+                  : money(item.coin.priceUsd, item.coin.currency, { compact: false })}
+              </PriceText>
+            </Row>
+          </Tappable>
+
+          <Tappable onPress={() => onOpenPost(item.id)} to={0.9}>
+            <Row gap={5} align="center">
+              <ReplyGlyph />
+              <Caption>{item.replyCount}</Caption>
+            </Row>
+          </Tappable>
+
           <Grow />
-          <Caption>{since(item.timestamp)}</Caption>
-        </Row>
+          <Tappable onPress={() => onOpen(item.coin!.address)} to={0.96}>
+            <BuyTap accessibilityRole="button" accessibilityLabel={`Buy $${item.coin.symbol}`}>
+              <BuyText>Buy</BuyText>
+            </BuyTap>
+          </Tappable>
+        </ActionRow>
+      ) : null}
 
-        {/* The post's own words, at reading size. This is the content; on a
-            trade entry the equivalent weight goes to the figure. */}
-        <PostBody>{item.body}</PostBody>
-
-        {item.coin ? (
-          <CoinChip onPress={() => onOpen(item.coin!.address)}>
+      {item.coin ? (
+        <Tappable onPress={() => onOpen(item.coin!.address)} to={0.99}>
+          <Row gap={6} align="center" style={{ marginTop: 10 }}>
             <Ticker style={{ fontSize: theme.type.label.size }}>${item.coin.symbol}</Ticker>
             <Label muted numberOfLines={1} style={{ flex: 1 }}>
               {item.coin.name}
             </Label>
             <Chevron size={15} />
-          </CoinChip>
-        ) : null}
+          </Row>
+        </Tappable>
+      ) : null}
 
-        {/* The conversation, and a way into it. A post you cannot answer is an
-            announcement, and this is supposed to be a social app. */}
+      {/* The post's own words, at reading size. This is the content; on a
+          trade entry the equivalent weight goes to the figure. */}
+      <PostBody numberOfLines={art ? 3 : undefined}>{item.body}</PostBody>
+
+      <Tappable onPress={() => onOpenPost(item.id)} to={0.99}>
         <Engagement>
-          <ReplyGlyph />
+          {/* A count, or an invitation — never "0 comments", which reads as a
+              verdict on the post. */}
           <Caption>
             {item.replyCount === 0
-              ? "Reply"
-              : `${item.replyCount} ${item.replyCount === 1 ? "reply" : "replies"}`}
+              ? "Add a comment"
+              : `View all ${item.replyCount} ${item.replyCount === 1 ? "comment" : "comments"}`}
           </Caption>
         </Engagement>
-      </Entry>
-    </Tappable>
+      </Tappable>
+    </Entry>
   );
+}
+
+/**
+ * Colour only where a direction was actually measured.
+ *
+ * An unread price and an unmeasured change both come back as muted ink, which
+ * is the visual form of "nobody knows" — the same rule the dash follows.
+ */
+function priceTone(price: number | null, changePct: number | null): "pos" | "neg" | "flat" {
+  if (price === null || changePct === null) return "flat";
+  return changePct >= 0 ? "pos" : "neg";
 }
 
 function ReplyGlyph() {
@@ -542,6 +605,83 @@ const PostBody = styled.Text`
 
 const Grow = styled.View`
   flex: 1;
+`;
+
+/**
+ * A square, full-bleed inside the entry.
+ *
+ * Square rather than the media's own ratio: a feed of mixed aspect ratios
+ * makes every scroll a different distance and the eye loses its place. The
+ * post screen shows it uncropped.
+ */
+const Media = styled.Image`
+  width: 100%;
+  aspect-ratio: 1;
+  margin-top: ${(p) => p.theme.space(3)}px;
+  border-radius: ${(p) => p.theme.radius.md}px;
+  background-color: ${(p) => p.theme.colors.surfaceAlt};
+`;
+
+const ActionRow = styled.View`
+  flex-direction: row;
+  align-items: center;
+  gap: ${(p) => p.theme.space(4)}px;
+  margin-top: ${(p) => p.theme.space(3)}px;
+`;
+
+/** The direction, drawn — so it is not colour alone carrying it. */
+const Arrow = styled.View<{ $up: boolean }>`
+  width: 0;
+  height: 0;
+  border-left-width: 5px;
+  border-right-width: 5px;
+  border-left-color: transparent;
+  border-right-color: transparent;
+  border-bottom-width: ${(p) => (p.$up ? 8 : 0)}px;
+  border-top-width: ${(p) => (p.$up ? 0 : 8)}px;
+  border-bottom-color: ${(p) => (p.$up ? p.theme.colors.pos : "transparent")};
+  border-top-color: ${(p) => (p.$up ? "transparent" : p.theme.colors.neg)};
+`;
+
+const PriceText = styled.Text<{ $tone: "pos" | "neg" | "flat" }>`
+  font-size: ${(p) => p.theme.type.label.size}px;
+  font-weight: 800;
+  font-variant: tabular-nums;
+  color: ${(p) =>
+    p.$tone === "pos"
+      ? p.theme.colors.pos
+      : p.$tone === "neg"
+        ? p.theme.colors.neg
+        : p.theme.colors.muted};
+`;
+
+const BuyTap = styled.View`
+  padding: 9px 22px;
+  border-radius: ${(p) => p.theme.radius.pill}px;
+  background-color: ${(p) => p.theme.colors.lime};
+`;
+
+const BuyText = styled.Text`
+  font-size: ${(p) => p.theme.type.label.size}px;
+  font-weight: 800;
+  color: ${(p) => p.theme.colors.onLime};
+`;
+
+/**
+ * A trader's own words about their fill.
+ *
+ * Set on a tinted ground so it reads as a quotation rather than as the app
+ * describing the trade — the figures below it are Juno's, this line is theirs.
+ */
+const Note = styled.Text`
+  width: 100%;
+  margin-top: ${(p) => p.theme.space(3)}px;
+  padding: ${(p) => p.theme.space(3)}px;
+  border-radius: ${(p) => p.theme.radius.md}px;
+  background-color: ${(p) => p.theme.colors.surfaceAlt};
+  font-size: ${(p) => p.theme.type.body.size}px;
+  line-height: ${(p) => p.theme.type.body.height}px;
+  color: ${(p) => p.theme.colors.text};
 `;
 
 /**

@@ -3,6 +3,7 @@ import { mediaKind, mediaSrc } from "@/lib/juno/media";
 import { identicon } from "@/lib/juno/identicon";
 import { shortAddress } from "@/lib/juno/format";
 import { listPosts, replyCounts } from "@/lib/juno/posts";
+import { notesForSignatures } from "@/lib/juno/social";
 import { listPools } from "@/lib/juno/registry";
 import { junoError, junoHandler, junoJson, junoOptions } from "@/lib/juno/api";
 import { following } from "@/lib/juno/social-graph";
@@ -36,6 +37,15 @@ type FeedItem =
       priceNow: number | null;
       currency: string;
       signature?: string;
+      /**
+       * What the trader said about this fill, if anything.
+       *
+       * Attached at the moment of signing and stored against the signature, so
+       * the feed can show the claim beside the transaction that backs it. A
+       * trade with no note is just a trade; this is what makes announcing one
+       * a thing you can choose to do.
+       */
+      note: string | null;
       actor: { wallet: string; handle: string; avatarUrl: string };
       coin: {
         address: string;
@@ -55,7 +65,24 @@ type FeedItem =
       mediaUrl: string | null;
       mediaKind: string | null;
       replyCount: number;
-      coin: { address: string; name: string; symbol: string } | null;
+      /**
+       * The market this post is about, priced.
+       *
+       * The whole premise is that a post *is* a market, and a post card that
+       * names one without pricing it is a link, not a market. Price is null
+       * when the pool could not be read — never zero, which would read as
+       * worthless rather than unknown.
+       */
+      coin: {
+        address: string;
+        name: string;
+        symbol: string;
+        priceUsd: number | null;
+        currency: string;
+        changePct: number | null;
+        progress: number | null;
+        graduated: boolean;
+      } | null;
     };
 
 /**
@@ -101,16 +128,46 @@ export async function GET(request: Request) {
     ]);
     const trades = feed.items;
 
-    // One hydration per coin that appears, not per row: a feed shows the same
-    // coin several times and each hydration is a pool read.
-    const mentioned = [...new Set(trades.map((trade) => trade.coinAddress))];
-    const live = new Map<string, { price: number; currency: string }>();
+    /*
+     * One hydration per coin that appears, not per row.
+     *
+     * A feed shows the same coin several times and each hydration is a pool
+     * read. Posts are in this set as well as trades: a post card prices the
+     * market it argues for, and the alternative — naming it and leaving the
+     * price off — is the version this feed shipped with.
+     */
+    const mentioned = [
+      ...new Set([
+        ...trades.map((trade) => trade.coinAddress),
+        ...posts.map((post) => post.baseMint).filter((mint): mint is string => !!mint),
+      ]),
+    ];
+    const live = new Map<
+      string,
+      { price: number; currency: string; changePct: number | null; progress: number; graduated: boolean }
+    >();
     for (const mint of mentioned) {
       const row = byMint.get(mint);
       if (!row) continue;
       const coin = await hydratePool(row).catch(() => null);
-      if (coin) live.set(mint, { price: coin.priceUsd, currency: coin.marketCapCurrency });
+      if (coin) {
+        live.set(mint, {
+          price: coin.priceUsd,
+          currency: coin.marketCapCurrency,
+          changePct: coin.marketCapChangePct,
+          progress: coin.curve.progress,
+          graduated: coin.curve.graduated,
+        });
+      }
     }
+
+    /* One query for every note on this page, rather than one per row. A
+       comments outage costs the notes and leaves the fills — they come from
+       completely different places and only one of them is the chain. */
+    const notes = await notesForSignatures(
+      trades.map((trade) => trade.signature).filter((s): s is string => typeof s === "string"),
+      cluster(),
+    ).catch(() => new Map<string, { body: string }>());
 
     const items: FeedItem[] = [];
 
@@ -129,6 +186,7 @@ export async function GET(request: Request) {
         priceNow: live.get(trade.coinAddress)?.price ?? null,
         currency: live.get(trade.coinAddress)?.currency ?? "USD",
         signature: trade.signature,
+        note: (trade.signature ? notes.get(trade.signature)?.body : null) ?? null,
         actor: { wallet: trade.wallet, ...trade.actor },
         coin: {
           address: trade.coinAddress,
@@ -165,7 +223,16 @@ export async function GET(request: Request) {
         mediaKind: post.mediaMime ? mediaKind(post.mediaMime) : null,
         replyCount: counts.get(post.id) ?? 0,
         coin: row
-          ? { address: row.baseMint, name: row.name, symbol: row.symbol }
+          ? {
+              address: row.baseMint,
+              name: row.name,
+              symbol: row.symbol,
+              priceUsd: live.get(row.baseMint)?.price ?? null,
+              currency: live.get(row.baseMint)?.currency ?? "USD",
+              changePct: live.get(row.baseMint)?.changePct ?? null,
+              progress: live.get(row.baseMint)?.progress ?? null,
+              graduated: live.get(row.baseMint)?.graduated ?? false,
+            }
           : null,
       });
     }

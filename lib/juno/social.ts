@@ -82,6 +82,44 @@ export async function listComments(
   }));
 }
 
+/**
+ * Notes attached to specific trades, keyed by signature.
+ *
+ * The feed shows fills decoded from the chain; a note is something the trader
+ * chose to say about one. Joining them here rather than in the feed's walk
+ * keeps it one query for the whole page instead of one per row, and keeps the
+ * chain read independent of whether Mongo is up — a comments outage costs the
+ * notes, not the feed.
+ *
+ * Signatures are unique, so the last write for one wins; in practice a trade
+ * gets at most one note because only the sheet that signed it can attach one.
+ */
+export async function notesForSignatures(
+  signatures: string[],
+  cluster: string,
+): Promise<Map<string, JunoComment>> {
+  if (signatures.length === 0) return new Map();
+  const docs = await (await comments())
+    .find({ cluster, signature: { $in: signatures } })
+    .sort({ createdAt: 1 })
+    .toArray();
+
+  return new Map(
+    docs.map((doc) => [
+      doc.signature!,
+      {
+        id: doc._id.toString(),
+        coinMint: doc.coinMint,
+        wallet: doc.wallet,
+        body: doc.body,
+        side: doc.side,
+        signature: doc.signature,
+        createdAt: doc.createdAt.toISOString(),
+      },
+    ]),
+  );
+}
+
 export async function addComment(input: {
   coinMint: string;
   cluster: string;
