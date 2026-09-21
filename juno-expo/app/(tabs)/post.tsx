@@ -1,4 +1,4 @@
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import {
   KeyboardAvoidingView,
@@ -65,6 +65,16 @@ const PRESETS = [
 export default function PostScreen() {
   const router = useRouter();
   const wallet = useWallet();
+  /*
+   * Which kind of thing is being launched, chosen in the create sheet.
+   *
+   * It was hardcoded to "post", so the phone could not launch a reel at all
+   * while the web could — and a reel is a different object in the feed, not a
+   * cosmetic label: it decides whether this lands in the grid or the swipe
+   * feed. Defaulting to "post" keeps a direct visit to this route working.
+   */
+  const { format } = useLocalSearchParams<{ format?: string }>();
+  const kind: "post" | "reel" = format === "reel" ? "reel" : "post";
 
   const [name, setName] = useState("");
   const [symbol, setSymbol] = useState("");
@@ -126,7 +136,7 @@ export default function PostScreen() {
           creatorWallet: address,
           name: name.trim(),
           symbol: symbol.trim().toUpperCase(),
-          format: "post",
+          format: kind,
           curvePreset: preset,
           createSignature: poolSignature,
         })
@@ -152,10 +162,13 @@ export default function PostScreen() {
         style={{ flex: 1 }}
       >
         <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
-          <Text style={styles.title}>Launch a coin</Text>
+          <Text style={styles.title}>
+            {kind === "reel" ? "Launch a reel" : "Launch a coin"}
+          </Text>
           <Text style={styles.lede}>
-            Publishing opens a real Meteora bonding curve on Solana. The post is
-            the market.
+            {kind === "reel"
+              ? "A vertical video with a real Meteora bonding curve behind it. It lands in the swipe feed."
+              : "Publishing opens a real Meteora bonding curve on Solana. The post is the market."}
           </Text>
 
           <Card style={styles.form}>

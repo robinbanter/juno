@@ -174,16 +174,4 @@ const Loading = styled.View`
 
 const Tap = styled.Pressable``;
 
-const Art = styled.Image`
-  width: 48px;
-  height: 48px;
-  border-radius: ${(p) => p.theme.radius.md}px;
-  background-color: ${(p) => p.theme.colors.surfaceAlt};
-`;
 
-const ArtEmpty = styled.View`
-  width: 48px;
-  height: 48px;
-  border-radius: ${(p) => p.theme.radius.md}px;
-  background-color: ${(p) => p.theme.colors.surfaceAlt};
-`;

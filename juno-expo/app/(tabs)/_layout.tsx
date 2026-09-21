@@ -1,9 +1,13 @@
-import React from "react";
+import React, { useRef, useState } from "react";
 import { Tabs, usePathname, useRouter } from "expo-router";
-import { Platform } from "react-native";
+import { Animated, Platform } from "react-native";
 import Svg, { Circle, Path, Rect } from "react-native-svg";
 import styled from "styled-components/native";
 
+import { CreateSheet } from "../../components/CreateSheet";
+import { usePressScale } from "../../components/Press";
+import { motion, useReducedMotion } from "../../lib/motion";
+import { feedChanged } from "../../lib/refresh";
 import { theme } from "../../theme";
 
 /**
@@ -19,9 +23,18 @@ import { theme } from "../../theme";
  * all — five icons are already legible, the label only ever appeared on the tab
  * you were demonstrably already on, and dropping it lets each slot breathe.
  * `accessibilityLabel` still names every tab for a screen reader.
+ *
+ * ## Post opens a sheet, it does not navigate
+ *
+ * It used to push a whole screen, which made picking what to create cost a
+ * navigation each way. It now raises a drawer over the feed: the thing behind
+ * stays visible, choosing does not feel like leaving, and a wrong tap costs a
+ * flick down. The `post` tab still exists and is still where a launch actually
+ * happens — the sheet hands off to it with a format already chosen.
  */
 export default function TabsLayout() {
   const router = useRouter();
+  const [creating, setCreating] = useState(false);
   // Which tab is active comes from the route, not from the button's
   // `accessibilityState`. That prop is not populated for a custom
   // `tabBarButton`, so reading it left every slot looking inactive — the lime
@@ -40,6 +53,10 @@ export default function TabsLayout() {
     );
 
   return (
+    // An explicit filling container, so the sheet's `absoluteFill` has
+    // something known to position against rather than whatever box the
+    // navigator happens to render its children into.
+    <Shell>
     <Tabs
       screenOptions={{
         headerShown: false,
@@ -70,7 +87,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="post"
         options={{
-          tabBarButton: () => <PostSlot onPress={() => router.push("/(tabs)/post")} />,
+          tabBarButton: () => <PostSlot open={creating} onPress={() => setCreating((on) => !on)} />,
         }}
       />
       <Tabs.Screen
@@ -82,8 +99,28 @@ export default function TabsLayout() {
         options={{ tabBarButton: slot("Profile", ProfileIcon, "/(tabs)/profile") }}
       />
     </Tabs>
+
+    {/* A sibling of `Tabs`, not a child, so the sheet rises over the tab bar
+        rather than being clipped by the screen it was opened from. */}
+    <CreateSheet
+      visible={creating}
+      onClose={() => setCreating(false)}
+      onLaunch={(format) => router.push(`/(tabs)/post?format=${format}` as never)}
+      onPosted={() => {
+        feedChanged();
+        // `navigate`, not `push`: the sheet is reachable from every tab, and
+        // pushing would stack a second copy of the feed on top of the first
+        // whenever someone posted while already looking at it.
+        router.navigate("/(tabs)/social" as never);
+      }}
+    />
+    </Shell>
   );
 }
+
+const Shell = styled.View`
+  flex: 1;
+`;
 
 function Slot({
   label,
@@ -109,19 +146,58 @@ function Slot({
   );
 }
 
-function PostSlot({ onPress }: { onPress: () => void }) {
+/**
+ * The raised centre button, and the one place in the bar that animates.
+ *
+ * The plus rotates 45° into a close mark while the sheet is up. It is the same
+ * two strokes throughout — nothing appears or disappears, the glyph turns —
+ * which is what makes one control read as having two states rather than two
+ * controls swapping places. It also means the button that opened the sheet is
+ * the button that closes it, and looks like it.
+ *
+ * 45° over 220ms with the drawer curve, so it turns at roughly the pace the
+ * sheet travels; the two read as one gesture rather than two animations that
+ * happened to start together.
+ */
+function PostSlot({ open, onPress }: { open: boolean; onPress: () => void }) {
+  const reduced = useReducedMotion();
+  const { scale, onPressIn, onPressOut } = usePressScale(0.9);
+  const turn = useRef(new Animated.Value(0)).current;
+
+  React.useEffect(() => {
+    Animated.timing(turn, {
+      toValue: open ? 1 : 0,
+      duration: reduced ? 0 : motion.swap,
+      easing: motion.easeDrawer,
+      useNativeDriver: true,
+    }).start();
+  }, [open, reduced, turn]);
+
+  const rotate = turn.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "45deg"] });
+
   return (
-    <PostBox onPress={onPress} accessibilityRole="button" accessibilityLabel="Post — launch a coin">
-      <PostDisc>
-        <Svg width={24} height={24} viewBox="0 0 24 24">
-          <Path
-            d="M12 5v14M5 12h14"
-            stroke={theme.colors.lime}
-            strokeWidth={2.6}
-            strokeLinecap="round"
-          />
-        </Svg>
-      </PostDisc>
+    <PostBox
+      onPress={onPress}
+      onPressIn={onPressIn}
+      onPressOut={onPressOut}
+      accessibilityRole="button"
+      accessibilityState={{ expanded: open }}
+      accessibilityLabel={open ? "Close" : "Create — post, coin or reel"}
+    >
+      <Animated.View style={{ transform: [{ scale }] }}>
+        <PostDisc>
+          <Animated.View style={{ transform: [{ rotate }] }}>
+            <Svg width={24} height={24} viewBox="0 0 24 24">
+              <Path
+                d="M12 5v14M5 12h14"
+                stroke={theme.colors.lime}
+                strokeWidth={2.6}
+                strokeLinecap="round"
+              />
+            </Svg>
+          </Animated.View>
+        </PostDisc>
+      </Animated.View>
     </PostBox>
   );
 }

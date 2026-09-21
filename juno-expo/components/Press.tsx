@@ -1,0 +1,122 @@
+import { useCallback, useRef } from "react";
+import { Animated, Pressable, type PressableProps, type StyleProp, type ViewStyle } from "react-native";
+
+import { motion, useReducedMotion } from "../lib/motion";
+
+/**
+ * The scale-down that tells a finger the interface heard it.
+ *
+ * Nothing in this app had it. A card that does not move under a thumb reads as
+ * a picture of a card, and on a touch screen there is no hover state to carry
+ * the difference — the press *is* the whole conversation.
+ *
+ * Down is faster than up, and that asymmetry is deliberate: the press is the
+ * acknowledgement and wants to be immediate, the release is the system letting
+ * go and can afford to settle. Both stay under 200ms, because past that the
+ * feedback arrives after the user has already moved on.
+ *
+ * Reduced motion keeps it. This is feedback, not decoration — removing it would
+ * cost information and the movement is a couple of points.
+ */
+export function usePressScale(to = 0.97) {
+  const scale = useRef(new Animated.Value(1)).current;
+
+  const onPressIn = useCallback(() => {
+    Animated.timing(scale, {
+      toValue: to,
+      duration: motion.press,
+      easing: motion.easeOut,
+      useNativeDriver: true,
+    }).start();
+  }, [scale, to]);
+
+  const onPressOut = useCallback(() => {
+    Animated.spring(scale, {
+      toValue: 1,
+      tension: 200,
+      friction: 12,
+      useNativeDriver: true,
+    }).start();
+  }, [scale]);
+
+  return { scale, onPressIn, onPressOut };
+}
+
+/**
+ * A pressable that responds to being pressed.
+ *
+ * `scale()` takes the element's children with it, so a card's art, type and
+ * figures all shrink together and the whole thing reads as one object being
+ * pushed rather than a box animating around its contents.
+ */
+export function Tappable({
+  children,
+  style,
+  to = 0.97,
+  ...rest
+}: PressableProps & {
+  children: React.ReactNode;
+  style?: StyleProp<ViewStyle>;
+  /** How far down. 0.95–0.98; below that it stops being feedback and starts being a jump. */
+  to?: number;
+}) {
+  const { scale, onPressIn, onPressOut } = usePressScale(to);
+
+  return (
+    <Pressable onPressIn={onPressIn} onPressOut={onPressOut} {...rest}>
+      <Animated.View style={[style, { transform: [{ scale }] }]}>{children}</Animated.View>
+    </Pressable>
+  );
+}
+
+/**
+ * Fade-and-rise, staggered by position in a list.
+ *
+ * Applied per row rather than to the list, so a row that arrives later (a new
+ * trade landing at the top of the feed) gets the same entrance as the ones that
+ * were there at mount — the feed never re-plays itself wholesale.
+ *
+ * The rise is 14pt. Enough to read as arriving from somewhere, small enough
+ * that ten of them at once is punctuation and not a wave. Reduced motion drops
+ * the travel and keeps the fade.
+ */
+export function Enter({
+  index = 0,
+  children,
+  style,
+}: {
+  index?: number;
+  children: React.ReactNode;
+  style?: StyleProp<ViewStyle>;
+}) {
+  const reduced = useReducedMotion();
+  const progress = useRef(new Animated.Value(0)).current;
+  const started = useRef(false);
+
+  if (!started.current) {
+    started.current = true;
+    Animated.timing(progress, {
+      toValue: 1,
+      duration: motion.swap,
+      // Past the cap the delay stops being decoration and becomes a wait.
+      delay: Math.min(index, motion.staggerCap) * motion.stagger,
+      easing: motion.easeOut,
+      useNativeDriver: true,
+    }).start();
+  }
+
+  const transform = reduced
+    ? undefined
+    : [
+        {
+          translateY: progress.interpolate({
+            inputRange: [0, 1],
+            outputRange: [motion.rise, 0],
+          }),
+        },
+      ];
+
+  return (
+    <Animated.View style={[style, { opacity: progress, transform }]}>{children}</Animated.View>
+  );
+}

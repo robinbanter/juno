@@ -1,7 +1,8 @@
 import React from "react";
-import { ActivityIndicator, type StyleProp, type ViewStyle } from "react-native";
+import { ActivityIndicator, Animated, Pressable, type StyleProp, type ViewStyle } from "react-native";
 import styled, { css } from "styled-components/native";
 
+import { usePressScale } from "./Press";
 import { theme } from "../theme";
 
 /**
@@ -114,7 +115,11 @@ const FILL: Record<Variant, { bg: string; fg: string }> = {
   quiet: { bg: theme.colors.surfaceAlt, fg: theme.colors.text },
 };
 
-const Touchable = styled.Pressable<{ $bg: string; $inactive: boolean; $tall: boolean }>`
+const Touchable = styled(Animated.createAnimatedComponent(Pressable))<{
+  $bg: string;
+  $inactive: boolean;
+  $tall: boolean;
+}>`
   height: ${(p) => (p.$tall ? 58 : 48)}px;
   border-radius: ${(p) => p.theme.radius.pill}px;
   align-items: center;
@@ -150,15 +155,22 @@ export function Button({
   const fill = FILL[variant];
   const inactive = disabled || loading;
 
+  // A button that does not move under a thumb reads as a picture of a button.
+  // There is no hover state on a phone to carry the difference, so the press
+  // is the entire conversation — and every button in this app was silent.
+  const { scale, onPressIn, onPressOut } = usePressScale();
+
   return (
     <Touchable
       onPress={inactive ? undefined : onPress}
+      onPressIn={inactive ? undefined : onPressIn}
+      onPressOut={inactive ? undefined : onPressOut}
       accessibilityRole="button"
       accessibilityState={{ disabled: inactive, busy: loading }}
       $bg={fill.bg}
       $inactive={inactive}
       $tall={tall}
-      style={style}
+      style={[{ transform: [{ scale }] }, style]}
     >
       {loading ? (
         <ActivityIndicator color={fill.fg} />
