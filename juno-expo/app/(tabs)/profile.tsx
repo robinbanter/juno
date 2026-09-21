@@ -169,9 +169,10 @@ export default function ProfileScreen() {
               <Skeleton h={42} w="60%" />
             ) : (
               // A wallet holding nothing really is worth $0 and should say so.
-              // A wallet whose pools could not all be read is not, and must not.
+              // A wallet whose pools could not all be read is not, and must
+              // not — the server nulls `totalValue` in exactly that case.
               <Display>
-                {data && !(data.partial && data.positions.length === 0)
+                {data && data.totalValue !== null
                   ? money(data.totalValue, currency, { compact: false })
                   : "—"}
               </Display>

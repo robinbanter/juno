@@ -77,9 +77,15 @@ export type Position = {
 export type Portfolio = {
   wallet: string;
   positions: Position[];
-  /** Sum of position values, in USD where every position could be priced in USD. */
-  totalValue: number;
-  /** Null when any held position has no recorded cost. */
+  /**
+   * Sum of position values, in USD where every position could be priced in USD.
+   *
+   * Null when the walk did not finish and found nothing: a wallet holding
+   * nothing really is worth zero and should say so, but a wallet nobody could
+   * read is not, and "$0" there is a number the app did not measure.
+   */
+  totalValue: number | null;
+  /** Null when any held position has no recorded cost, or nothing was measured. */
   totalPnl: number | null;
   totalPnlPct: number | null;
   currency: string;
@@ -282,30 +288,69 @@ export async function loadPortfolio(
 
   positions.sort((a, b) => b.value - a.value);
 
-  const totalValue = positions.reduce((sum, p) => sum + p.value, 0);
-  // A total is only meaningful when every part of it is in the same unit.
-  const currencies = new Set(positions.map((p) => p.currency));
-  const currency = currencies.size === 1 ? [...currencies][0] : "mixed";
-
-  const anyUnknownCost = positions.some((p) => p.balance > 0 && p.unrealisedPnl === null);
-  const totalPnl = anyUnknownCost
-    ? null
-    : positions.reduce((sum, p) => sum + (p.unrealisedPnl ?? 0) + p.realisedPnl, 0);
-
-  const totalCost = positions.reduce(
-    (sum, p) => sum + (p.averageCost === null ? 0 : p.averageCost * p.balance),
-    0,
-  );
+  const totals = totalsFor(positions, partial);
 
   return {
     wallet,
     positions,
-    history: valueOverTime(positions, totalValue),
-    totalValue,
-    totalPnl,
-    totalPnlPct: totalPnl === null || totalCost <= 0 ? null : totalPnl / totalCost,
-    currency,
+    history: valueOverTime(positions, totals.sum),
+    ...totals.portfolio,
     partial,
+  };
+}
+
+/**
+ * The headline figures, and which of them this read actually earned.
+ *
+ * Pure, and separated from the walk above, because the rule it encodes is the
+ * one that keeps getting this wrong and it needs a test that does not need a
+ * network. Three distinct "no":
+ *
+ * - **A complete walk that found nothing.** The wallet holds nothing. `$0` and
+ *   a zero P&L are real measurements and are reported as such.
+ * - **A partial walk that found nothing.** Some pool refused, so nobody knows
+ *   what this wallet holds. Summing an empty list gives zero, and zero reads
+ *   as "flat" — a measurement nobody took. Both totals are null.
+ * - **A holding with no recorded cost.** Its acquisition is outside visible
+ *   history, so P&L is unknowable even though the value is not. Value stands;
+ *   P&L is null.
+ *
+ * A partial walk that *did* find positions reports their totals as a floor,
+ * and `partial` tells the caller so.
+ */
+export function totalsFor(
+  positions: Position[],
+  partial: boolean,
+): {
+  sum: number;
+  portfolio: Pick<Portfolio, "totalValue" | "totalPnl" | "totalPnlPct" | "currency">;
+} {
+  const sum = positions.reduce((total, p) => total + p.value, 0);
+  // A total is only meaningful when every part of it is in the same unit.
+  const currencies = new Set(positions.map((p) => p.currency));
+  const currency = currencies.size === 1 ? [...currencies][0] : "mixed";
+
+  const nothingMeasured = partial && positions.length === 0;
+  const anyUnknownCost = positions.some((p) => p.balance > 0 && p.unrealisedPnl === null);
+
+  const totalPnl =
+    anyUnknownCost || nothingMeasured
+      ? null
+      : positions.reduce((total, p) => total + (p.unrealisedPnl ?? 0) + p.realisedPnl, 0);
+
+  const totalCost = positions.reduce(
+    (total, p) => total + (p.averageCost === null ? 0 : p.averageCost * p.balance),
+    0,
+  );
+
+  return {
+    sum,
+    portfolio: {
+      totalValue: nothingMeasured ? null : sum,
+      totalPnl,
+      totalPnlPct: totalPnl === null || totalCost <= 0 ? null : totalPnl / totalCost,
+      currency,
+    },
   };
 }
 

@@ -234,7 +234,8 @@ export type Position = {
 export type Portfolio = {
   wallet: string;
   positions: Position[];
-  totalValue: number;
+  /** Null when the pool walk did not finish and found nothing — not "$0". */
+  totalValue: number | null;
   totalPnl: number | null;
   totalPnlPct: number | null;
   currency: string;

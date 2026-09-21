@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 
-import { basisFromSwaps } from "@/lib/juno/portfolio";
+import { basisFromSwaps, totalsFor, type Position } from "@/lib/juno/portfolio";
 
 /**
  * Average-cost accounting, which is the part of a portfolio that can lie.
@@ -101,5 +101,87 @@ describe("basisFromSwaps", () => {
     expect(basis.seen).toBe(false);
     expect(basis.quantity).toBe(0);
     expect(basis.realised).toBe(0);
+  });
+});
+
+/**
+ * Which headline figures a read has actually earned.
+ *
+ * This is the third place the same mistake has appeared: summing over an empty
+ * list gives zero, zero renders as a number, and a screen that could not read
+ * the wallet tells you it is flat. The rule lives in one pure function now so
+ * it can be pinned here instead of re-discovered on a phone.
+ */
+function position(over: Partial<Position> = {}): Position {
+  return {
+    baseMint: "mint",
+    poolAddress: "pool",
+    name: "Coin",
+    symbol: "COIN",
+    mediaUrl: null,
+    mediaMime: null,
+    curvePreset: "content",
+    balance: 100,
+    price: 2,
+    value: 200,
+    averageCost: 1,
+    unrealisedPnl: 100,
+    unrealisedPnlPct: 1,
+    realisedPnl: 0,
+    currency: "USD",
+    graduated: false,
+    trades: [],
+    ...over,
+  };
+}
+
+describe("totalsFor", () => {
+  it("reports a real zero for a wallet that was fully read and holds nothing", () => {
+    const { portfolio } = totalsFor([], false);
+    expect(portfolio.totalValue).toBe(0);
+    expect(portfolio.totalPnl).toBe(0);
+  });
+
+  it("reports nothing for a walk that did not finish and found nothing", () => {
+    // The distinction the app kept losing: "$0" is a measurement, and nobody
+    // took one here.
+    const { portfolio } = totalsFor([], true);
+    expect(portfolio.totalValue).toBeNull();
+    expect(portfolio.totalPnl).toBeNull();
+    expect(portfolio.totalPnlPct).toBeNull();
+  });
+
+  it("still totals what a partial walk did find", () => {
+    // Short of the truth, but every number in it was read. The `partial` flag
+    // beside it is what says "at least".
+    const { portfolio } = totalsFor([position()], true);
+    expect(portfolio.totalValue).toBe(200);
+    expect(portfolio.totalPnl).toBe(100);
+  });
+
+  it("drops P&L but keeps value when a holding has no recorded cost", () => {
+    const { portfolio } = totalsFor(
+      [position(), position({ averageCost: null, unrealisedPnl: null, unrealisedPnlPct: null })],
+      false,
+    );
+    expect(portfolio.totalValue).toBe(400);
+    expect(portfolio.totalPnl).toBeNull();
+  });
+
+  it("labels a mixed-quote portfolio rather than summing units that differ", () => {
+    const { portfolio } = totalsFor([position(), position({ currency: "SOL" })], false);
+    expect(portfolio.currency).toBe("mixed");
+    expect(totalsFor([position(), position()], false).portfolio.currency).toBe("USD");
+  });
+
+  it("returns a percentage against cost, not against nothing", () => {
+    const { portfolio } = totalsFor([position({ realisedPnl: 0 })], false);
+    // 100 profit on 100 balance x 1 average cost.
+    expect(portfolio.totalPnlPct).toBeCloseTo(1, 9);
+    // Nothing was paid for a position with no recorded cost, so there is no
+    // base to divide by and no percentage to report.
+    expect(
+      totalsFor([position({ averageCost: null, unrealisedPnl: 5 })], false).portfolio.totalPnlPct,
+    ).toBeNull();
   });
 });
