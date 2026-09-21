@@ -11,6 +11,7 @@ import { GraduatedNotice } from "@/components/juno/coin/GraduatedNotice";
 import { QUOTE_TOKENS } from "@/lib/juno/dbc";
 import { listPoolHolders } from "@/lib/juno/activity";
 import { getPool } from "@/lib/juno/registry";
+import { withRetry } from "@/lib/juno/rpc";
 import { listComments } from "@/lib/juno/social";
 import { ActivityList } from "@/components/juno/coin/ActivityList";
 import { CoinMedia } from "@/components/juno/coin/CoinMedia";
@@ -43,11 +44,26 @@ export default async function CoinPage({
   const row = await getPool(address);
   if (!row) notFound();
 
-  // Trade history is the one slow read. The page renders a fully priced
-  // market without it and streams the chart and activity in behind their own
-  // Suspense boundaries, rather than holding the whole page for a dozen paced
-  // transaction fetches.
-  const coin = await hydratePool(row, { detailed: true, history: false });
+  /*
+   * Trade history is the one slow read. The page renders a fully priced
+   * market without it and streams the chart and activity in behind their own
+   * Suspense boundaries, rather than holding the whole page for a dozen paced
+   * transaction fetches.
+   *
+   * Retried, because this one read is the page. The chart and the activity
+   * list each own their failure and degrade to a sentence, but there is no
+   * degraded version of the pool account itself — without it there is no
+   * price, no curve and no NAV band. So a single 429 from the public endpoint,
+   * which rate-limits hard and recovers in under a second, threw straight past
+   * everything and replaced the entire coin page with the error boundary. It
+   * is a good error boundary; it should still be the rarest thing on this
+   * route, not the one a judge refreshing twice is most likely to see.
+   *
+   * Three attempts with jittered backoff, the same policy every other read
+   * here uses. A genuine outage still lands on the boundary, which says the
+   * network is not answering and offers to retry — which by then is true.
+   */
+  const coin = await withRetry(() => hydratePool(row, { detailed: true, history: false }));
   if (!coin) notFound();
 
   const meteoraLink = meteoraPoolUrl(coin.pool);
