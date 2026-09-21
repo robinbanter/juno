@@ -16,6 +16,7 @@ import { feeSchedule, tokenomics } from "./economics";
 import { identicon } from "./identicon";
 import { activityFromSwap } from "./activity";
 import { mediaKind, mediaSrc } from "./media";
+import { isTesseraRef, tesseraOnChain, tesseraToken } from "./tessera";
 import { tryRead, ttlCache } from "./rpc";
 import {
   changeWithin,
@@ -72,11 +73,17 @@ function creatorFromWallet(wallet: string): Creator {
 }
 
 /**
- * Where the underlying is marked, for a pool that names a Pyth feed.
+ * Where the underlying is marked, for a pool that names a reference.
  *
  * Only equity-shaped presets carry a `navBandBps`, and only pools launched in
- * issuance mode carry a feed id, so most coins have no NAV and that is correct
- * rather than missing — a photo has no net asset value.
+ * issuance mode carry a reference, so most coins have no NAV and that is
+ * correct rather than missing — a photo has no net asset value.
+ *
+ * Two sources, chosen by the reference itself. Pyth for anything listed;
+ * Tessera for the pre-IPO names Pyth has no feed for, which is the entire
+ * reason the second path exists — there is no oracle for a company that has
+ * not floated, and a `tight-nav` curve about SpaceX needs something to be
+ * tight *against*.
  */
 async function navFor(
   row: JunoPoolRow,
@@ -87,14 +94,76 @@ async function navFor(
   const bandBps = CURVE_PRESETS[preset]?.navBandBps;
   if (!bandBps) return null;
 
+  /*
+   * The curve's price, restated in the reference's own units.
+   *
+   * `navUnitsPerToken` is how much of the underlying one token stands for. A
+   * curve token costs a hundredth of a cent and a share of NVDA costs $224, so
+   * without this conversion the band was subtracting two numbers that are not
+   * the same kind of thing and reporting every tracker as "-100%, outside the
+   * band" — arithmetically true and completely meaningless.
+   *
+   * Null when the pool never recorded a ratio, and null is the answer: the
+   * deviation is genuinely unknown rather than zero.
+   */
+  const ratio = row.navUnitsPerToken;
+  const band = (navPriceUsd: number) => {
+    if (ratio === null || !(ratio > 0)) {
+      return { deviation: null, withinBand: null, impliedUsd: null };
+    }
+    const impliedUsd = priceUsd / ratio;
+    const { deviation } = navBand({ curvePriceUsd: impliedUsd, navPriceUsd, bandBps });
+    return {
+      deviation,
+      withinBand: Math.abs(deviation) * 10_000 <= bandBps,
+      impliedUsd,
+    };
+  };
+
+  if (isTesseraRef(row.navFeedId)) {
+    const token = await tesseraToken(row.navFeedId).catch(() => null);
+    if (!token) return null;
+
+    // Read alongside the mark so the disclosure on the coin page is a fact
+    // about the mint today, not a sentence copied out of a whitepaper.
+    const facts = await tesseraOnChain(token.mint).catch(() => null);
+    const { deviation, withinBand, impliedUsd } = band(token.markPrice);
+
+    return {
+      feed: token.id,
+      priceUsd: token.markPrice,
+      deviation,
+      bandBps,
+      withinBand,
+      impliedUsd,
+      unitsPerToken: ratio,
+      /*
+       * When *we* read it, and labelled as such by `state: "mark"`.
+       *
+       * Tessera publishes a price and no timestamp. Putting their mark in the
+       * `updatedAt` slot with a made-up time would be the one number on this
+       * screen that came from nowhere; `ageSeconds: null` is the honest shape.
+       */
+      updatedAt: new Date().toISOString(),
+      ageSeconds: null,
+      state: "mark",
+      source: "tessera",
+      tessera: {
+        id: token.id,
+        mint: token.mint,
+        sector: token.sector,
+        holders: token.holders,
+        markValuation: token.markValuation,
+        supply: token.supply,
+        blocked: facts?.blocked ?? null,
+      },
+    };
+  }
+
   const price = await fetchPythPrice(row.navFeedId);
   if (!price) return null;
 
-  const { deviation } = navBand({
-    curvePriceUsd: priceUsd,
-    navPriceUsd: price.priceUsd,
-    bandBps,
-  });
+  const { deviation, withinBand, impliedUsd } = band(price.priceUsd);
 
   return {
     feed: row.navFeedId,
@@ -102,9 +171,13 @@ async function navFor(
     deviation,
     updatedAt: price.publishedAt,
     bandBps,
-    withinBand: Math.abs(deviation) * 10_000 <= bandBps,
+    withinBand,
+    impliedUsd,
+    unitsPerToken: ratio,
     state: marketStateOf(price),
     ageSeconds: price.ageSeconds,
+    source: "pyth",
+    tessera: null,
   };
 }
 

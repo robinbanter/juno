@@ -1075,8 +1075,27 @@ export const junoPools = pgTable(
     mediaWidth: integer("media_width"),
     mediaHeight: integer("media_height"),
 
-    /** Pyth feed id for equity presets, so the coin page can show NAV. */
+    /**
+     * What this curve is marked against: a Pyth feed id, or `tessera:T-OpenAI`
+     * for a pre-IPO name Pyth has no feed for.
+     */
     navFeedId: text("nav_feed_id"),
+
+    /**
+     * How many units of the reference one token stands for.
+     *
+     * Without this the NAV band was nonsense. A curve token costs a hundredth
+     * of a cent and a share of NVDA costs $224, so comparing the two directly
+     * reported every tracker as "-100.00%, outside the band" — a true
+     * subtraction of two numbers that are not the same kind of thing.
+     *
+     * Set at launch from the reference's own price, so a tracker starts at
+     * parity by construction and the band then measures what it is actually
+     * for: drift *relative to* the underlying. Null for coins that track
+     * nothing, and null on anything launched before this existed — which
+     * yields no deviation rather than a fabricated one.
+     */
+    navUnitsPerToken: doublePrecision("nav_units_per_token"),
 
     /** The launch signature — the receipt a judge clicks. */
     createSignature: varchar("create_signature", { length: 96 }).notNull(),

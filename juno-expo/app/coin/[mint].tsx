@@ -32,6 +32,7 @@ import {
   Placeholder,
   Row,
   Skeleton,
+  Stat,
   Title,
 } from "../../components/kit";
 import { juno, type NavReference, type Plan } from "../../lib/api";
@@ -726,9 +727,29 @@ function DetailRow({
  * as such rather than dressed up as live.
  */
 function NavBand({ nav }: { nav: NavReference }) {
-  const label = /^Equity\.[A-Z]+\.([A-Z.]+)\/USD$/.exec(nav.feed)?.[1] ?? nav.feed.slice(0, 8);
+  const label =
+    nav.tessera?.id ??
+    /^Equity\.[A-Z]+\.([A-Z.]+)\/USD$/.exec(nav.feed)?.[1] ??
+    nav.feed.slice(0, 8);
   const state =
-    nav.state === "live" ? "Live" : nav.state === "closed" ? "Market closed · last close" : "Stale";
+    nav.state === "live"
+      ? "Live"
+      : nav.state === "closed"
+        ? "Market closed · last close"
+        : nav.state === "mark"
+          ? "Published mark"
+          : "Stale";
+
+  /*
+   * Three states, not two.
+   *
+   * A curve token costs a hundredth of a cent and a share costs hundreds of
+   * dollars, so the two are only comparable once the token's price is restated
+   * in the reference's units. A pool with no ratio recorded has no deviation —
+   * which is different from being outside the band, and used to render as
+   * "-100.00%, outside" on every tracker in the app.
+   */
+  const measured = nav.deviation !== null && nav.withinBand !== null;
 
   return (
     <Card style={{ marginTop: 14 }}>
@@ -747,20 +768,59 @@ function NavBand({ nav }: { nav: NavReference }) {
           {state}
         </Caption>
       </Row>
+
       <Row justify="space-between" align="baseline" style={{ marginTop: 8 }}>
         <CellValue style={{ fontSize: theme.type.heading.size }}>
           {money(nav.priceUsd, "USD", { compact: false })}
         </CellValue>
-        <Mono style={{ color: nav.withinBand ? theme.colors.pos : theme.colors.neg }}>
-          {nav.deviation >= 0 ? "+" : ""}
-          {(nav.deviation * 100).toFixed(2)}%
+        <Mono
+          style={{
+            color: !measured
+              ? theme.colors.muted
+              : nav.withinBand
+                ? theme.colors.pos
+                : theme.colors.neg,
+          }}
+        >
+          {measured ? `${nav.deviation! >= 0 ? "+" : ""}${(nav.deviation! * 100).toFixed(2)}%` : "—"}
         </Mono>
       </Row>
+
       <Caption style={{ marginTop: 8 }}>
-        {nav.withinBand
-          ? `Inside this preset's ${nav.bandBps / 100}% band. Read from Pyth on-chain.`
-          : `Outside this preset's ${nav.bandBps / 100}% band.`}
+        {!measured
+          ? `This market names ${label} as its reference but never recorded how much of it one token stands for, so the two prices cannot be compared.`
+          : `This curve implies ${money(nav.impliedUsd!, "USD", { compact: false })} against a ${money(
+              nav.priceUsd,
+              "USD",
+              { compact: false },
+            )} mark — ${nav.withinBand ? "inside" : "outside"} this preset's ${
+              nav.bandBps / 100
+            }% band. ${
+              nav.source === "tessera"
+                ? "Tessera publishes no timestamp with it, so freshness is unknown."
+                : "Read from Pyth on-chain."
+            }`}
       </Caption>
+
+      {/* What Tessera carries and an oracle does not: a company behind the
+          mark, and the reason its token cannot be the other side of a Juno
+          curve — read from the mint, not copied from a whitepaper. */}
+      {nav.tessera ? (
+        <>
+          <Split />
+          <Row>
+            <Stat value={String(nav.tessera.holders)} label="T-token holders" />
+            <Stat
+              value={money(nav.tessera.markValuation, "USD")}
+              label="Implied valuation"
+            />
+            <Stat value={nav.tessera.sector} label="Sector" />
+          </Row>
+          {nav.tessera.blocked ? (
+            <Caption style={{ marginTop: 12 }}>{nav.tessera.blocked}</Caption>
+          ) : null}
+        </>
+      ) : null}
     </Card>
   );
 }
@@ -919,6 +979,13 @@ const CellValue = styled.Text`
   font-variant: tabular-nums;
   letter-spacing: ${(p) => p.theme.type.lead.tracking}px;
   color: ${(p) => p.theme.colors.text};
+`;
+
+/** A hairline inside a card, where the sheet's own rules do not reach. */
+const Split = styled.View`
+  height: ${(p) => p.theme.hairline}px;
+  background-color: ${(p) => p.theme.colors.line};
+  margin-vertical: ${(p) => p.theme.space(4)}px;
 `;
 
 const Divider = styled.View`

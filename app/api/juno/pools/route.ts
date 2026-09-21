@@ -1,7 +1,9 @@
 
 import { junoJson, junoOptions } from "@/lib/juno/api";
 import { CURVE_PRESETS } from "@/lib/juno/curves";
-import { getDbcClient } from "@/lib/juno/dbc";
+import { fetchPoolSnapshot, getDbcClient } from "@/lib/juno/dbc";
+import { fetchPythPrice, quoteTokenUsdPrice } from "@/lib/juno/pyth";
+import { isTesseraRef, tesseraToken } from "@/lib/juno/tessera";
 import { listPools, recordLaunch } from "@/lib/juno/registry";
 import type { CoinFormat, CurvePresetId } from "@/lib/juno/types";
 
@@ -97,6 +99,8 @@ export async function POST(request: Request) {
   const num = (key: string) =>
     typeof body[key] === "number" ? (body[key] as number) : null;
 
+  const navFeedId = str("navFeedId") || null;
+
   const row = await recordLaunch({
     baseMint,
     poolAddress,
@@ -108,7 +112,8 @@ export async function POST(request: Request) {
     description: str("description") || null,
     format,
     curvePreset,
-    navFeedId: str("navFeedId") || null,
+    navFeedId: navFeedId,
+    navUnitsPerToken: await parityRatio(navFeedId, poolAddress, quoteMint),
     mediaUrl: str("mediaUrl") || null,
     posterUrl: str("posterUrl") || null,
     mediaWidth: num("mediaWidth"),
@@ -117,4 +122,53 @@ export async function POST(request: Request) {
   });
 
   return junoJson({ pool: row }, { status: 201 });
+}
+
+/**
+ * How much of the reference one token stands for, fixed at launch.
+ *
+ * A curve token and a share are not the same kind of number — one costs a
+ * hundredth of a cent, the other hundreds of dollars — so a NAV band needs a
+ * conversion or it reports every tracker as 100% below its underlying. The
+ * conversion is chosen once, here, as *whatever makes this market start at
+ * parity*: the curve's opening price divided by the reference's price at the
+ * same moment.
+ *
+ * That is the only defensible choice. Picking any other ratio would be
+ * declaring the market mispriced on the day it opened, and the band exists to
+ * measure drift from the issue, not to grade the issue itself.
+ *
+ * Null when the reference could not be read. A tracker with no ratio shows no
+ * deviation, which is the honest outcome — better than one derived from a
+ * price nobody managed to fetch.
+ */
+async function parityRatio(
+  navFeedId: string | null,
+  poolAddress: string,
+  quoteMint: string,
+): Promise<number | null> {
+  if (!navFeedId) return null;
+
+  const [reference, snapshot] = await Promise.all([
+    referencePriceUsd(navFeedId),
+    fetchPoolSnapshot(poolAddress).catch(() => null),
+  ]);
+  if (reference === null || !(reference > 0) || !snapshot) return null;
+
+  // The curve's price in USD at this instant. `fetchPoolSnapshot` prices in
+  // quote units, so it needs the quote's own dollar rate to compare.
+  const quoteUsd = await quoteTokenUsdPrice(quoteMint).catch(() => null);
+  const openingUsd = snapshot.price * (quoteUsd ?? 1);
+  if (!(openingUsd > 0)) return null;
+
+  return openingUsd / reference;
+}
+
+async function referencePriceUsd(navFeedId: string): Promise<number | null> {
+  if (isTesseraRef(navFeedId)) {
+    const token = await tesseraToken(navFeedId).catch(() => null);
+    return token?.markPrice ?? null;
+  }
+  const price = await fetchPythPrice(navFeedId).catch(() => null);
+  return price?.priceUsd ?? null;
 }

@@ -405,9 +405,21 @@ function NavBandWarning({
 }) {
   const nav = coin.nav;
   if (!nav || !quote || coin.priceUsd <= 0 || nav.priceUsd <= 0) return null;
+  /*
+   * No ratio, no warning.
+   *
+   * This compared the token's price against the underlying's directly, which
+   * on a curve token priced in hundredths of a cent meant the warning fired on
+   * every single trade — a band breach is meaningless until the two figures
+   * are in the same units. `impliedUsd` is the token price restated in the
+   * reference's terms; without it there is nothing honest to say.
+   */
+  if (nav.impliedUsd === null || nav.deviation === null || nav.unitsPerToken === null) {
+    return null;
+  }
 
   // A buy walks the curve up, a sell walks it down.
-  const after = coin.priceUsd * (buying ? 1 + quote.priceImpact : 1 - quote.priceImpact);
+  const after = nav.impliedUsd * (buying ? 1 + quote.priceImpact : 1 - quote.priceImpact);
   const deviation = (after - nav.priceUsd) / nav.priceUsd;
   const breaches = Math.abs(deviation) * 10_000 > nav.bandBps;
 
@@ -423,7 +435,7 @@ function NavBandWarning({
     >
       This trade would put {coin.symbol} {percent(deviation)} against{" "}
       {feedLabel(nav.feed)}
-      {nav.state === "closed" ? "'s last close" : ""} — outside the{" "}
+      {nav.state === "closed" ? "'s last close" : nav.state === "mark" ? "'s mark" : ""} — outside the{" "}
       {nav.bandBps / 100}% band this issuance was launched with.
     </p>
   );

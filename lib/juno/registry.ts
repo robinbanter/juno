@@ -33,6 +33,8 @@ export type LaunchRecord = {
   mediaWidth?: number | null;
   mediaHeight?: number | null;
   navFeedId?: string | null;
+  /** Units of the reference one token stands for — see the schema comment. */
+  navUnitsPerToken?: number | null;
   createSignature: string;
 };
 

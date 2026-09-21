@@ -123,12 +123,31 @@ export type CurveState = {
 export type NavReference = {
   feed: string;
   priceUsd: number;
-  deviation: number;
+  /** Null when the curve and the reference cannot be compared — see `unitsPerToken`. */
+  deviation: number | null;
   updatedAt: string;
   bandBps: number;
-  withinBand: boolean;
-  state: "live" | "closed" | "stale";
-  ageSeconds: number;
+  withinBand: boolean | null;
+  /** The curve's price restated in the reference's units. Null without a ratio. */
+  impliedUsd: number | null;
+  /** How much of the reference one token stands for, fixed at launch. */
+  unitsPerToken: number | null;
+  /** `"mark"` is a published price with no timestamp — freshness is unknown. */
+  state: "live" | "closed" | "stale" | "mark";
+  /** Null when the source publishes no timestamp, as Tessera does not. */
+  ageSeconds: number | null;
+  source: "pyth" | "tessera";
+  /** Present only on a Tessera reference: a company, not a ticker. */
+  tessera: {
+    id: string;
+    mint: string;
+    sector: string;
+    holders: number;
+    markValuation: number;
+    supply: number | null;
+    /** Why this token cannot be a Juno quote mint, read from the mint itself. */
+    blocked: string | null;
+  } | null;
 };
 
 export type Coin = {

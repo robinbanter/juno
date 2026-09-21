@@ -30,7 +30,16 @@ import type { NavReference } from "@/lib/juno/types";
  */
 export function NavPanel({ nav, className }: { nav: NavReference; className?: string }) {
   const label = feedLabel(nav.feed);
-  const outside = !nav.withinBand;
+  /*
+   * Three states, not two.
+   *
+   * `withinBand` is null on a pool with no ratio recorded — the curve's price
+   * and the reference's price are not the same kind of number without one, so
+   * there is nothing to be inside or outside of. Treating null as "outside"
+   * painted a breach on a market nobody had measured.
+   */
+  const measured = nav.deviation !== null && nav.withinBand !== null;
+  const outside = measured && !nav.withinBand;
 
   return (
     <section
@@ -49,26 +58,40 @@ export function NavPanel({ nav, className }: { nav: NavReference; className?: st
         <span
           className={cn(
             "text-[14px] font-semibold tabular-nums",
-            outside ? "text-j-neg" : "text-j-pos",
+            !measured ? "text-j-faint" : outside ? "text-j-neg" : "text-j-pos",
           )}
         >
-          {percent(nav.deviation)}
+          {measured ? percent(nav.deviation!) : "—"}
         </span>
       </div>
 
-      <Band nav={nav} />
+      {measured ? <Band nav={nav} deviation={nav.deviation!} /> : null}
 
       <p className="mt-2 text-[11px] leading-snug text-j-faint">
-        {outside ? (
+        {!measured ? (
           <>
-            The curve is trading {(Math.abs(nav.deviation) * 100).toFixed(2)}%{" "}
-            {nav.deviation >= 0 ? "above" : "below"}{" "}the reference — outside
-            this preset&rsquo;s {nav.bandBps / 100}% band.
+            This market names {label} as its reference but never recorded how
+            much of it one token stands for, so the two prices cannot be
+            compared. The mark above is {label}&rsquo;s, not this curve&rsquo;s.
+          </>
+        ) : outside ? (
+          <>
+            The curve implies {usd(nav.impliedUsd!, { compact: false })} against
+            a {usd(nav.priceUsd, { compact: false })} mark —{" "}
+            {(Math.abs(nav.deviation!) * 100).toFixed(2)}%{" "}
+            {nav.deviation! >= 0 ? "above" : "below"}, outside this
+            preset&rsquo;s {nav.bandBps / 100}% band.
           </>
         ) : (
           <>
-            Inside this preset&rsquo;s {nav.bandBps / 100}% band. Pyth mark from{" "}
-            {since(nav.updatedAt)}, read on-chain.
+            The curve implies {usd(nav.impliedUsd!, { compact: false })} against
+            a {usd(nav.priceUsd, { compact: false })} mark — inside this
+            preset&rsquo;s {nav.bandBps / 100}% band.{" "}
+            {nav.source === "tessera" ? (
+              <>Tessera&rsquo;s published mark; they timestamp it, so freshness is unknown.</>
+            ) : (
+              <>Pyth mark from {since(nav.updatedAt)}, read on-chain.</>
+            )}
           </>
         )}
       </p>
@@ -83,11 +106,11 @@ export function NavPanel({ nav, className }: { nav: NavReference; className?: st
  * "how far off, and which way", which is a polarity question rather than a
  * magnitude one.
  */
-function Band({ nav }: { nav: NavReference }) {
+function Band({ nav, deviation }: { nav: NavReference; deviation: number }) {
   // Show up to twice the band so a breach is visible rather than pinned to the
   // edge, and clamp so an extreme deviation cannot escape the track.
   const limit = (nav.bandBps / 10_000) * 2;
-  const clamped = Math.max(-limit, Math.min(limit, nav.deviation));
+  const clamped = Math.max(-limit, Math.min(limit, deviation));
   const position = 50 + (clamped / limit) * 50;
   const bandHalfWidth = 25; // the band occupies the middle half of the track
 
