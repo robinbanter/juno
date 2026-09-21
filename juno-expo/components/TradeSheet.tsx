@@ -50,6 +50,15 @@ const QUICK_QUOTE = [0.1, 0.25, 0.5, 1];
 const QUICK_SELL = [0.25, 0.5, 0.75, 1];
 
 /**
+ * The move the size suggester searches against.
+ *
+ * One percent of *curve* movement — not one percent of total cost. On a pool
+ * whose fee is 48 bps the two differ by half the budget, and only one of them
+ * grows with the order.
+ */
+const IMPACT_BUDGET = 0.01;
+
+/**
  * How long the pre-sign refresh is allowed to take.
  *
  * Shorter than the client's default, because this one has somewhere to fall
@@ -108,6 +117,20 @@ export function TradeSheet({
   const [signature, setSignature] = useState<string | null>(null);
   const [note, setNote] = useState("");
   const [noteError, setNoteError] = useState<string | null>(null);
+  /**
+   * The largest buy that stays inside a 1% move of the curve.
+   *
+   * Binary-searched server-side against the same `swapQuote` the transaction
+   * is built with, on *curve* impact with the fee excluded — a fee is a flat
+   * percentage and does not grow with size, so including it would make the
+   * answer mostly a constant and give the same number on a deep curve as a
+   * thin one. This is the figure that actually distinguishes Juno's four
+   * presets from each other, and until now it existed only in an endpoint.
+   */
+  const [suggestion, setSuggestion] = useState<
+    { amountIn: number; curveImpact: number; ceilingReached: boolean } | null
+  >(null);
+  const [suggesting, setSuggesting] = useState(false);
   /** When the quote on screen was built. Kept for the "quoted Ns ago" read. */
   const quotedAt = useRef(0);
 
@@ -171,6 +194,33 @@ export function TradeSheet({
       clearTimeout(timer);
     };
   }, [amount, valid, value, side, coin.address, wallet.address]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setSuggestion(null);
+    setSuggesting(true);
+    juno
+      .depth(coin.address, side, IMPACT_BUDGET)
+      .then((result) => {
+        if (cancelled) return;
+        setSuggestion(
+          result.suggestion
+            ? {
+                amountIn: result.suggestion.amountIn,
+                curveImpact: result.suggestion.curveImpact,
+                ceilingReached: result.suggestion.ceilingReached,
+              }
+            : null,
+        );
+      })
+      // No suggestion is a fine outcome and gets no error copy: the pill
+      // simply does not appear. It is a convenience, not the trade.
+      .catch(() => (cancelled ? undefined : setSuggestion(null)))
+      .finally(() => (cancelled ? undefined : setSuggesting(false)));
+    return () => {
+      cancelled = true;
+    };
+  }, [coin.address, side]);
 
   const press = useCallback((key: string) => {
     setError(null);
@@ -385,6 +435,40 @@ export function TradeSheet({
                 </Quick>
               ))}
             </Row>
+
+            {/* How much this curve will take before it moves.
+                A bonding curve's whole character is how it absorbs size, and
+                that number was invisible in the one place a trader is deciding
+                on size. */}
+            {suggesting ? (
+              <Depth>
+                <Caption>Measuring what this curve will take…</Caption>
+              </Depth>
+            ) : suggestion ? (
+              <Tappable
+                onPress={() => setAmount(trimTrailingZeros(suggestion.amountIn))}
+                to={0.98}
+              >
+                <Depth accessibilityRole="button">
+                  <Col gap={2} style={{ flex: 1 }}>
+                    <Label style={{ fontWeight: "700" }}>
+                      {tokens(suggestion.amountIn)} {unit} moves it{" "}
+                      {(suggestion.curveImpact * 100).toFixed(2)}%
+                    </Label>
+                    <Caption>
+                      {suggestion.ceilingReached
+                        ? `Everything this curve can still fill stays under ${
+                            IMPACT_BUDGET * 100
+                          }%.`
+                        : `The most you can ${side} before the curve moves ${
+                            IMPACT_BUDGET * 100
+                          }%.`}
+                    </Caption>
+                  </Col>
+                  <UseIt>Use</UseIt>
+                </Depth>
+              </Tappable>
+            ) : null}
 
             {/* Network fee, and the curve's own cost beside it. They are
                 different things and a trader deciding on size needs the second
@@ -604,6 +688,21 @@ const TokenText = styled.Text`
   font-size: ${(p) => p.theme.type.caption.size}px;
   font-weight: 800;
   color: ${(p) => p.theme.colors.text};
+`;
+
+const Depth = styled.View`
+  flex-direction: row;
+  align-items: center;
+  gap: ${(p) => p.theme.space(3)}px;
+  padding: ${(p) => p.theme.space(3)}px;
+  border-radius: ${(p) => p.theme.radius.md}px;
+  background-color: ${(p) => p.theme.colors.surfaceAlt};
+`;
+
+const UseIt = styled.Text`
+  font-size: ${(p) => p.theme.type.caption.size}px;
+  font-weight: 800;
+  color: ${(p) => p.theme.colors.focus};
 `;
 
 const Line = styled.View`
