@@ -46,7 +46,15 @@ export default function ReelsScreen() {
   }
 
   if (reels.error) {
-    return <View style={styles.screen}><Placeholder title="Could not load reels" detail={reels.error} /></View>;
+    return (
+      <View style={styles.screen}>
+        <Placeholder
+          title="Could not load reels"
+          detail={reels.error}
+          action={<Button label="Try again" onPress={reels.refresh} />}
+        />
+      </View>
+    );
   }
 
   if ((reels.data?.length ?? 0) === 0) {

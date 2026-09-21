@@ -6,6 +6,7 @@ import styled from "styled-components/native";
 
 import {
   Body,
+  Button,
   Caption,
   Card,
   Col,
@@ -70,7 +71,11 @@ export default function TradeScreen() {
           ))}
         </Loading>
       ) : coins.error ? (
-        <Placeholder title="Could not load the market" detail={coins.error} />
+        <Placeholder
+          title="Could not load the market"
+          detail={coins.error}
+          action={<Button label="Try again" onPress={coins.refresh} />}
+        />
       ) : (
         <FlatList
           data={coins.data?.coins ?? []}

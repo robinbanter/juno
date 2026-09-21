@@ -8,6 +8,7 @@ import { JunoMark } from "../../components/logo";
 import {
   Avatar,
   Body,
+  Button,
   Caption,
   Delta,
   Stat,
@@ -62,7 +63,14 @@ export default function SocialScreen() {
           ))}
         </Loading>
       ) : feed.error ? (
-        <Placeholder title="Could not load the feed" detail={feed.error} />
+        // A dead end with no way out of it is the worst version of this
+        // screen: the public RPC recovers on its own within a minute, so the
+        // only thing missing was something to press.
+        <Placeholder
+          title="Could not load the feed"
+          detail={feed.error}
+          action={<Button label="Try again" onPress={feed.refresh} />}
+        />
       ) : (
         <FlatList
           data={feed.data?.items ?? []}
