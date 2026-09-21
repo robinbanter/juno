@@ -1,5 +1,9 @@
 import { hydratePool, poolActivityRead } from "@/lib/juno/chain";
 import { listPoolHolders } from "@/lib/juno/activity";
+import { crowdFromSwaps } from "@/lib/juno/crowd";
+import { fetchPoolSnapshot, vaultsOf } from "@/lib/juno/dbc";
+import { listSwapHistory } from "@/lib/juno/swaps";
+import { quoteTokenUsdPrice } from "@/lib/juno/pyth";
 import { getPool } from "@/lib/juno/registry";
 import { junoError, junoHandler, junoJson, junoOptions } from "@/lib/juno/api";
 
@@ -47,6 +51,30 @@ export async function GET(
      * endpoint had simply refused to hand over, which is the one thing this
      * app is not allowed to do.
      */
+    /*
+     * Who else is in this market.
+     *
+     * Derived from the same decoded fills the chart is drawn from, which by
+     * now are a cache hit — `hydratePool` read them a moment ago. Nothing
+     * extra is fetched, so this is free in RPC terms and the page does not get
+     * slower for having it.
+     */
+    const crowd = await (async () => {
+      // The *same* rate `hydratePool` used, so this is the cached snapshot
+      // rather than a second read under a different key — which is what made
+      // this come back `partial` with every figure zeroed on a pool whose
+      // history had just been walked successfully.
+      const rate = (await quoteTokenUsdPrice(row.quoteMint).catch(() => null)) ?? 1;
+      const snapshot = await fetchPoolSnapshot(row.poolAddress, rate);
+      if (!snapshot) return null;
+      const history = await listSwapHistory(row.poolAddress, vaultsOf(snapshot));
+      // `snapshot.price`, not `coin.priceUsd`. A decoded swap's price is quote
+      // per base, so comparing it against a USD price multiplied the first
+      // buyer's return by whatever SOL costs — it read 113x on an entry that
+      // is up about 13%.
+      return crowdFromSwaps(history.swaps, history.partial, snapshot.price, rate);
+    })().catch(() => null);
+
     const [activity, holders] = await Promise.all([
       poolActivityRead(row, 20).catch(() => ({ items: [], partial: true })),
       listPoolHolders(row.baseMint)
@@ -59,6 +87,8 @@ export async function GET(
       activity: activity.items,
       /** True when the swap walk was cut short: `activity` is not the whole story. */
       activityPartial: activity.partial,
+      /** Null when the history could not be read at all — not "nobody traded". */
+      crowd,
       holders: holders.items,
       /** True when the holder read was refused outright — not "nobody holds it". */
       holdersUnreadable: holders.unreadable,

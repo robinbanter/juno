@@ -344,6 +344,16 @@ async function readPoolSnapshot(
 /* Quotes                                                              */
 /* ------------------------------------------------------------------ */
 
+/**
+ * The curve's activation point, read once.
+ *
+ * Exported so a caller that quotes many sizes against one pool pays for this
+ * once instead of once per quote. See `quoteTrade`'s `currentPoint`.
+ */
+export async function curvePoint(): Promise<BN> {
+  return getCurrentPoint(getConnection(), ActivationType.Timestamp);
+}
+
 export type TradeQuote = {
   /** What the trader receives, in UI units of the output token. */
   amountOut: number;
@@ -351,8 +361,25 @@ export type TradeQuote = {
   minimumAmountOut: number;
   /** Trading fee paid, in UI units of the fee token. */
   fee: number;
-  /** Price impact as a ratio, e.g. 0.012 for 1.2%. */
+  /**
+   * Total shortfall against spot, as a ratio — e.g. 0.012 for 1.2%.
+   *
+   * This is what the trade costs you versus an infinitesimal one, and it
+   * includes the trading fee. It is the right number to show a trader who is
+   * deciding whether to press the button.
+   */
   priceImpact: number;
+  /**
+   * The part of that shortfall the *curve* caused, with the fee taken out.
+   *
+   * These two are routinely confused and behave completely differently with
+   * size: the fee is a fixed percentage and does not grow, while the curve's
+   * movement does. On a pool with a 0.6% fee, a "1% impact" budget leaves only
+   * 0.4% of actual movement — so a size suggester that searched on
+   * `priceImpact` would be mostly searching on a constant, and would give the
+   * same answer on a deep curve as on a thin one.
+   */
+  curveImpact: number;
 };
 
 /**
@@ -367,6 +394,17 @@ export async function quoteTrade(params: {
   /** Input amount in UI units — quote units for a buy, base units for a sell. */
   amountIn: number;
   slippageBps?: number;
+  /**
+   * The curve's activation point, when the caller already has it.
+   *
+   * Reading it is an RPC round trip, and a caller that quotes the same pool at
+   * thirty different sizes — a depth chart, a size search — was making thirty
+   * of them against an endpoint that answers a burst with 429s. The failures
+   * then looked exactly like "the curve cannot fill this", which is a
+   * completely different fact, and a depth chart quietly lost two thirds of
+   * its points to it.
+   */
+  currentPoint?: BN;
 }): Promise<TradeQuote> {
   const { snapshot, side, amountIn, slippageBps = 100 } = params;
   const client = getDbcClient();
@@ -376,7 +414,8 @@ export async function quoteTrade(params: {
   const inDecimals = swapBaseForQuote ? baseDecimals : quoteDecimals;
   const outDecimals = swapBaseForQuote ? quoteDecimals : baseDecimals;
 
-  const currentPoint = await getCurrentPoint(getConnection(), ActivationType.Timestamp);
+  const currentPoint =
+    params.currentPoint ?? (await getCurrentPoint(getConnection(), ActivationType.Timestamp));
 
   const result = client.pool.swapQuote({
     virtualPool: snapshot.pool,
@@ -391,14 +430,28 @@ export async function quoteTrade(params: {
 
   const amountOut = bnToUi(result.outputAmount, outDecimals);
   const spotOut = swapBaseForQuote ? amountIn * snapshot.price : amountIn / snapshot.price;
+  // `collectFeeMode` is QuoteToken for every Juno preset, so the fee is always
+  // denominated in the quote token regardless of direction.
+  const fee = bnToUi(result.tradingFee, quoteDecimals);
+
+  /*
+   * What the curve alone did, with the fee removed.
+   *
+   * On a buy the fee is taken off the input, so the curve only ever saw
+   * `amountIn - fee` and that is what its output should be measured against.
+   * On a sell the fee comes out of the quote the curve produced, so it is
+   * added back to the output instead. Either way the comparison is
+   * like-for-like, which `priceImpact` — fee included — is not.
+   */
+  const curveSpotOut = swapBaseForQuote ? spotOut : Math.max(amountIn - fee, 0) / snapshot.price;
+  const curveOut = swapBaseForQuote ? amountOut + fee : amountOut;
 
   return {
     amountOut,
     minimumAmountOut: bnToUi(result.minimumAmountOut, outDecimals),
-    // `collectFeeMode` is QuoteToken for every Juno preset, so the fee is
-    // always denominated in the quote token regardless of direction.
-    fee: bnToUi(result.tradingFee, quoteDecimals),
+    fee,
     priceImpact: spotOut > 0 ? Math.max(0, (spotOut - amountOut) / spotOut) : 0,
+    curveImpact: curveSpotOut > 0 ? Math.max(0, (curveSpotOut - curveOut) / curveSpotOut) : 0,
   };
 }
 
