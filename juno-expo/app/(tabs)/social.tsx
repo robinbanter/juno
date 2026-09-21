@@ -460,6 +460,14 @@ function FeedRow({
             <Label muted numberOfLines={1} style={{ flex: 1 }}>
               {item.coin.name}
             </Label>
+            {/* Absent, not zero, when the holder read was refused — which the
+                public endpoint does often, and "held by 0" is a claim about a
+                coin with holders. */}
+            {item.coin.holders !== null ? (
+              <Caption>
+                Held by {item.coin.holders} {item.coin.holders === 1 ? "wallet" : "wallets"}
+              </Caption>
+            ) : null}
             <Chevron size={15} />
           </Row>
         </Tappable>

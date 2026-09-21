@@ -230,6 +230,8 @@ export type FeedItem =
         changePct: number | null;
         progress: number | null;
         graduated: boolean;
+        /** Null when the holder read was refused — not "held by nobody". */
+        holders: number | null;
       } | null;
     };
 
@@ -627,13 +629,17 @@ export const juno = {
     createSignature: string;
   }) => api.post<{ pool: unknown }>("/api/juno/pools", input),
 
-  buildSwap: (input: {
-    mint: string;
-    owner: string;
-    side: "buy" | "sell";
-    amountIn: number;
-    slippageBps?: number;
-  }) => api.post<SwapBuild>("/api/juno/tx/swap", input),
+  buildSwap: (
+    input: {
+      mint: string;
+      owner: string;
+      side: "buy" | "sell";
+      amountIn: number;
+      slippageBps?: number;
+    },
+    /** Shorter than the default when the caller has a usable quote to fall back on. */
+    timeoutMs?: number,
+  ) => api.post<SwapBuild>("/api/juno/tx/swap", input, timeoutMs),
 
   buildLaunch: (input: {
     creator: string;

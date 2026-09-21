@@ -82,6 +82,12 @@ type FeedItem =
         changePct: number | null;
         progress: number | null;
         graduated: boolean;
+        /**
+         * How many wallets hold it. Null when the holder read was refused,
+         * which the public endpoint does often — and "held by 0" would be a
+         * different and false claim about a coin with holders.
+         */
+        holders: number | null;
       } | null;
     };
 
@@ -144,7 +150,14 @@ export async function GET(request: Request) {
     ];
     const live = new Map<
       string,
-      { price: number; currency: string; changePct: number | null; progress: number; graduated: boolean }
+      {
+        price: number;
+        currency: string;
+        changePct: number | null;
+        progress: number;
+        graduated: boolean;
+        holders: number | null;
+      }
     >();
     for (const mint of mentioned) {
       const row = byMint.get(mint);
@@ -157,6 +170,7 @@ export async function GET(request: Request) {
           changePct: coin.marketCapChangePct,
           progress: coin.curve.progress,
           graduated: coin.curve.graduated,
+          holders: coin.holders,
         });
       }
     }
@@ -232,6 +246,7 @@ export async function GET(request: Request) {
               changePct: live.get(row.baseMint)?.changePct ?? null,
               progress: live.get(row.baseMint)?.progress ?? null,
               graduated: live.get(row.baseMint)?.graduated ?? false,
+              holders: live.get(row.baseMint)?.holders ?? null,
             }
           : null,
       });

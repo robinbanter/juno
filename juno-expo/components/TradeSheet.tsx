@@ -42,20 +42,21 @@ import { theme } from "../theme";
  * them moved money.
  */
 
-/**
- * How long a quote is trusted before Buy rebuilds it.
- *
- * A Solana blockhash lasts about 150 slots — roughly a minute. Thirty seconds
- * leaves room for the sign-and-send round trip to finish inside that window.
- */
-const STALE_QUOTE_MS = 30_000;
-
 /** Dollar sizes, converted at the quote token's rate. */
 const QUICK_USD = [2, 20, 50, 100];
 /** What a buy offers when no USD feed answered, in quote units. */
 const QUICK_QUOTE = [0.1, 0.25, 0.5, 1];
 /** A sell is a fraction of what you hold; absolute sizes mean nothing there. */
 const QUICK_SELL = [0.25, 0.5, 0.75, 1];
+
+/**
+ * How long the pre-sign refresh is allowed to take.
+ *
+ * Shorter than the client's default, because this one has somewhere to fall
+ * back to. Waiting the full forty-five seconds for a refresh would spend most
+ * of the blockhash window the refresh exists to protect.
+ */
+const REQUOTE_MS = 12_000;
 
 type Stage = "entry" | "confirming" | "done";
 
@@ -107,15 +108,7 @@ export function TradeSheet({
   const [signature, setSignature] = useState<string | null>(null);
   const [note, setNote] = useState("");
   const [noteError, setNoteError] = useState<string | null>(null);
-  /**
-   * When the quote on screen was built.
-   *
-   * A quote carries the blockhash the transaction is signed against, and a
-   * Solana blockhash is good for roughly a minute. Someone who opens this
-   * sheet, thinks about it, and then taps Buy was getting "something went
-   * wrong" from an expired one — for a transaction that was never broadcast
-   * and could have simply been rebuilt.
-   */
+  /** When the quote on screen was built. Kept for the "quoted Ns ago" read. */
   const quotedAt = useRef(0);
 
   const value = Number(amount || "0");
@@ -202,23 +195,32 @@ export function TradeSheet({
       if (!address) throw new Error("No wallet available");
 
       /*
-       * Re-quote if the one on screen has gone stale.
+       * Rebuild the quote, every time, right before signing.
        *
-       * Rebuilding is cheap next to a failed submit, and it is also *more*
-       * correct: the bonding curve moves, so a minute-old quote is not only
-       * carrying a dead blockhash, it is quoting a price nobody would get now.
-       * The rebuilt quote replaces the visible one before signing, so what is
-       * signed is what the sheet last showed.
+       * A quote carries the blockhash the transaction is signed against, and a
+       * Solana blockhash lives about ninety seconds. This was conditional on
+       * the quote being older than thirty seconds, and that still failed: the
+       * *round trip* — rebuild, sign, submit, confirm — can itself take longer
+       * than the remaining life of a blockhash issued half a minute ago,
+       * especially against an endpoint that is rate-limiting.
+       *
+       * So the branch is gone. One extra quote on the fast path costs a call
+       * this sheet already makes on every keystroke; a dead blockhash costs
+       * the trade. It is also *more* correct: the curve moves as it fills, so
+       * a minute-old quote is quoting a price nobody would get now. The
+       * rebuilt quote replaces the visible one before signing, so what is
+       * signed is what the sheet shows.
        */
-      let live = quote;
-      if (Date.now() - quotedAt.current > STALE_QUOTE_MS) {
-        live = await juno.buildSwap({
-          mint: coin.address,
-          owner: address,
-          side,
-          amountIn: value,
-        });
-        setQuote(live);
+      const fresh = await juno
+        .buildSwap({ mint: coin.address, owner: address, side, amountIn: value }, REQUOTE_MS)
+        // A refresh that times out is not a reason to refuse the trade: the
+        // quote on screen may still be inside its blockhash window, and
+        // failing here would turn a slow endpoint into a failed buy. If the
+        // old one has also expired the submit says so, in those words.
+        .catch(() => null);
+      const live = fresh ?? quote;
+      if (fresh) {
+        setQuote(fresh);
         quotedAt.current = Date.now();
       }
 
