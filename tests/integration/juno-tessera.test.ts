@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 
 /**
+ * Live checks against Tessera's public API and Solana mainnet.
+ *
+ * In `integration/` rather than `unit/` because both are real network calls to
+ * a third party. The unit suite is hermetic and one of its files stubs the
+ * global `fetch`, which these would silently inherit — a probe that asserts a
+ * real endpoint answers is worthless if it is talking to a mock.
+ */
+
+/**
  * Live checks against Tessera's public API and mainnet.
  *
  * Not a unit test of pure logic — these assert that the two things Juno now

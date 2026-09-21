@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 /**
+ * A live check of the signature join, against the real comment store.
+ *
+ * In `integration/` because it needs a database: the unit suite is meant to
+ * run anywhere, and this asserts a fact about data that has to already exist.
+ */
+
+/**
  * A live check of the signature join, run against the real store.
  *
  * Not a unit test of pure logic — it is the one link in the announcement path
