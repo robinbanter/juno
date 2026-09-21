@@ -413,14 +413,17 @@ function LaunchResult({
         </Button>
       </div>
 
-      <a
-        href={meteoraPoolUrl(result.pool)}
-        target="_blank"
-        rel="noreferrer noopener"
-        className="text-center text-[12px] text-j-muted underline hover:text-j-ink"
-      >
-        View the curve on Meteora
-      </a>
+      {/* Meteora's app is mainnet-only; on devnet there is no page to open. */}
+      {meteoraPoolUrl(result.pool) && (
+        <a
+          href={meteoraPoolUrl(result.pool)!}
+          target="_blank"
+          rel="noreferrer noopener"
+          className="text-center text-[12px] text-j-muted underline hover:text-j-ink"
+        >
+          View the curve on Meteora
+        </a>
+      )}
     </div>
   );
 }

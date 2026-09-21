@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { ExternalLink } from "lucide-react";
 
-import { shortAddress } from "@/lib/juno/format";
+import { money, shortAddress } from "@/lib/juno/format";
 import { identicon } from "@/lib/juno/identicon";
 
 import { hydratePool, poolActivityRead } from "@/lib/juno/chain";
@@ -50,6 +50,8 @@ export default async function CoinPage({
   const coin = await hydratePool(row, { detailed: true, history: false });
   if (!coin) notFound();
 
+  const meteoraLink = meteoraPoolUrl(coin.pool);
+
   const [holders, comments] = await Promise.all([
     listPoolHolders(row.baseMint),
     listComments(row.baseMint, cluster()).catch(
@@ -72,7 +74,14 @@ export default async function CoinPage({
         </div>
 
         <aside className="w-full shrink-0 lg:max-w-[420px]">
-          <CoinSummary coin={coin} />
+          <CoinSummary
+            coin={coin}
+            volume={
+              <Suspense fallback={<span className="text-j-faint">·</span>}>
+                <StreamedVolume address={address} />
+              </Suspense>
+            }
+          />
           {/* A migrated curve cannot be swapped — the program rejects it.
               Trading continues in the DAMM v2 pool it graduated into. */}
           {coin.curve.graduated ? (
@@ -87,7 +96,8 @@ export default async function CoinPage({
             <Proof href={explorer.token(coin.address)}>Mint</Proof>
             <Proof href={explorer.account(coin.config)}>Config</Proof>
             <Proof href={explorer.tx(row.createSignature)}>Launch tx</Proof>
-            <Proof href={meteoraPoolUrl(coin.pool)}>Meteora</Proof>
+            {/* Only on a cluster Meteora's app actually serves. */}
+            {meteoraLink && <Proof href={meteoraLink}>Meteora</Proof>}
           </div>
 
           <CoinTabs
@@ -153,6 +163,27 @@ async function StreamedChart({ address }: { address: string }) {
     return <PriceChart coin={coin} />;
   } catch {
     return <ChartUnavailable />;
+  }
+}
+
+/**
+ * The 24h volume, read from the same cached swap history the chart uses.
+ *
+ * Deferred for the same reason as the chart, and rendered through a slot on
+ * `CoinSummary` so the stat card can show a real number once the walk lands
+ * instead of freezing on the em dash the fast path leaves behind.
+ */
+async function StreamedVolume({ address }: { address: string }) {
+  try {
+    const row = await getPool(address);
+    if (!row) return <>&mdash;</>;
+    const coin = await hydratePool(row, { detailed: true });
+    if (!coin) return <>&mdash;</>;
+    return <>{money(coin.volume24h, coin.marketCapCurrency)}</>;
+  } catch {
+    // A short read is not a zero. The dash keeps saying "not known" rather
+    // than claiming this pool did no trade today.
+    return <>&mdash;</>;
   }
 }
 

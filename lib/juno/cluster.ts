@@ -50,7 +50,21 @@ export const explorer = {
   token: (mint: string) => `https://solscan.io/token/${mint}${suffix()}`,
 };
 
-/** Meteora's own pool page, which renders the curve rather than raw accounts. */
-export function meteoraPoolUrl(poolAddress: string): string {
+/**
+ * Meteora's own pool page, or null when there is not one to link to.
+ *
+ * `app.meteora.ag` serves mainnet only. Pointed at a devnet pool it does not
+ * show an empty curve, it serves its own 404 — so the one link on the coin
+ * page that was supposed to prove the DBC integration was, on the cluster
+ * this app actually runs on, guaranteed to be broken. A dead proof link is
+ * worse than no proof link: it invites the click and then contradicts the
+ * claim.
+ *
+ * Null rather than a devnet-shaped URL, because there is no such page to
+ * construct. The caller omits the link entirely; the Solscan links beside it
+ * are cluster-aware and still prove the accounts exist.
+ */
+export function meteoraPoolUrl(poolAddress: string): string | null {
+  if (cluster() !== "mainnet-beta") return null;
   return `https://app.meteora.ag/dbc/${poolAddress}`;
 }

@@ -17,7 +17,24 @@ import { CurveProgress } from "./CurveProgress";
 import { NavPanel } from "./NavPanel";
 
 /** Everything above the trade panel: who made it, what it is, how it's doing. */
-export function CoinSummary({ coin }: { coin: Coin }) {
+export function CoinSummary({
+  coin,
+  /*
+   * 24h volume arrives late, or not at all.
+   *
+   * The page renders a fully priced market from the pool account alone and
+   * defers the swap walk, so `coin.volume24h` is null here not because the
+   * figure is unknowable but because it has not been read yet. Rendering
+   * `money(null)` then printed an em dash next to a live market cap and left
+   * it there — a permanent "unknown" for a number the very next read returns.
+   * The caller streams the real figure in through this slot; the dash is only
+   * the fallback for a caller that has nothing to stream.
+   */
+  volume,
+}: {
+  coin: Coin;
+  volume?: React.ReactNode;
+}) {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-2">
@@ -66,7 +83,7 @@ export function CoinSummary({ coin }: { coin: Coin }) {
           },
           {
             label: "24H Volume",
-            value: money(coin.volume24h, coin.marketCapCurrency),
+            value: volume ?? money(coin.volume24h, coin.marketCapCurrency),
             icon: <Flame size={13} className="text-j-muted" aria-hidden="true" />,
           },
           {

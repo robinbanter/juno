@@ -46,6 +46,23 @@ export default async function ExplorePage({
         c.creator.handle.toLowerCase().includes(query),
     );
   }
+  /*
+   * Whether "Trending" can be ranked at all.
+   *
+   * Trending sorts on 24h volume, and volume comes from the swap walk this
+   * view deliberately skips — a dozen paced transaction crawls is not a price
+   * worth paying to draw a grid. So every coin here arrives with
+   * `volume24h: null`, every comparison comes out zero, and the sort is a
+   * no-op that leaves registry order in place under a heading that claims to
+   * rank by activity. The tab looked like it worked, which is why nobody
+   * noticed it never did.
+   *
+   * Counted rather than assumed: when the walk has been done recently the
+   * cache can make some of these real, and a partial ranking is worth
+   * showing as long as it says what it is.
+   */
+  const rankable = coins.filter((c) => c.volume24h !== null).length;
+
   if (sort === "trending") {
     // Coins with unknown volume sort last rather than being treated as zero.
     coins = [...coins].sort((a, b) => (b.volume24h ?? -1) - (a.volume24h ?? -1));
@@ -82,6 +99,15 @@ export default async function ExplorePage({
           </nav>
         )}
       </div>
+
+      {/* A heading that claims a ranking has to be able to produce one. */}
+      {sort === "trending" && coins.length > 0 && rankable < coins.length && (
+        <p className="mb-3 rounded-j border border-j-line bg-j-surface px-3 py-2 text-[12px] text-j-muted">
+          {rankable === 0
+            ? "24h volume is not read on this view, so these are not ranked by activity — they are in the order they launched. Open a coin to see its volume."
+            : `Ranked on the ${rankable} of ${coins.length} coins whose 24h volume has been read; the rest follow in launch order.`}
+        </p>
+      )}
 
       {missing > 0 && coins.length > 0 && (
         <p className="mb-3 rounded-j border border-j-line bg-j-surface px-3 py-2 text-[12px] text-j-muted">

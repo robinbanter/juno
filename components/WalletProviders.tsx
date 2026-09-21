@@ -9,10 +9,12 @@ import {
 } from "@txnlab/use-wallet-react";
 import { WalletUIProvider } from "@txnlab/use-wallet-ui-react";
 import { PrivyProvider } from "@privy-io/react-auth";
+import { usePathname } from "next/navigation";
 import "@txnlab/use-wallet-ui-react/dist/style.css";
 import { privyWalletProvider } from "@/lib/privyWallet";
 import { PrivyBridge } from "@/components/PrivyBridge";
 import { PrivySessionSync } from "@/components/PrivySessionSync";
+import { isJunoRoute } from "@/lib/juno/routes";
 
 const PRIVY_ICON =
   "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iIzY5NjdmZiI+PHJlY3Qgd2lkdGg9IjI0IiBoZWlnaHQ9IjI0IiByeD0iNiIvPjxjaXJjbGUgY3g9IjEyIiBjeT0iOS41IiByPSIzLjIiIGZpbGw9IiNmZmYiLz48cGF0aCBkPSJNNi41IDE4YzAtMyAyLjUtNC44IDUuNS00LjhTMTcuNSAxNSAxNy41IDE4eiIgZmlsbD0iI2ZmZiIvPjwvc3ZnPg==";
@@ -60,6 +62,30 @@ const walletManager = new WalletManager({
  * connect button simply won't have a wallet context until the key is set.
  */
 export function WalletProviders({ children }: { children: React.ReactNode }) {
+  /*
+   * Juno is not a tenant of Norr's wallet stack.
+   *
+   * Norr signs with Algorand wallets through `@txnlab/use-wallet-react` and
+   * authenticates through Privy. Juno signs Solana transactions through
+   * `@solana/wallet-adapter-react` and mounts its own provider in
+   * `app/(juno)/layout.tsx`. The two share no context and no hook.
+   *
+   * Wrapping Juno in Privy anyway was not merely redundant, it was fatal:
+   * `PrivyProvider` holds its subtree until its iframe resolves, and on a
+   * domain the Privy dashboard does not list the iframe never does —
+   * "Exceeded max attempts before resolving function". The whole Juno page
+   * then renders from the server and never hydrates, so every tab, every
+   * toggle and every button on it is inert while looking perfectly fine.
+   * That is how the coin page came to paint a complete trading UI in which
+   * nothing could be clicked.
+   *
+   * `isJunoRoute` is the same switch `AgeGate` uses to stand down, for the
+   * same reason: one app, two products, and Norr's chrome does not belong on
+   * Juno's side of it.
+   */
+  const pathname = usePathname();
+  if (isJunoRoute(pathname)) return <>{children}</>;
+
   // The use-wallet context is always mounted so <ConnectWalletButton /> (which
   // calls useWallet) has a provider anywhere in the tree, key or not.
   const walletTree = (

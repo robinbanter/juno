@@ -67,11 +67,24 @@ export function ProfileHeader({
         </span>
         {/*
           Posts is a real count of what this wallet launched. Followers and
-          following are not stored anywhere, and printing 0 for them was a
-          confident claim about an audience this app has never measured — on a
-          profile whose whole purpose is to establish credibility.
+          following were omitted here because nothing stored them, and printing
+          0 would have been a confident claim about an audience this app had
+          never measured — on a profile whose whole purpose is to establish
+          credibility.
+
+          `junoFollows` stores them now and `followStats` counts them, so the
+          figures are shown. They are still omitted rather than zeroed when the
+          count could not be read: null and 0 remain different answers, and the
+          reason for the original omission survives as the null branch.
         */}
         <Stat value={creator.posts} label="Posts" />
+        {creator.followers !== null && (
+          <Stat
+            value={creator.followers}
+            label={creator.followers === 1 ? "Follower" : "Followers"}
+          />
+        )}
+        {creator.following !== null && <Stat value={creator.following} label="Following" />}
 
         {creator.socials?.x && (
           <a

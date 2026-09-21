@@ -1,7 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 
+import { compact, money } from "@/lib/juno/format";
 import type { Coin, Creator } from "@/lib/juno/types";
 import { MediaGrid } from "@/components/juno/profile/MediaGrid";
 import { ProfileHeader } from "@/components/juno/profile/ProfileHeader";
@@ -15,11 +17,20 @@ import { ProfileTabs, type ProfileTabId } from "@/components/juno/profile/Profil
 export function ProfileView({
   creator,
   coins,
+  positions = [],
+  trades = [],
+  portfolioPartial = false,
   unreadable = false,
   missing = 0,
 }: {
   creator: Creator;
   coins: Coin[];
+  /** What this wallet holds now, from `loadPortfolio`. */
+  positions?: CreatorPosition[];
+  /** Every fill this wallet signed, newest first, flattened across pools. */
+  trades?: CreatorTrade[];
+  /** True when a pool's history came back short, so both lists are incomplete. */
+  portfolioPartial?: boolean;
   /** Launches exist on record but could not be priced — see the page above. */
   unreadable?: boolean;
   /**
@@ -74,24 +85,167 @@ export function ProfileView({
             empty={unreadable ? UNPRICED : "No reels yet."}
           />
         )}
-        {/* These two asserted an empty result without reading anything. What
-            this wallet holds and what it has traded are both knowable — the
-            portfolio and activity reads exist — but neither is wired up here,
-            and "Nothing collected yet" is a measurement, not a placeholder. */}
+        {/* These two used to assert an empty result without reading anything,
+            then said so honestly instead. Both are now read: `loadPortfolio`
+            returns the positions and the trades behind them, and the page
+            streams it in. A short walk still says "could not read" rather
+            than "holds nothing" — the two are different claims. */}
         {tab === "collected" && (
-          <Empty>
-            What this wallet holds is not read on this page yet.
-          </Empty>
+          <PositionList
+            positions={positions}
+            partial={portfolioPartial}
+            empty="Nothing held on this cluster."
+          />
         )}
         {tab === "activity" && (
-          <Empty>
-            This wallet&rsquo;s trades are not read on this page yet.
-          </Empty>
+          <TradeList
+            trades={trades}
+            partial={portfolioPartial}
+            empty="No trades on this cluster."
+          />
         )}
       </div>
     </>
   );
 }
+
+/** One holding, narrowed from `Position` to what this list renders. */
+export type CreatorPosition = {
+  baseMint: string;
+  symbol: string;
+  name: string;
+  balance: number;
+  value: number;
+  unrealisedPnlPct: number | null;
+  currency: string;
+};
+
+/** One fill, flattened out of a position's `trades` so every pool shares a list. */
+export type CreatorTrade = {
+  t: string;
+  side: "buy" | "sell";
+  base: number;
+  price: number;
+  symbol: string;
+  baseMint: string;
+  currency: string;
+};
+
+/**
+ * Held positions, largest first.
+ *
+ * `partial` is carried separately from emptiness because a throttled walk and
+ * an empty wallet produce the same array, and only one of them is a fact about
+ * this creator.
+ */
+function PositionList({
+  positions,
+  partial,
+  empty,
+}: {
+  positions: CreatorPosition[];
+  partial: boolean;
+  empty: string;
+}) {
+  if (positions.length === 0) return <Empty>{partial ? UNREADABLE : empty}</Empty>;
+  return (
+    <>
+      {partial && <ShortRead />}
+      <ul className="divide-y divide-j-line">
+        {positions.map((position) => (
+          <li key={position.baseMint} className="flex items-center gap-3 py-3">
+            <Link
+              href={`/coin/${position.baseMint}`}
+              className="flex min-w-0 flex-1 flex-col transition-opacity hover:opacity-70"
+            >
+              <span className="truncate text-[14px] font-semibold">${position.symbol}</span>
+              <span className="truncate text-[12px] text-j-muted">
+                {compact(position.balance)} tokens
+              </span>
+            </Link>
+            <div className="flex shrink-0 flex-col items-end">
+              <span className="text-[14px] font-semibold tabular-nums">
+                {money(position.value, position.currency)}
+              </span>
+              {/* Null is not zero: a position whose cost is outside the
+                  history window has no percentage to show. */}
+              {position.unrealisedPnlPct !== null && (
+                <span
+                  className={
+                    position.unrealisedPnlPct >= 0
+                      ? "text-[12px] tabular-nums text-j-up"
+                      : "text-[12px] tabular-nums text-j-down"
+                  }
+                >
+                  {position.unrealisedPnlPct >= 0 ? "+" : ""}
+                  {(position.unrealisedPnlPct * 100).toFixed(2)}%
+                </span>
+              )}
+            </div>
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
+
+/** Every fill this wallet signed, newest first. */
+function TradeList({
+  trades,
+  partial,
+  empty,
+}: {
+  trades: CreatorTrade[];
+  partial: boolean;
+  empty: string;
+}) {
+  if (trades.length === 0) return <Empty>{partial ? UNREADABLE : empty}</Empty>;
+  return (
+    <>
+      {partial && <ShortRead />}
+      <ul className="divide-y divide-j-line">
+        {trades.map((trade) => (
+          <li
+            key={`${trade.baseMint}-${trade.t}-${trade.side}-${trade.base}`}
+            className="flex items-center gap-3 py-3"
+          >
+            <span
+              className={
+                trade.side === "buy"
+                  ? "shrink-0 text-[12px] font-semibold text-j-up"
+                  : "shrink-0 text-[12px] font-semibold text-j-down"
+              }
+            >
+              {trade.side === "buy" ? "Buy" : "Sell"}
+            </span>
+            <Link
+              href={`/coin/${trade.baseMint}`}
+              className="min-w-0 flex-1 truncate text-[14px] transition-opacity hover:opacity-70"
+            >
+              ${trade.symbol}
+            </Link>
+            <span className="shrink-0 text-[14px] tabular-nums">{compact(trade.base)}</span>
+            <span className="shrink-0 text-[12px] tabular-nums text-j-muted">
+              {money(trade.base * trade.price, trade.currency)}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
+
+function ShortRead() {
+  return (
+    <p className="pb-2 text-[12px] text-j-faint">
+      Some of this wallet&rsquo;s history could not be read — the list below is
+      incomplete.
+    </p>
+  );
+}
+
+const UNREADABLE =
+  "Could not read this wallet's history just now — the public RPC is rate-limiting. Try again in a moment.";
 
 function Empty({ children }: { children: React.ReactNode }) {
   return <p className="py-16 text-center text-[14px] text-j-faint">{children}</p>;
