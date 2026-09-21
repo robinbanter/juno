@@ -1,12 +1,13 @@
 import { useRouter } from "expo-router";
 import { useMemo, useState } from "react";
-import { RefreshControl, ScrollView } from "react-native";
+import { Linking, RefreshControl, ScrollView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Svg, { Path } from "react-native-svg";
 import styled from "styled-components/native";
 
 import { CoinArt, Identicon } from "../../components/art";
 import { JunoMark } from "../../components/logo";
+import { CommentsSheet } from "../../components/CommentsSheet";
 import { Tappable } from "../../components/Press";
 import {
   Button,
@@ -14,6 +15,7 @@ import {
   Chevron,
   Col,
   Delta,
+  ExternalGlyph,
   Entry,
   Label,
   Ledger,
@@ -91,12 +93,25 @@ export default function SocialScreen() {
     [revision, onlyFollowing, wallet.address],
   );
   const [filter, setFilter] = useState<Filter>("all");
+  /**
+   * The post whose replies are open, as a drawer.
+   *
+   * Reading what people said about a post used to mean leaving the feed for a
+   * whole screen, and coming back was a separate decision. A sheet keeps the
+   * feed behind the scrim, so reading the room and scrolling on are the same
+   * visit — the same reasoning as the coin screen's comments.
+   */
+  const [replying, setReplying] = useState<string | null>(null);
 
   const items = useMemo(() => {
     const all = feed.data?.items ?? [];
-    if (filter === "trades") return all.filter((item) => item.kind === "trade");
-    if (filter === "posts") return all.filter((item) => item.kind === "post");
-    return all;
+    const kind =
+      filter === "trades"
+        ? all.filter((item) => item.kind === "trade")
+        : filter === "posts"
+          ? all.filter((item) => item.kind === "post")
+          : all;
+    return collapseRuns(kind);
   }, [feed.data?.items, filter]);
 
   const counts = useMemo(() => {
@@ -269,7 +284,7 @@ export default function SocialScreen() {
                   item={item}
                   first={index === 0}
                   onOpen={(mint) => router.push(`/coin/${mint}`)}
-                  onOpenPost={(postId) => router.push(`/post/${postId}`)}
+                  onOpenPost={(postId) => setReplying(postId)}
                   onOpenTrader={(target) => router.push(`/trader/${target}` as never)}
                 />
               ))}
@@ -287,6 +302,12 @@ export default function SocialScreen() {
           ) : null}
         </ScrollView>
       )}
+      <CommentsSheet
+        visible={replying !== null}
+        onClose={() => setReplying(null)}
+        target={{ kind: "post", postId: replying ?? "" }}
+        onPosted={feed.refresh}
+      />
     </Page>
   );
 }
@@ -307,85 +328,98 @@ function FeedRow({
 }) {
   if (item.kind === "trade") {
     const buying = item.side === "buy";
+    const runOf = (item as FeedItem & { runOf?: number }).runOf ?? 1;
     const move =
       item.priceNow !== null && item.price > 0 ? (item.priceNow - item.price) / item.price : null;
+    const up = move !== null && move >= 0;
 
     return (
-      <Tappable onPress={() => onOpen(item.coin.address)} to={0.985}>
-        <Entry $first={first}>
-          <Row gap={8}>
-            {/* The name is the way to the person; the rest of the row is the
-                way to the coin. Two destinations on one card, and which is
-                which follows from what you touched. The identicon is seeded on
-                the wallet rather than the handle so it matches the trader
-                screen it leads to — a shortened address is not a stable key. */}
-            <Byline
-              onPress={() => onOpenTrader(item.actor.wallet)}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel={`Open ${item.actor.handle}`}
+      <Entry $first={first}>
+        <Row gap={10} align="center">
+          <Byline
+            onPress={() => onOpenTrader(item.actor.wallet)}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={`Open ${item.actor.handle}`}
+          >
+            <Identicon seed={item.actor.wallet} size={30} />
+            <Label numberOfLines={1} style={{ fontWeight: "700" }}>
+              {item.actor.handle}
+            </Label>
+          </Byline>
+          <Grow />
+          <Caption>{since(item.timestamp)}</Caption>
+        </Row>
+
+        {/*
+          A trade as a sentence, not a spreadsheet.
+
+          This was four columns of figures — amount, total, price paid — which
+          on a feed of one wallet buying one coin repeatedly rendered as the
+          same table four times and read as nothing at all. What a reader
+          actually wants is the claim: who did what, to which market, and how
+          it has gone since. The tint carries the direction of the *outcome*,
+          and the figures move into a second line where they support the
+          sentence instead of being it.
+        */}
+        <Tappable onPress={() => onOpen(item.coin.address)} to={0.99}>
+          <Bubble $up={move === null ? null : up}>
+            <Row gap={10} align="flex-start">
+              <Col gap={3} style={{ flex: 1 }}>
+                <Deed numberOfLines={2}>
+                  {buying ? "Bought" : "Sold"} {item.coin.name}
+                </Deed>
+                <Sub numberOfLines={1}>
+                  {tokens(item.amount)} ${item.coin.symbol || "—"} for{" "}
+                  {money(item.valueUsd, item.currency, { compact: false })}
+                  {runOf > 1 ? ` · ${runOf} fills` : ""}
+                </Sub>
+              </Col>
+              {/* Absent, never zero, when the live price could not be read —
+                  "0.00%" would be a claim that it has not moved. */}
+              {move === null ? (
+                <Col gap={2} style={{ alignItems: "flex-end" }}>
+                  <Outcome $up={null}>—</Outcome>
+                  <Caption>since</Caption>
+                </Col>
+              ) : (
+                <Col gap={2} style={{ alignItems: "flex-end" }}>
+                  <Outcome $up={up}>
+                    {up ? "Up" : "Down"} {Math.abs(move * 100).toFixed(2)}%
+                  </Outcome>
+                  <Caption>since the fill</Caption>
+                </Col>
+              )}
+            </Row>
+          </Bubble>
+        </Tappable>
+
+        {/* The trader's own words about it, when they said any. */}
+        {item.note ? <Note>{item.note}</Note> : null}
+
+        <Row gap={18} style={{ marginTop: 12 }} align="center">
+          <Tappable onPress={() => onOpen(item.coin.address)} to={0.95}>
+            <Row gap={6} align="center">
+              <Ticker style={{ fontSize: theme.type.caption.size }}>
+                ${item.coin.symbol}
+              </Ticker>
+              <Chevron size={14} />
+            </Row>
+          </Tappable>
+          <Grow />
+          {item.signature ? (
+            <Tappable
+              onPress={() => Linking.openURL(juno.explorer("tx", item.signature!))}
+              to={0.9}
             >
-              <Identicon seed={item.actor.wallet} size={22} />
-              <Label numberOfLines={1} style={{ fontWeight: "700", maxWidth: 104 }}>
-                {item.actor.handle}
-              </Label>
-            </Byline>
-            {/* The verb, in the direction's colour. Colour and word together —
-                neither carries it alone. */}
-            <Verb $tone={buying ? theme.colors.pos : theme.colors.neg}>
-              {buying ? "bought" : "sold"}
-            </Verb>
-            <Grow />
-            <Caption>{since(item.timestamp)}</Caption>
-          </Row>
-
-          <Row gap={12} style={{ marginTop: 12 }}>
-            <CoinArt
-              uri={juno.still({
-                kind: item.coin.mediaKind === "video" ? "video" : "image",
-                url: item.coin.mediaUrl ?? "",
-                posterUrl: item.coin.posterUrl ?? undefined,
-              })}
-              seed={item.coin.address}
-              size={52}
-              radius={16}
-            />
-            <Col gap={3} style={{ flex: 1 }}>
-              <Ticker numberOfLines={1}>${item.coin.symbol || item.coin.name}</Ticker>
-              <Label muted numberOfLines={1}>
-                {item.coin.name}
-              </Label>
-            </Col>
-            {/* The subject of the card, at the size that says so: what the
-                position did after the decision. Absent, never zero, when the
-                live price could not be read. */}
-            <Col gap={1} style={{ alignItems: "flex-end" }}>
-              <Delta pct={move} />
-              <Caption>since the fill</Caption>
-            </Col>
-          </Row>
-
-          {/* What they said about it, when they said anything. This is the
-              difference between a ticker tape and a social feed — and the
-              signature on the same row is what makes it checkable. */}
-          {item.note ? <Note>{item.note}</Note> : null}
-
-          <Figures>
-            <Column>
-              <Mono>{tokens(item.amount)}</Mono>
-              <Caption>Amount</Caption>
-            </Column>
-            <Column>
-              <Mono>{money(item.valueUsd, item.currency)}</Mono>
-              <Caption>Total</Caption>
-            </Column>
-            <Column>
-              <Mono>{money(item.price, item.currency, { compact: false })}</Mono>
-              <Caption>Price paid</Caption>
-            </Column>
-          </Figures>
-        </Entry>
-      </Tappable>
+              <Row gap={5} align="center">
+                <Caption>Receipt</Caption>
+                <ExternalGlyph />
+              </Row>
+            </Tappable>
+          ) : null}
+        </Row>
+      </Entry>
     );
   }
 
@@ -503,6 +537,54 @@ function priceTone(price: number | null, changePct: number | null): "pos" | "neg
   return changePct >= 0 ? "pos" : "neg";
 }
 
+/**
+ * Collapse a run of the same wallet doing the same thing to the same coin.
+ *
+ * A wallet filling an order in four goes on-chain as four transactions, and
+ * the feed rendered four identical cards — same size, same price, same
+ * minute — which reads as a broken list rather than as a single decision.
+ * They are folded into one entry carrying the summed size and value and a
+ * count of the fills behind it.
+ *
+ * Only *consecutive* items fold, so the feed's time order is never rearranged,
+ * and only within a window: two buys a day apart are two decisions. The
+ * signature of the first is kept so the receipt still links to a real
+ * transaction, and `runOf` says how many there were — nothing is hidden.
+ */
+const RUN_WINDOW_MS = 30 * 60_000;
+
+function collapseRuns(items: FeedItem[]): Array<FeedItem & { runOf?: number }> {
+  const out: Array<FeedItem & { runOf?: number }> = [];
+
+  for (const item of items) {
+    const previous = out[out.length - 1];
+    const sameDecision =
+      previous &&
+      previous.kind === "trade" &&
+      item.kind === "trade" &&
+      previous.actor.wallet === item.actor.wallet &&
+      previous.coin.address === item.coin.address &&
+      previous.side === item.side &&
+      Math.abs(Date.parse(previous.timestamp) - Date.parse(item.timestamp)) <= RUN_WINDOW_MS;
+
+    if (sameDecision && previous.kind === "trade" && item.kind === "trade") {
+      previous.amount += item.amount;
+      previous.valueUsd += item.valueUsd;
+      // The blended price of the whole run, which is what was actually paid.
+      previous.price = previous.amount > 0 ? previous.valueUsd / previous.amount : previous.price;
+      previous.runOf = (previous.runOf ?? 1) + 1;
+      // The earliest note survives; a run rarely carries two and the first is
+      // the one written at the decision.
+      previous.note = previous.note ?? item.note;
+      continue;
+    }
+
+    out.push({ ...item });
+  }
+
+  return out;
+}
+
 function ReplyGlyph() {
   return (
     <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
@@ -544,6 +626,51 @@ const Header = styled.View`
 
 const FilterRow = styled.View`
   align-self: flex-start;
+`;
+
+/**
+ * A trade, set as a quotation rather than as data.
+ *
+ * Tinted by outcome — green when the position is up since the fill, red when
+ * down, and plain when the live price could not be read, because a colour is
+ * a claim too.
+ */
+const Bubble = styled.View<{ $up: boolean | null }>`
+  margin-top: ${(p) => p.theme.space(3)}px;
+  padding: ${(p) => p.theme.space(3)}px;
+  border-radius: ${(p) => p.theme.radius.md}px;
+  background-color: ${(p) =>
+    p.$up === null
+      ? p.theme.colors.surfaceAlt
+      : p.$up
+        ? p.theme.colors.posSoft
+        : p.theme.colors.negSoft};
+`;
+
+const Deed = styled.Text`
+  font-size: ${(p) => p.theme.type.lead.size}px;
+  line-height: ${(p) => p.theme.type.lead.height}px;
+  letter-spacing: ${(p) => p.theme.type.lead.tracking}px;
+  font-weight: 700;
+  color: ${(p) => p.theme.colors.text};
+`;
+
+const Sub = styled.Text`
+  font-size: ${(p) => p.theme.type.caption.size}px;
+  font-variant: tabular-nums;
+  color: ${(p) => p.theme.colors.muted};
+`;
+
+const Outcome = styled.Text<{ $up: boolean | null }>`
+  font-size: ${(p) => p.theme.type.label.size}px;
+  font-weight: 800;
+  font-variant: tabular-nums;
+  color: ${(p) =>
+    p.$up === null
+      ? p.theme.colors.muted
+      : p.$up
+        ? p.theme.colors.pos
+        : p.theme.colors.neg};
 `;
 
 const Byline = styled.Pressable`

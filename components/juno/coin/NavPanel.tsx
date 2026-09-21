@@ -80,18 +80,15 @@ export function NavPanel({ nav, className }: { nav: NavReference; className?: st
             a {usd(nav.priceUsd, { compact: false })} mark —{" "}
             {(Math.abs(nav.deviation!) * 100).toFixed(2)}%{" "}
             {nav.deviation! >= 0 ? "above" : "below"}, outside this
-            preset&rsquo;s {nav.bandBps / 100}% band.
+            preset&rsquo;s {nav.bandBps / 100}% band.{" "}
+            <Provenance nav={nav} />
           </>
         ) : (
           <>
             The curve implies {usd(nav.impliedUsd!, { compact: false })} against
             a {usd(nav.priceUsd, { compact: false })} mark — inside this
             preset&rsquo;s {nav.bandBps / 100}% band.{" "}
-            {nav.source === "tessera" ? (
-              <>Tessera&rsquo;s published mark; they timestamp it, so freshness is unknown.</>
-            ) : (
-              <>Pyth mark from {since(nav.updatedAt)}, read on-chain.</>
-            )}
+            <Provenance nav={nav} />
           </>
         )}
       </p>
@@ -135,6 +132,26 @@ function Band({ nav, deviation }: { nav: NavReference; deviation: number }) {
   );
 }
 
+/**
+ * Where the mark came from, said once and the same way on every branch.
+ *
+ * It used to appear only when the curve was *inside* its band, so a reader
+ * looking at a breach — the case where provenance matters most — was not told
+ * whether the number it breached was an on-chain oracle read or a
+ * third-party's undated figure.
+ */
+function Provenance({ nav }: { nav: NavReference }) {
+  if (nav.source === "tessera") {
+    return (
+      <>
+        Tessera publishes no timestamp with this mark, so its freshness is
+        unknown.
+      </>
+    );
+  }
+  return <>Pyth mark from {since(nav.updatedAt)}, read on-chain.</>;
+}
+
 function StateBadge({ nav }: { nav: NavReference }) {
   if (nav.state === "stale") {
     return (
@@ -150,6 +167,23 @@ function StateBadge({ nav }: { nav: NavReference }) {
       <span className="inline-flex items-center gap-1 text-[11px] font-medium text-j-muted">
         <Clock size={11} aria-hidden="true" />
         Market closed · last close
+      </span>
+    );
+  }
+
+  /*
+   * A published mark with no timestamp.
+   *
+   * This fell through to "Live", which is the strongest possible claim about
+   * a number whose age is genuinely unknown: Tessera publishes a price and no
+   * time with it. The band's own sentence already said freshness was unknown,
+   * so the badge was contradicting the paragraph underneath it.
+   */
+  if (nav.state === "mark") {
+    return (
+      <span className="inline-flex items-center gap-1 text-[11px] font-medium text-j-muted">
+        <Clock size={11} aria-hidden="true" />
+        Published mark · no timestamp
       </span>
     );
   }

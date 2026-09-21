@@ -427,8 +427,7 @@ export default function CoinScreen() {
           <CommentsSheet
             visible={commentsOpen}
             onClose={() => setCommentsOpen(false)}
-            mint={mint}
-            symbol={coin.symbol}
+            target={{ kind: "coin", mint, symbol: coin.symbol }}
             onPosted={() => comments.refresh()}
           />
 

@@ -7,7 +7,7 @@ import { BottomSheet } from "./BottomSheet";
 import { Identicon } from "./art";
 import { Tappable } from "./Press";
 import { Body, Caption, Label, Row } from "./kit";
-import { juno, type CoinComment } from "../lib/api";
+import { juno } from "../lib/api";
 import { since } from "../lib/useApi";
 import { useWallet } from "../lib/wallet";
 import { theme } from "../theme";
@@ -28,22 +28,41 @@ import { theme } from "../theme";
  * counts nothing, and no total is displayed beside it. When a likes table
  * exists the control is already here and the count can become real.
  */
+/**
+ * What the sheet is a conversation about.
+ *
+ * Two stores, one surface. A coin's comments live in Mongo keyed by mint; a
+ * post's replies are rows in Postgres keyed by a parent id. They are the same
+ * *interaction* — read what people said, say something back — so they get the
+ * same drawer rather than one drawer and one whole screen.
+ */
+export type CommentsTarget =
+  | { kind: "coin"; mint: string; symbol: string }
+  | { kind: "post"; postId: string };
+
+/** One row, flattened from whichever store it came out of. */
+type Row = {
+  id: string;
+  wallet: string;
+  body: string;
+  createdAt: string;
+  side?: "buy" | "sell";
+};
+
 export function CommentsSheet({
   visible,
   onClose,
-  mint,
-  symbol,
+  target,
   onPosted,
 }: {
   visible: boolean;
   onClose: () => void;
-  mint: string;
-  symbol: string;
-  /** A comment landed; the screen behind should pick up the new count. */
+  target: CommentsTarget;
+  /** Something landed; the screen behind should pick up the new count. */
   onPosted?: () => void;
 }) {
   const wallet = useWallet();
-  const [rows, setRows] = useState<CoinComment[] | null>(null);
+  const [rows, setRows] = useState<Row[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
@@ -52,13 +71,25 @@ export function CommentsSheet({
   const load = useCallback(async () => {
     setError(null);
     try {
-      const { comments } = await juno.comments(mint);
-      setRows(comments);
+      if (target.kind === "coin") {
+        const { comments } = await juno.comments(target.mint);
+        setRows(comments);
+        return;
+      }
+      const { replies } = await juno.post(target.postId);
+      setRows(
+        replies.map((reply) => ({
+          id: reply.id,
+          wallet: reply.author.wallet,
+          body: reply.body,
+          createdAt: reply.timestamp,
+        })),
+      );
     } catch (caught) {
       setRows(null);
       setError(caught instanceof Error ? caught.message : "Could not load the comments");
     }
-  }, [mint]);
+  }, [target]);
 
   // Read on the way in rather than on mount: the sheet is mounted for the
   // whole life of the screen behind it, and a list read on mount would be
@@ -75,10 +106,23 @@ export function CommentsSheet({
     try {
       const address = wallet.address ?? (await wallet.connect());
       if (!address) throw new Error("No wallet available");
-      const { comment } = await juno.addComment({ coin: mint, wallet: address, body });
-      // Prepended from the server's own row, not from the draft: the id and
-      // timestamp have to be the real ones or the key collides on the next read.
-      setRows((current) => [comment, ...(current ?? [])]);
+
+      if (target.kind === "coin") {
+        const { comment } = await juno.addComment({
+          coin: target.mint,
+          wallet: address,
+          body,
+        });
+        // Prepended from the server's own row, not from the draft: the id and
+        // timestamp have to be the real ones or the key collides on the next
+        // read.
+        setRows((current) => [comment, ...(current ?? [])]);
+      } else {
+        await juno.createPost({ authorWallet: address, body, parentId: target.postId });
+        // A reply's id comes back without its author or timestamp shaped like
+        // a row, so the list is re-read rather than guessed at.
+        await load();
+      }
       setDraft("");
       onPosted?.();
     } catch (caught) {
@@ -113,7 +157,9 @@ export function CommentsSheet({
         ) : rows!.length === 0 ? (
           <Centre>
             <Body muted style={{ textAlign: "center" }}>
-              Nothing said about ${symbol} yet. Say the first thing.
+              {target.kind === "coin"
+                ? `Nothing said about $${target.symbol} yet. Say the first thing.`
+                : "No replies yet. Say the first thing."}
             </Body>
           </Centre>
         ) : (
@@ -176,7 +222,7 @@ function CommentRow({
   liked,
   onLike,
 }: {
-  comment: CoinComment;
+  comment: Row;
   liked: boolean;
   onLike: () => void;
 }) {
