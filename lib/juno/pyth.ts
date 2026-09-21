@@ -227,7 +227,7 @@ export async function fetchPythPrice(feedId: string | null): Promise<PythPrice |
   const id = feedIdFor(feedId);
   if (!id) return null;
 
-  return priceCache.get(id, async () => {
+  const cached = await priceCache.get(id, async () => {
     const accounts = SHARDS.map((shard) => ({ shard, address: priceAccountFor(id, shard) }));
 
     // One multi-account read rather than one per shard.
@@ -251,6 +251,31 @@ export async function fetchPythPrice(feedId: string | null): Promise<PythPrice |
     }
     return best;
   });
+
+  return aged(cached);
+}
+
+/**
+ * Recompute how old the mark is, now.
+ *
+ * `ageSeconds` was decoded once and cached alongside the price, so a cached
+ * reading reported the age it had when it was *fetched*. Two reads twenty
+ * seconds apart both said "15s", and the coin page printed "Pyth mark from
+ * 15s" over a figure that could be a whole TTL older. For a product whose
+ * claim is that live market data does real work, a freshness label that
+ * freezes is the one number that must not.
+ *
+ * `publishedAt` is the publisher's own timestamp and does not change, so age
+ * is derived from it at read time and `isFresh`/`marketState` follow.
+ */
+function aged(price: PythPrice | null): PythPrice | null {
+  if (!price) return null;
+  const published = Date.parse(price.publishedAt);
+  if (!Number.isFinite(published)) return price;
+  return {
+    ...price,
+    ageSeconds: Math.max(0, Math.round((Date.now() - published) / 1000)),
+  };
 }
 
 /** Several feeds at once, keyed by feed id. Absent means unreadable. */
