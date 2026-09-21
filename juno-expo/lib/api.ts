@@ -440,7 +440,14 @@ export type Plan = {
 export const juno = {
   /** Traders ranked by profit taken. `partial` when the walk came back short. */
   leaderboard: (limit = 20) =>
-    api.get<{ cluster: string; partial: boolean; poolsRead: number; traders: Trader[] }>(
+    api.get<{
+      cluster: string;
+      partial: boolean;
+      poolsRead: number;
+      /** What the registry holds, so `poolsRead` can be read against something. */
+      poolsTotal: number;
+      traders: Trader[];
+    }>(
       `/api/juno/leaderboard?limit=${limit}`,
     ),
 

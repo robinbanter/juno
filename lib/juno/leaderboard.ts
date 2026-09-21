@@ -58,10 +58,20 @@ export type TraderRow = {
 
 export type Leaderboard = {
   traders: TraderRow[];
-  /** Pools whose history could not be fully read. The rank is short by those. */
+  /**
+   * The rank is short of something.
+   *
+   * True when a pool's history came back incomplete *or* when the registry
+   * holds more pools than this walk covered. The second case used to report
+   * clean: reading twelve of fourteen and announcing a complete board is the
+   * same dishonesty as an empty chart claiming an empty market, and it hid
+   * every trader whose only fills were on an older pool.
+   */
   partial: boolean;
   /** How many pools were walked to build this. */
   poolsRead: number;
+  /** How many the registry holds, so `poolsRead` can be read against something. */
+  poolsTotal: number;
 };
 
 const board = ttlCache<Leaderboard>(90_000);
@@ -73,17 +83,31 @@ const board = ttlCache<Leaderboard>(90_000);
  * public endpoint answers a burst with 429s, and a leaderboard is not worth
  * making the rest of the app unusable for.
  */
-export async function leaderboard(poolLimit = 12, width = 2): Promise<Leaderboard> {
+export async function leaderboard(poolLimit = 60, width = 2): Promise<Leaderboard> {
+  /*
+   * Every pool, not the newest dozen.
+   *
+   * The old cap of twelve was a concession to the walk's cost — each pool meant
+   * a signature listing plus paced pages of parsed transactions. Fills are now
+   * decoded once and kept, so a pool already on record costs a query rather
+   * than a crawl, and there is no longer a reason to rank only part of the
+   * cluster.
+   */
+  const total = (await listPools(200)).length;
   const rows = await listPools(poolLimit);
   return board.get(
     rows.map((row) => row.baseMint).join(","),
-    async () => build(rows, width),
+    async () => build(rows, width, total),
     // A short read is not worth trusting for long; a complete one is.
     (value) => (value.partial ? 15_000 : 90_000),
   );
 }
 
-async function build(rows: JunoPoolRow[], width: number): Promise<Leaderboard> {
+async function build(
+  rows: JunoPoolRow[],
+  width: number,
+  poolsTotal: number,
+): Promise<Leaderboard> {
   type Acc = {
     realised: number;
     unrealised: number;
@@ -224,5 +248,12 @@ async function build(rows: JunoPoolRow[], width: number): Promise<Leaderboard> {
     // money across three coins traded better than one that got lucky on one.
     .sort((a, b) => b.realised - a.realised || b.coins - a.coins || b.trades - a.trades);
 
-  return { traders, partial, poolsRead };
+  return {
+    traders,
+    // Short if any walk was short, *or* if the registry holds pools this rank
+    // never looked at.
+    partial: partial || poolsRead < poolsTotal,
+    poolsRead,
+    poolsTotal,
+  };
 }

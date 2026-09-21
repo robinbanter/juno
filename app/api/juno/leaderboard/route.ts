@@ -27,6 +27,7 @@ export async function GET(request: Request) {
       cluster: cluster(),
       partial: board.partial,
       poolsRead: board.poolsRead,
+      poolsTotal: board.poolsTotal,
       traders: top.map((trader) => ({
         ...trader,
         followers: followers.get(trader.wallet) ?? 0,
