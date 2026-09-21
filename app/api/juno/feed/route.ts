@@ -36,7 +36,14 @@ type FeedItem =
       currency: string;
       signature?: string;
       actor: { handle: string; avatarUrl: string };
-      coin: { address: string; name: string; symbol: string; mediaUrl: string | null; mediaKind: string };
+      coin: {
+        address: string;
+        name: string;
+        symbol: string;
+        mediaUrl: string | null;
+        mediaKind: string;
+        posterUrl: string | null;
+      };
     }
   | {
       kind: "post";
@@ -107,6 +114,10 @@ export async function GET(request: Request) {
           symbol: row?.symbol ?? "",
           mediaUrl: mediaSrc(row?.mediaUrl) ?? null,
           mediaKind: mediaKind(row?.mediaMime),
+          // A reel's `mediaUrl` is a video; a feed row wants a frame from it.
+          // Without this the mobile feed drew a grey square beside every trade
+          // on a reel coin, because `<Image>` had been handed an mp4.
+          posterUrl: mediaSrc(row?.posterUrl) ?? null,
         },
       });
     }

@@ -188,7 +188,14 @@ export type FeedItem =
       currency: string;
       signature?: string;
       actor: { handle: string; avatarUrl: string };
-      coin: { address: string; name: string; symbol: string; mediaUrl: string | null; mediaKind: string };
+      coin: {
+        address: string;
+        name: string;
+        symbol: string;
+        mediaUrl: string | null;
+        mediaKind: string;
+        posterUrl: string | null;
+      };
     }
   | {
       kind: "post";
@@ -388,6 +395,26 @@ export const juno = {
     if (!url) return null;
     if (url.startsWith("data:image/svg")) return null;
     return url.startsWith("http") ? url : `${API_URL}${url}`;
+  },
+
+  /**
+   * The best *still* image for a coin, for a list row or a thumbnail.
+   *
+   * Reel coins carry a video in `media.url` and a real poster frame beside it.
+   * Handing the video to `<Image>` renders nothing at all, which is why the
+   * market list showed a grey square for every reel while the coins with no
+   * media at all were fine. A still context wants the poster; only if there
+   * isn't one does the video's own url get a try, and a video url that is its
+   * own poster is refused rather than silently failing to draw.
+   */
+  still: (media: {
+    kind: "image" | "video";
+    url: string;
+    posterUrl?: string;
+  }): string | null => {
+    const poster = media.posterUrl && media.posterUrl !== media.url ? media.posterUrl : null;
+    if (poster) return juno.media(poster);
+    return media.kind === "video" ? null : juno.media(media.url);
   },
 
   explorer: (kind: "tx" | "account" | "token", id: string, cluster = "devnet") =>

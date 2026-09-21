@@ -58,7 +58,7 @@ export default function CoinScreen() {
   const holding =
     portfolio.data?.positions.find((position) => position.baseMint === mint)?.balance ?? null;
 
-  const art = coin ? juno.media(coin.media.url) : null;
+  const art = coin ? juno.still(coin.media) : null;
 
   return (
     <Page edges={["top"]}>

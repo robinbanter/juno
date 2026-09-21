@@ -1,3 +1,4 @@
+import { Image, View } from "react-native";
 import Svg, { Circle, Defs, G, Line, LinearGradient, Path, Rect, Stop } from "react-native-svg";
 
 import { theme } from "../theme";
@@ -151,6 +152,62 @@ export function CoinGlyph({ size = 48, seed = "" }: { size?: number; seed?: stri
   );
 }
 
+
+/**
+ * A coin's artwork, or the mark derived from its mint when there is none.
+ *
+ * Most Juno coins carry real media. The ones that do not get the server's
+ * identicon, which arrives as an SVG data URI — and those crash the iOS image
+ * loader outright ("URI parsing error"), so `juno.media` strips them. What was
+ * left behind was an empty grey square on every unmediated coin in the market
+ * list, which reads as a broken image rather than as a coin without a picture.
+ *
+ * Drawing the same seed as SVG gives the coin a stable identity here without
+ * asking the image loader to parse anything.
+ */
+export function CoinArt({
+  uri,
+  seed,
+  size = 48,
+  radius = 16,
+}: {
+  /** Already passed through `juno.media` — null when there is no loadable image. */
+  uri: string | null;
+  /** The coin's mint, so the drawn mark is the same one everywhere. */
+  seed: string;
+  size?: number;
+  radius?: number;
+}) {
+  if (uri) {
+    return (
+      <Image
+        source={{ uri }}
+        style={{
+          width: size,
+          height: size,
+          borderRadius: radius,
+          backgroundColor: colors.surfaceAlt,
+        }}
+      />
+    );
+  }
+
+  return (
+    <View
+      style={{
+        width: size,
+        height: size,
+        borderRadius: radius,
+        backgroundColor: colors.surfaceAlt,
+        alignItems: "center",
+        justifyContent: "center",
+        overflow: "hidden",
+      }}
+    >
+      <CoinGlyph seed={seed} size={size} />
+    </View>
+  );
+}
 
 /**
  * A seeded avatar, drawn rather than fetched.

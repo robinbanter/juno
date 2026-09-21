@@ -3,7 +3,7 @@ import { FlatList, RefreshControl } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import styled from "styled-components/native";
 
-import { Identicon } from "../../components/art";
+import { CoinArt, Identicon } from "../../components/art";
 import { JunoMark } from "../../components/logo";
 import {
   Avatar,
@@ -142,11 +142,16 @@ function FeedRow({
           </Row>
 
           <Row gap={12} style={{ marginTop: 12 }}>
-            {juno.media(item.coin.mediaUrl) ? (
-              <Thumb source={{ uri: juno.media(item.coin.mediaUrl)! }} />
-            ) : (
-              <ThumbEmpty />
-            )}
+            <CoinArt
+              uri={juno.still({
+                kind: item.coin.mediaKind === "video" ? "video" : "image",
+                url: item.coin.mediaUrl ?? "",
+                posterUrl: item.coin.posterUrl ?? undefined,
+              })}
+              seed={item.coin.address}
+              size={64}
+              radius={18}
+            />
             <Col gap={4} style={{ flex: 1 }}>
               <Heading numberOfLines={1} style={{ fontSize: 16 }}>
                 {item.coin.name}
@@ -244,22 +249,6 @@ const Tap = styled.Pressable``;
 
 const Grow = styled.View`
   flex: 1;
-`;
-
-const Thumb = styled.Image`
-  width: 64px;
-  height: 64px;
-  border-radius: ${(p) => p.theme.radius.md}px;
-  background-color: ${(p) => p.theme.colors.surfaceAlt};
-`;
-
-const ThumbEmpty = styled.View`
-  width: 64px;
-  height: 64px;
-  border-radius: ${(p) => p.theme.radius.md}px;
-  background-color: ${(p) => p.theme.colors.surfaceAlt};
-  border-width: 1px;
-  border-color: ${(p) => p.theme.colors.line};
 `;
 
 const CoinChip = styled.Pressable`

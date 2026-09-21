@@ -20,6 +20,7 @@ import {
   Skeleton,
   Title,
 } from "../../components/kit";
+import { CoinArt } from "../../components/art";
 import { juno, type Coin } from "../../lib/api";
 import { money, useApi } from "../../lib/useApi";
 import { theme } from "../../theme";
@@ -116,14 +117,14 @@ export default function TradeScreen() {
 }
 
 function CoinRow({ coin, onPress }: { coin: Coin; onPress: () => void }) {
-  const art = juno.media(coin.media.url);
+  const art = juno.still(coin.media);
   const pct = coin.curve.progress * 100;
 
   return (
     <Tap onPress={onPress}>
       <Card>
         <Row gap={12}>
-          {art ? <Art source={{ uri: art }} /> : <ArtEmpty />}
+          <CoinArt uri={art} seed={coin.address} size={48} radius={16} />
 
           <Col gap={4} style={{ flex: 1 }}>
             <Heading numberOfLines={1} style={{ fontSize: 16 }}>
