@@ -22,7 +22,8 @@ export function CoinTabs({
   coin: Coin;
   /** Streamed in on the server — see the coin page's Suspense boundaries. */
   activity: React.ReactNode;
-  holders: Holder[];
+  /** Null when the holder read was refused — see `listPoolHolders`. */
+  holders: Holder[] | null;
   comments: Comment[];
 }) {
   const [tab, setTab] = useState<TabId>("activity");
@@ -62,7 +63,17 @@ export function CoinTabs({
   );
 }
 
-function HoldersList({ items }: { items: Holder[] }) {
+function HoldersList({ items }: { items: Holder[] | null }) {
+  // "No holders yet" about a pool that has traded is the kind of thing a
+  // visitor checks once and stops trusting the page over.
+  if (items === null) {
+    return (
+      <Empty>
+        Could not read this pool&rsquo;s holders just now — the public RPC
+        refuses this call under load. Try again in a moment.
+      </Empty>
+    );
+  }
   if (items.length === 0) return <Empty>No holders yet.</Empty>;
 
   return (

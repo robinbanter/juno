@@ -50,7 +50,7 @@ export async function GET(
     const [activity, holders] = await Promise.all([
       poolActivityRead(row, 20).catch(() => ({ items: [], partial: true })),
       listPoolHolders(row.baseMint)
-        .then((items) => ({ items, unreadable: false }))
+        .then((items) => ({ items: items ?? [], unreadable: items === null }))
         .catch(() => ({ items: [], unreadable: true })),
     ]);
 

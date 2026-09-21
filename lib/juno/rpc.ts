@@ -130,6 +130,20 @@ export async function collect<TPage, TItem>(
  */
 export function ttlCache<T>(ttlMs: number) {
   const entries = new Map<string, { at: number; value: T; ttl: number }>();
+  /*
+   * Reads that have started but not finished.
+   *
+   * A TTL only de-duplicates callers that arrive *after* one has finished.
+   * Two that arrive together both miss, both read, and the endpoint answers
+   * one of them and refuses the other — which is how a coin page ended up
+   * saying "trade history could not be read" beside an activity list showing
+   * four trades. Both sentences were true of their own read. They were reads
+   * of the same history.
+   *
+   * Sharing the in-flight promise makes that contradiction unrepresentable:
+   * concurrent callers for one key get one answer, whatever it is.
+   */
+  const inFlight = new Map<string, Promise<T>>();
 
   return {
     /**
@@ -153,9 +167,23 @@ export function ttlCache<T>(ttlMs: number) {
     ): Promise<T> {
       const hit = entries.get(key);
       if (hit && Date.now() - hit.at < hit.ttl) return hit.value;
-      const value = await load();
-      entries.set(key, { at: Date.now(), value, ttl: Math.max(0, ttlFor(value)) });
-      return value;
+
+      const pending = inFlight.get(key);
+      if (pending) return pending;
+
+      const run = (async () => {
+        const value = await load();
+        entries.set(key, { at: Date.now(), value, ttl: Math.max(0, ttlFor(value)) });
+        return value;
+      })();
+      inFlight.set(key, run);
+      try {
+        return await run;
+      } finally {
+        // Cleared whether it resolved or threw, so a failed read does not
+        // pin every later caller to the same rejection.
+        inFlight.delete(key);
+      }
     },
     invalidate(prefix: string): void {
       for (const key of entries.keys()) {
@@ -164,6 +192,7 @@ export function ttlCache<T>(ttlMs: number) {
     },
     clear(): void {
       entries.clear();
+      inFlight.clear();
     },
   };
 }

@@ -67,11 +67,15 @@ export async function listPoolActivity(
  * busy, so this degrades to an empty list. Callers that publish a *count* use
  * `hydratePool`, which distinguishes a refusal from a genuinely empty book.
  */
-export async function listPoolHolders(baseMint: string): Promise<Holder[]> {
+export async function listPoolHolders(baseMint: string): Promise<Holder[] | null> {
   const result = await tryRead(() =>
     getConnection().getTokenLargestAccounts(new PublicKey(baseMint), "confirmed"),
   );
-  if (!result) return [];
+  // Null, not []. `getTokenLargestAccounts` is one of the calls the public
+  // endpoint refuses by method rather than by rate, so this path is the common
+  // one — and returning an empty list here made "No holders yet" the standard
+  // rendering for pools with holders.
+  if (!result) return null;
 
   const accounts = result.value.filter((account) => (account.uiAmount ?? 0) > 0);
   const total = accounts.reduce((sum, account) => sum + (account.uiAmount ?? 0), 0);

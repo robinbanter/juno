@@ -244,12 +244,21 @@ function Plot({
           {price(last.price, currency)}
         </text>
 
+        {/*
+          The time axis, in whichever unit actually separates the two ends.
+
+          `since` alone read "2d … 2d" for four trades made fourteen minutes
+          apart two days ago — true at both ends, and an axis that says the
+          same thing twice is not an axis. When the relative ages collide the
+          labels fall back to clock times, which is the scale the data is
+          spread over.
+        */}
         <text
           x={PAD.left}
           y={HEIGHT - 10}
           className="fill-j-faint text-[11px] tabular-nums"
         >
-          {since(points[0].t)}
+          {axisLabels(points[0].t, last.t)[0]}
         </text>
         <text
           x={PAD.left + PLOT_W}
@@ -257,7 +266,7 @@ function Plot({
           textAnchor="end"
           className="fill-j-faint text-[11px] tabular-nums"
         >
-          {since(last.t)}
+          {axisLabels(points[0].t, last.t)[1]}
         </text>
 
         {active && (
@@ -336,4 +345,27 @@ function ChartFrame({ children }: { children: React.ReactNode }) {
       <p className="text-center text-[14px] text-j-faint">{children}</p>
     </div>
   );
+}
+
+/**
+ * The two ends of the time axis, as a pair.
+ *
+ * Relative ages first, because "3h" is what a reader wants from a chart of a
+ * market that trades in bursts. When both ends round to the same age the pair
+ * is redrawn as clock times, and if those collide too, as dates — each step
+ * down is finer, so the axis always distinguishes its own endpoints or admits
+ * the two trades happened at the same moment.
+ */
+function axisLabels(first: string, last: string): [string, string] {
+  const relative: [string, string] = [since(first), since(last)];
+  if (relative[0] !== relative[1]) return relative;
+
+  const clock = (iso: string) =>
+    new Date(iso).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  const times: [string, string] = [clock(first), clock(last)];
+  if (times[0] !== times[1]) return [`${times[0]} · ${relative[0]} ago`, times[1]];
+
+  const day = (iso: string) =>
+    new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  return [`${day(first)} ${times[0]}`, `${day(last)} ${times[1]}`];
 }
