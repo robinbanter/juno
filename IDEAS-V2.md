@@ -154,5 +154,39 @@ the point of ranking by fit.
 
 ## Disposition
 
-Filled in below as the run proceeds. "Not reached" is said plainly rather than
-dressed up as a decision.
+"Not reached" is said plainly rather than dressed up as a decision.
+
+### Built and verified on a real device against devnet
+
+| # | What | How it was verified |
+|---|---|---|
+| 1 | Trader leaderboard | `/api/juno/leaderboard` 200 in 21.6s, `partial: true`, `poolsRead: 8`; board rendered on device with its own "ranked from N pools" caveat |
+| 2 | Follow a trader | New `app/trader/[wallet]` screen. Tapped Follow on device; `followers` went 0 → 1 in Postgres and the button became "Following" |
+| 3 | Following-only feed | Server-side filter. `?following=<wallet>` returned 12 of 13 items, correctly dropping the viewer's own; switch verified on device |
+| 4 | Copy a position | "Buy this yourself" on every holding of a trader, opening the ordinary buy sheet at your size |
+| 5 | Watchlist | Watch toggle in the coin nav; row written to Postgres; Watching tab renders it |
+| 6 | Recurring buy plan | Created through the sheet (0.02 SOL weekly, 0.08 target); contributed for real — devnet signature `2SChsaQvu…` — and `contributed`/`fills` advanced only after it landed |
+| 7 | Social proof (`crowd`) | Endpoint returns 3 traders, 2 still holding, first buyer and their multiple, net flow over a day and a week. **No UI yet.** |
+| 8 | Price-impact size suggester (`depth`) | 12-point depth curve and a binary search that lands at 0.9989% against a 1% budget. **No UI yet.** |
+| 13 | A note attached to a buy | The buy sheet's comment box. Stored with the side and the signature; `notesForSignatures` proven to return it for a real landed fill |
+| 23 | Follower count, real | On the trader screen, from Postgres |
+| 26 | Price alert on a watched coin | Alert sheet; direction derived from the price when it was set; "Crossed" pill verified |
+| 27 | Plan progress vs target | Ruled bar, zero draws nothing |
+| 41 | Depth chart | `sampleDepth`, 12 log-spaced points. **No UI yet.** |
+| 42 | — | Exact-out not reached |
+| 88 | Program errors as sentences | `explainSubmitFailure`; verified live — an expired blockhash now says so instead of "something went wrong on our side" |
+| 93 | Deep links | Every tab and segment is addressable, and re-addressable on an already-mounted screen |
+
+### Also built, outside the original hundred
+
+The seven UI changes asked for mid-run: the chart as the hero of the coin
+screen, four tabs, comments as a bottom drawer, the buy sheet rebuilt, a
+media-forward feed card, trade announcements, and the details table.
+
+### Not reached
+
+Everything else. Tiers 2, 3, 5 and 6 are almost entirely untouched, and the
+Meteora depth of Tier 4 stops at 41. The reason is the one this document
+already predicted: the ranking was by fit, the first eight are one story, and
+telling that story properly — with every figure read from somewhere — took the
+whole run. A shorter honest list.
