@@ -307,6 +307,8 @@ export default function SocialScreen() {
         onClose={() => setReplying(null)}
         target={{ kind: "post", postId: replying ?? "" }}
         onPosted={feed.refresh}
+        /* Clear of the tab bar, which the navigator paints over this sheet. */
+        bottomInset={76}
       />
     </Page>
   );
@@ -428,6 +430,16 @@ function FeedRow({
     : null;
 
   return (
+    /*
+     * The card is the way into the conversation.
+     *
+     * The only affordance used to be the "Add a comment" line — a 16pt text
+     * box, well under any usable tap target, and the reply itself lived on a
+     * whole separate screen. A post's primary action is to read and answer it,
+     * so the card opens that drawer and the coin chip inside it stays the one
+     * thing that goes somewhere else.
+     */
+    <Tappable onPress={() => onOpenPost(item.id)} to={0.99}>
     <Entry $first={first}>
       <Row gap={10} align="center">
         <Byline
@@ -511,18 +523,18 @@ function FeedRow({
           trade entry the equivalent weight goes to the figure. */}
       <PostBody numberOfLines={art ? 3 : undefined}>{item.body}</PostBody>
 
-      <Tappable onPress={() => onOpenPost(item.id)} to={0.99}>
-        <Engagement>
-          {/* A count, or an invitation — never "0 comments", which reads as a
-              verdict on the post. */}
-          <Caption>
-            {item.replyCount === 0
-              ? "Add a comment"
-              : `View all ${item.replyCount} ${item.replyCount === 1 ? "comment" : "comments"}`}
-          </Caption>
-        </Engagement>
-      </Tappable>
+      <Engagement>
+        <ReplyGlyph />
+        {/* A count, or an invitation — never "0 comments", which reads as a
+            verdict on the post. */}
+        <Caption>
+          {item.replyCount === 0
+            ? "Add a comment"
+            : `View all ${item.replyCount} ${item.replyCount === 1 ? "comment" : "comments"}`}
+        </Caption>
+      </Engagement>
     </Entry>
+    </Tappable>
   );
 }
 

@@ -54,12 +54,22 @@ export function CommentsSheet({
   onClose,
   target,
   onPosted,
+  bottomInset = 0,
 }: {
   visible: boolean;
   onClose: () => void;
   target: CommentsTarget;
   /** Something landed; the screen behind should pick up the new count. */
   onPosted?: () => void;
+  /**
+   * Space to leave under the composer, in points.
+   *
+   * A tab bar belongs to the navigator, not to the screen, so it paints *over*
+   * this sheet — the reply box was sitting underneath it, visible but
+   * untappable. Stack screens pass nothing; a tab screen passes its bar's
+   * height.
+   */
+  bottomInset?: number;
 }) {
   const wallet = useWallet();
   const [rows, setRows] = useState<Row[] | null>(null);
@@ -187,7 +197,7 @@ export function CommentsSheet({
         )}
       </List>
 
-      <Composer>
+      <Composer style={{ paddingBottom: 16 + bottomInset }}>
         <Identicon seed={wallet.address ?? "anon"} size={30} />
         <Field>
           <TextInput
@@ -283,10 +293,17 @@ const Title = styled.Text`
   color: ${(p) => p.theme.colors.text};
 `;
 
-/* A fixed height, so the sheet does not resize as comments load — and so the
-   composer stays where a thumb last saw it. */
+/*
+ * A ceiling, not a fixed height.
+ *
+ * It was a flat 420pt, which is right for a busy thread and leaves a chasm of
+ * white under a single reply. `maxHeight` keeps the sheet from swallowing the
+ * screen while letting it sit close to its content, and `minHeight` stops it
+ * collapsing to nothing while the first read is in flight.
+ */
 const List = styled.View`
-  height: 420px;
+  max-height: 420px;
+  min-height: 120px;
   padding-horizontal: ${(p) => p.theme.space(4)}px;
 `;
 
