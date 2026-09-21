@@ -40,7 +40,7 @@ against Pyth (listed names) or Tessera (pre-IPO names Pyth has no feed for).
 ### Phase A — Sponsor depth  ·  DONE
 ### Phase B — Reliability  ·  DONE
 ### Phase C — Mainnet  ·  BLOCKED on funding
-### Phase D — Deploy + submit  ·  NOT STARTED
+### Phase D — Deploy + submit  ·  PARTIAL
 ### Phase E — Curve science  ·  NOT STARTED
 ### Phase F — Polish  ·  PARTIAL
 
@@ -102,12 +102,22 @@ against Pyth (listed names) or Tessera (pre-IPO names Pyth has no feed for).
 
 ### Phase D — Deploy and submit
 
-- **D1 · NOT STARTED** — Deploy the Next app. `vercel.json` exists; nothing is
-  deployed. Needs a Vercel or Railway credential.
-- **D2 · NOT STARTED** — Env on the deployed instance: `DATABASE_URL`,
-  `MONGODB_URI`, `NEXT_PUBLIC_SOLANA_CLUSTER`, and an RPC if B6 resolves.
-- **D3 · NOT STARTED** — Run `/api/juno/index` against the deployed instance so
-  its swap record is warm before judging.
+- **D1 · DONE** — Deployed to Railway.
+  **https://juno-web-production-bd2e.up.railway.app**
+  Project `3dcca757-3f03-44a4-ae57-fd82e670c49b`, service `juno-web`.
+  Two build failures on the way, both fixed: a 6GB upload (`.railwayignore`,
+  now 3.8MB) and an npm peer conflict between `@solana-program/token-2022`'s
+  `sysvars@^5` and `@solana/kit@6` (`.npmrc`, `legacy-peer-deps`). A third
+  failure was Railway's own builder taking a 504 from GitHub fetching `mise`
+  and needed only a retry.
+- **D2 · DONE** — 19 variables set, `PORT=3000` pinned to match the domain's
+  target port.
+- **D3 · DONE** — The swap record lives in the same Neon database, so the
+  deployed instance reads a warm store: its feed returns `tradesPartial:
+  false`.
+- **D6 · DONE** — `juno-expo/.env` points `EXPO_PUBLIC_API_URL` at Railway, so
+  the phone no longer depends on a laptop's dev server being up and on the
+  same network.
 - **D4 · NOT STARTED** — Submission text. Lead with the two things nobody else
   will have: a curve marked against a company that has not listed, and fills
   decoded from vault deltas with no indexer.
