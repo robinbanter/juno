@@ -4,6 +4,13 @@ import { PublicKey, type ParsedTransactionWithMeta } from "@solana/web3.js";
 
 import { getConnection } from "./dbc";
 import { collect, ttlCache, withRetry } from "./rpc";
+import {
+  markScanned,
+  mergeSwaps,
+  recalledSwaps,
+  rememberSwaps,
+  scannedSignatures,
+} from "./swap-store";
 import type { PricePoint } from "./types";
 
 /**
@@ -195,6 +202,20 @@ export async function listSwapHistory(
     async () => {
       const connection = getConnection();
 
+      /*
+       * What Juno already decoded for this pool.
+       *
+       * Read first, and it decides what a failure means. A signature listing
+       * that the endpoint refuses used to empty the history; with a record to
+       * fall back on it returns what is known and marks the read partial,
+       * which is the difference between a chart disappearing and a chart being
+       * a few minutes behind.
+       */
+      const [recalled, scanned] = await Promise.all([
+        recalledSwaps(poolAddress, limit).catch(() => [] as PoolSwap[]),
+        scannedSignatures(poolAddress).catch(() => new Set<string>()),
+      ]);
+
       let candidates: string[];
       try {
         const signatures = await withRetry(() =>
@@ -202,14 +223,45 @@ export async function listSwapHistory(
         );
         candidates = signatures.filter((entry) => !entry.err).map((entry) => entry.signature);
       } catch {
-        return { swaps: [], partial: true };
+        return { swaps: recalled, partial: true };
       }
 
-      if (candidates.length === 0) return { swaps: [], partial: false };
+      if (candidates.length === 0) {
+        // The listing succeeded and found nothing. If we remember fills, the
+        // endpoint has forgotten them rather than them not having happened —
+        // devnet prunes history, and a pruned pool is not an untraded one.
+        return { swaps: recalled, partial: recalled.length > 0 };
+      }
+
+      /*
+       * Only fetch what is not already known.
+       *
+       * This is the whole point: a pool with forty fills used to cost two
+       * pages of `getParsedTransactions` on every single read by every single
+       * surface. Now it costs one signature listing, and the parsed pages only
+       * for signatures nobody has decoded yet — which on a quiet pool is none.
+       */
+      /*
+       * Everything already looked at, whatever the answer was.
+       *
+       * Filtering on decoded *swaps* alone was a bug with a long tail: a
+       * pool's own launch transactions are never swaps, so they were fetched
+       * and parsed on every read forever. On a pool with no trades that is a
+       * permanent toll paid to learn nothing, and it is why the same pools
+       * came back short pass after pass.
+       */
+      const unknown = candidates.filter(
+        (signature) => !scanned.has(signature),
+      );
+
+      if (unknown.length === 0) return { swaps: recalled, partial: false };
+
+      /* Signatures whose page actually returned — see `markScanned`. */
+      const examined: string[] = [];
 
       const chunks: string[][] = [];
-      for (let i = 0; i < candidates.length; i += BATCH) {
-        chunks.push(candidates.slice(i, i + BATCH));
+      for (let i = 0; i < unknown.length; i += BATCH) {
+        chunks.push(unknown.slice(i, i + BATCH));
       }
 
       const { items, partial } = await collect(
@@ -222,6 +274,9 @@ export async function listSwapHistory(
           // Pace the next chunk. The endpoint's per-method limit is about rate,
           // not concurrency, so the gap is what keeps the following chunk legal.
           await new Promise((resolve) => setTimeout(resolve, CHUNK_GAP_MS));
+          // Every signature in a page that came back has now been examined,
+          // including the ones that turned out not to be swaps.
+          chunk.forEach((signature) => examined.push(signature));
           return parsed
             .map((tx) => (tx ? decodeSwap(tx, vaults) : null))
             .filter((swap): swap is PoolSwap => swap !== null);
@@ -229,7 +284,17 @@ export async function listSwapHistory(
         { attempts: 4, baseDelayMs: 400, maxDelayMs: 3_000 },
       );
 
-      return { swaps: items.sort((a, b) => b.slot - a.slot), partial };
+      // Write down what was decoded, then answer from everything known. The
+      // write is allowed to fail: a database hiccup should cost the *record*,
+      // not the reading the user asked for.
+      await Promise.all([
+        rememberSwaps(poolAddress, items).catch(() => undefined),
+        // Only the pages that actually came back. A chunk the endpoint refused
+        // must not be recorded as examined, or its trades are lost for good.
+        markScanned(poolAddress, examined).catch(() => undefined),
+      ]);
+
+      return { swaps: mergeSwaps(recalled, items), partial };
     },
     // A complete read holds for a minute. A partial one is a symptom of
     // throttling, so it is trusted only briefly — long enough that the same

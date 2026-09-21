@@ -15,6 +15,7 @@ import {
   check,
   primaryKey,
   doublePrecision,
+  bigint,
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 
@@ -1166,6 +1167,69 @@ export const junoPosts = pgTable(
  * mainnet relationship. The primary key is the pair, so following twice is a
  * no-op rather than a duplicate row.
  */
+/**
+ * Decoded swaps, kept.
+ *
+ * Juno has no indexer and does not want one: a fill's side and size come out
+ * of the pool's own vault deltas, which is a better source than anybody's API.
+ * But *re-deriving* them on every read is what broke the app. A chart, a
+ * portfolio, a leaderboard and the feed all walk the same pools, each walk is
+ * a signature listing plus paced pages of parsed transactions, and the public
+ * endpoint answers that with refusals — so a coin with four trades routinely
+ * rendered as "No trades yet".
+ *
+ * So a swap is decoded once and written down. The chain stays the source of
+ * truth; this is a record of what was already read from it, keyed by the
+ * signature that proves it. Nothing here is ever computed — every column is
+ * something the transaction said.
+ */
+export const junoSwaps = pgTable(
+  "juno_swaps",
+  {
+    /** The transaction signature. Unique per fill, and its own proof. */
+    signature: varchar("signature", { length: 96 }).primaryKey(),
+    poolAddress: varchar("pool_address", { length: 44 }).notNull(),
+    cluster: varchar("cluster", { length: 16 }).notNull(),
+    /** Decoded from vault deltas: base out + quote in is a buy. */
+    side: varchar("side", { length: 4 }).notNull(),
+    baseAmount: doublePrecision("base_amount").notNull(),
+    quoteAmount: doublePrecision("quote_amount").notNull(),
+    /** Realised price of this fill, in quote per base. */
+    price: doublePrecision("price").notNull(),
+    /** Whoever signed it. */
+    trader: varchar("trader", { length: 44 }).notNull(),
+    slot: bigint("slot", { mode: "number" }).notNull(),
+    blockTime: timestamp("block_time", { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    index("juno_swaps_pool_slot_idx").on(table.poolAddress, table.slot),
+    index("juno_swaps_trader_idx").on(table.cluster, table.trader),
+  ],
+);
+
+/**
+ * Signatures Juno has already looked at and found not to be swaps.
+ *
+ * Every pool's history contains its own launch transactions, and most pools
+ * contain nothing else. Remembering only the *fills* meant those launch
+ * transactions were fetched and parsed on every read forever — a permanent
+ * toll on the exact pools that have no trades to show, which is why the same
+ * seven came back short on pass after pass.
+ *
+ * A signature is immutable: if it was not a swap when it confirmed, it never
+ * will be. So examining one is worth writing down even when the answer is no.
+ */
+export const junoScanned = pgTable(
+  "juno_scanned",
+  {
+    signature: varchar("signature", { length: 96 }).primaryKey(),
+    poolAddress: varchar("pool_address", { length: 44 }).notNull(),
+    cluster: varchar("cluster", { length: 16 }).notNull(),
+    scannedAt: timestamp("scanned_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("juno_scanned_pool_idx").on(table.poolAddress, table.cluster)],
+);
+
 export const junoFollows = pgTable(
   "juno_follows",
   {
