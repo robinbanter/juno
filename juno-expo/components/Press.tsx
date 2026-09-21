@@ -1,7 +1,7 @@
 import { useCallback, useRef } from "react";
 import { Animated, Pressable, type PressableProps, type StyleProp, type ViewStyle } from "react-native";
 
-import { motion, useReducedMotion } from "../lib/motion";
+import { motion } from "../lib/motion";
 
 /**
  * The scale-down that tells a finger the interface heard it.
@@ -66,57 +66,5 @@ export function Tappable({
     <Pressable onPressIn={onPressIn} onPressOut={onPressOut} {...rest}>
       <Animated.View style={[style, { transform: [{ scale }] }]}>{children}</Animated.View>
     </Pressable>
-  );
-}
-
-/**
- * Fade-and-rise, staggered by position in a list.
- *
- * Applied per row rather than to the list, so a row that arrives later (a new
- * trade landing at the top of the feed) gets the same entrance as the ones that
- * were there at mount — the feed never re-plays itself wholesale.
- *
- * The rise is 14pt. Enough to read as arriving from somewhere, small enough
- * that ten of them at once is punctuation and not a wave. Reduced motion drops
- * the travel and keeps the fade.
- */
-export function Enter({
-  index = 0,
-  children,
-  style,
-}: {
-  index?: number;
-  children: React.ReactNode;
-  style?: StyleProp<ViewStyle>;
-}) {
-  const reduced = useReducedMotion();
-  const progress = useRef(new Animated.Value(0)).current;
-  const started = useRef(false);
-
-  if (!started.current) {
-    started.current = true;
-    Animated.timing(progress, {
-      toValue: 1,
-      duration: motion.swap,
-      // Past the cap the delay stops being decoration and becomes a wait.
-      delay: Math.min(index, motion.staggerCap) * motion.stagger,
-      easing: motion.easeOut,
-      useNativeDriver: true,
-    }).start();
-  }
-
-  const transform = reduced
-    ? undefined
-    : [
-        {
-          translateY: progress.interpolate({
-            inputRange: [0, 1],
-            outputRange: [motion.rise, 0],
-          }),
-        },
-      ];
-
-  return (
-    <Animated.View style={[style, { opacity: progress, transform }]}>{children}</Animated.View>
   );
 }

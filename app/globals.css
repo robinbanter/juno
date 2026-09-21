@@ -187,6 +187,96 @@ body:has(.juno) {
   color-scheme: light;
 }
 
+/* ------------------------------------------------------------
+   The parts of Juno that Juno did not draw.
+
+   Text selection, the caret, the focus ring, the scrollbar, the underline
+   offset and the numerals in a figure all ship with defaults that belong to no
+   design system. Left alone they are the clearest tell that a page was
+   assembled rather than built, and they are the cheapest thing on the page to
+   get right. Scoped to `.juno` so Norr keeps its own.
+   ------------------------------------------------------------ */
+
+/* Lime carries dark ink everywhere else in this product; a selection is not the
+   exception. Measured at 16.00:1. */
+.juno ::selection {
+  background: var(--j-brand);
+  color: var(--j-ink);
+}
+
+.juno {
+  /* Where the next character lands, in the colour of the thing being typed
+     into rather than the browser's default blue. */
+  caret-color: var(--j-ink);
+  /* Checkboxes, radios and range inputs the browser draws for us. */
+  accent-color: var(--j-pos);
+}
+
+/* Norr's focus ring is crimson. On a Juno route that is a colour from another
+   product; the token exists, so use it. */
+.juno :focus-visible {
+  outline: 2px solid var(--j-focus);
+  outline-offset: 2px;
+  /* No radius here on purpose. An `outline` already follows the focused
+     element's own corners; forcing one imposes a single shape on a pill button,
+     a square input and a rounded card alike. */
+}
+
+/* Links sit on a light surface at 13–15px, where the default underline runs
+   straight through the descenders. */
+.juno a:not([class*="no-underline"]):hover {
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+}
+
+/*
+ * A real scrollbar, thin and in the palette.
+ *
+ * The app above hides scrollbars globally (`width: 0`). That is defensible on a
+ * short marketing page and wrong on a market list: the bar is the only thing
+ * telling a desktop reader how much record is left below the fold, and removing
+ * a standard affordance for tidiness is the definition of reinventing one.
+ */
+.juno *::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.juno *::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.juno *::-webkit-scrollbar-thumb {
+  background: var(--j-line-strong);
+  border-radius: 999px;
+  /* Inset from the track by a transparent border, so the thumb reads as a
+     floating bar rather than a filled gutter. */
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+.juno *::-webkit-scrollbar-thumb:hover {
+  background: var(--j-faint);
+  background-clip: content-box;
+}
+
+.juno {
+  scrollbar-width: thin;
+  scrollbar-color: var(--j-line-strong) transparent;
+}
+
+/*
+ * Every figure in this product is compared against the one above it.
+ * Proportional digits make a column of prices wander; lining tabular ones do
+ * not. This is the one typographic setting a market UI cannot do without.
+ */
+.juno [class*="tabular"],
+.juno td,
+.juno time,
+.juno output {
+  font-variant-numeric: tabular-nums;
+}
+
 @theme inline {
   --color-bg: var(--bg);
   --color-surface: var(--surface);

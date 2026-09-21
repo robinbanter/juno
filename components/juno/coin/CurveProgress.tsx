@@ -26,7 +26,7 @@ export function CurveProgress({
 
   return (
     <div className={cn("flex items-center gap-2", className)}>
-      <span className="flex shrink-0 items-center gap-1 text-[13px] font-semibold text-j-pos">
+      <span className="flex shrink-0 items-center gap-1 text-[14px] font-semibold text-j-pos">
         <Triangle up />
         {usd(curve.raisedUsd)}
       </span>
@@ -51,7 +51,7 @@ export function CurveProgress({
         />
       </div>
 
-      <span className="shrink-0 text-[13px] font-semibold text-j-muted">
+      <span className="shrink-0 text-[14px] font-semibold text-j-muted">
         {usd(curve.thresholdUsd)}
       </span>
     </div>

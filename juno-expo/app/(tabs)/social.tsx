@@ -1,21 +1,22 @@
 import { useRouter } from "expo-router";
 import { useMemo, useState } from "react";
-import { FlatList, RefreshControl } from "react-native";
+import { RefreshControl, ScrollView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Svg, { Path } from "react-native-svg";
 import styled from "styled-components/native";
 
 import { CoinArt, Identicon } from "../../components/art";
 import { JunoMark } from "../../components/logo";
-import { Enter, Tappable } from "../../components/Press";
+import { Tappable } from "../../components/Press";
 import {
-  Body,
   Button,
   Caption,
-  Delta,
-  Card,
+  Chevron,
   Col,
+  Delta,
+  Entry,
   Label,
+  Ledger,
   Mono,
   Placeholder,
   Row,
@@ -37,17 +38,27 @@ import { theme } from "../../theme";
  * makes this a social app rather than a block explorer, and a reader can always
  * tell which is which.
  *
- * ## Telling them apart without reading them
+ * ## One sheet, ruled — not a deck of cards
  *
- * Both used to be the same white card, so the difference only arrived after you
- * had parsed the contents — which on a feed you scroll is too late. Now a trade
- * carries a coloured edge in its own direction and leads with the coin's
- * artwork; a post leads with its words, at reading size. Scrolling past, the
- * shape alone tells you which is which and the colour tells you which way.
+ * Every row used to be its own floating white rectangle. That is the default
+ * shape of a generated feed, and it cost twelve shadows and twelve gaps of
+ * chrome around twelve rows of content in an app whose subject is a list of
+ * things that happened. The feed is now one surface ruled into entries: denser,
+ * quieter, and shaped like the record it is.
  *
- * The edge is never the only signal: every trade also spells out "bought" or
- * "sold" in words, because the green and the red are only ΔE 9.0 apart under
- * deuteranopia.
+ * It also settles a question the cards could not. A trade briefly carried a 4px
+ * coloured edge to mark its direction, which is a stripe doing a number's job.
+ * On a ledger the direction lives where a trader already looks — in the figure,
+ * signed and coloured, with the verb spelled out beside it. Colour is never the
+ * only signal: "bought" and "sold" are written, because the green and the red
+ * are only ΔE 9.0 apart under deuteranopia.
+ *
+ * ## Nothing animates in
+ *
+ * There was a staggered entrance. It was decoration on a surface whose job is a
+ * task: the feed can take fifteen seconds to read, and a cascade on top of that
+ * is making someone watch it load. The skeletons say "loading"; the rows just
+ * arrive.
  */
 
 const FILTERS = [
@@ -104,30 +115,31 @@ export default function SocialScreen() {
           ) : null}
         </Row>
 
-        {feed.data ? (
-          <FilterRow>
-            <Segmented items={FILTERS} value={filter} onChange={setFilter} />
-          </FilterRow>
-        ) : null}
+        {/* Always rendered, so the sheet below does not jump down the screen at
+            the moment the data lands. Disabled while there is nothing to
+            filter — a control that looks live and does nothing is worse than
+            one that says it is waiting. */}
+        <FilterRow>
+          <Segmented items={FILTERS} value={filter} onChange={feed.data ? setFilter : () => {}} />
+        </FilterRow>
       </Header>
 
       {feed.loading ? (
+        // Shaped like the ledger it precedes, on the same sheet, so the page
+        // does not change structure when the content lands.
         <Loading>
-          {[0, 1, 2].map((i) => (
-            <Enter key={i} index={i}>
-              <Card>
+          <Ledger>
+            {[0, 1, 2, 3].map((i) => (
+              <Entry key={i} $first={i === 0}>
                 <Row gap={10}>
-                  <Skeleton h={30} w={30} round={15} />
-                  <Col gap={6} style={{ flex: 1 }}>
-                    <Skeleton h={13} w="45%" />
-                    <Skeleton h={11} w="28%" />
-                  </Col>
+                  <Skeleton h={26} w={26} round={13} />
+                  <Skeleton h={13} w="38%" />
                 </Row>
-                <Skeleton h={12} w="92%" style={{ marginTop: 16 }} />
-                <Skeleton h={12} w="64%" style={{ marginTop: 8 }} />
-              </Card>
-            </Enter>
-          ))}
+                <Skeleton h={12} w="92%" style={{ marginTop: 14 }} />
+                <Skeleton h={12} w="58%" style={{ marginTop: 8 }} />
+              </Entry>
+            ))}
+          </Ledger>
         </Loading>
       ) : feed.error ? (
         // A dead end with no way out of it is the worst version of this
@@ -139,12 +151,9 @@ export default function SocialScreen() {
           action={<Button label="Try again" onPress={feed.refresh} />}
         />
       ) : (
-        <FlatList
-          data={items}
-          keyExtractor={(item) => `${item.kind}:${item.id}`}
-          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 130, gap: 12 }}
+        <ScrollView
+          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 130 }}
           showsVerticalScrollIndicator={false}
-          initialNumToRender={8}
           refreshControl={
             <RefreshControl
               refreshing={feed.refreshing}
@@ -152,19 +161,8 @@ export default function SocialScreen() {
               tintColor={theme.colors.muted}
             />
           }
-          ListFooterComponent={
-            // Posts are complete; trades are walked against an endpoint that
-            // refuses. Saying so is cheaper than a feed that looks quiet.
-            feed.data?.tradesPartial && items.length > 0 && filter !== "posts" ? (
-              <Card>
-                <Body muted>
-                  Some pools would not load, so the trades above are not every
-                  trade on this cluster. Pull to retry.
-                </Body>
-              </Card>
-            ) : null
-          }
-          ListEmptyComponent={
+        >
+          {items.length === 0 ? (
             filter !== "all" && (feed.data?.items.length ?? 0) > 0 ? (
               // A filter finding nothing is a fact about the filter, not about
               // the cluster, and must not borrow the cluster's error copy.
@@ -184,19 +182,30 @@ export default function SocialScreen() {
                 detail="Trades and posts appear as they happen."
               />
             )
-          }
-          renderItem={({ item, index }) => (
-            // Only the first screenful is staggered. Past that the delay stops
-            // being an entrance and becomes a row that is late.
-            <Enter index={index} key={`${filter}:${item.id}`}>
-              <FeedRow
-                item={item}
-                onOpen={(mint) => router.push(`/coin/${mint}`)}
-                onOpenPost={(postId) => router.push(`/post/${postId}`)}
-              />
-            </Enter>
+          ) : (
+            <Ledger>
+              {items.map((item, index) => (
+                <FeedRow
+                  key={`${item.kind}:${item.id}`}
+                  item={item}
+                  first={index === 0}
+                  onOpen={(mint) => router.push(`/coin/${mint}`)}
+                  onOpenPost={(postId) => router.push(`/post/${postId}`)}
+                />
+              ))}
+            </Ledger>
           )}
-        />
+
+          {/* Posts are complete; trades are walked against an endpoint that
+              refuses. A footnote under the sheet, not another card on it —
+              this is a caveat about the record, not an entry in it. */}
+          {feed.data?.tradesPartial && items.length > 0 && filter !== "posts" ? (
+            <Footnote>
+              Some pools would not load, so the trades above are not every trade
+              on this cluster. Pull to retry.
+            </Footnote>
+          ) : null}
+        </ScrollView>
       )}
     </Page>
   );
@@ -204,32 +213,34 @@ export default function SocialScreen() {
 
 function FeedRow({
   item,
+  first,
   onOpen,
   onOpenPost,
 }: {
   item: FeedItem;
+  /** The first entry carries no rule above it. */
+  first: boolean;
   onOpen: (mint: string) => void;
   onOpenPost: (postId: string) => void;
 }) {
   if (item.kind === "trade") {
     const buying = item.side === "buy";
-    const tone = buying ? theme.colors.pos : theme.colors.neg;
     const move =
       item.priceNow !== null && item.price > 0 ? (item.priceNow - item.price) / item.price : null;
 
     return (
-      <Tappable onPress={() => onOpen(item.coin.address)}>
-        <TradeCard>
-          {/* Direction as an edge. Colour is never alone — "bought"/"sold" is
-              spelled out a line below. */}
-          <Edge $tone={tone} />
-
+      <Tappable onPress={() => onOpen(item.coin.address)} to={0.985}>
+        <Entry $first={first}>
           <Row gap={8}>
             <Identicon seed={item.actor.handle} size={22} />
             <Label numberOfLines={1} style={{ fontWeight: "700", maxWidth: 104 }}>
               {item.actor.handle}
             </Label>
-            <Verb $tone={tone}>{buying ? "bought" : "sold"}</Verb>
+            {/* The verb, in the direction's colour. Colour and word together —
+                neither carries it alone. */}
+            <Verb $tone={buying ? theme.colors.pos : theme.colors.neg}>
+              {buying ? "bought" : "sold"}
+            </Verb>
             <Grow />
             <Caption>{since(item.timestamp)}</Caption>
           </Row>
@@ -242,8 +253,8 @@ function FeedRow({
                 posterUrl: item.coin.posterUrl ?? undefined,
               })}
               seed={item.coin.address}
-              size={58}
-              radius={18}
+              size={52}
+              radius={16}
             />
             <Col gap={3} style={{ flex: 1 }}>
               <Ticker numberOfLines={1}>${item.coin.symbol || item.coin.name}</Ticker>
@@ -251,37 +262,37 @@ function FeedRow({
                 {item.coin.name}
               </Label>
             </Col>
-            {/* The move since the trade is the one number worth the largest
-                type on this card: it is what happened *after* the decision.
-                Absent, never zero, when the live price could not be read. */}
-            <Col gap={2} style={{ alignItems: "flex-end" }}>
+            {/* The subject of the card, at the size that says so: what the
+                position did after the decision. Absent, never zero, when the
+                live price could not be read. */}
+            <Col gap={1} style={{ alignItems: "flex-end" }}>
               <Delta pct={move} />
-              <Caption>since</Caption>
+              <Caption>since the fill</Caption>
             </Col>
           </Row>
 
           <Figures>
-            <Figure>
+            <Column>
               <Mono>{tokens(item.amount)}</Mono>
               <Caption>Amount</Caption>
-            </Figure>
-            <Figure>
+            </Column>
+            <Column>
               <Mono>{money(item.valueUsd, item.currency)}</Mono>
               <Caption>Total</Caption>
-            </Figure>
-            <Figure>
+            </Column>
+            <Column>
               <Mono>{money(item.price, item.currency, { compact: false })}</Mono>
               <Caption>Price paid</Caption>
-            </Figure>
+            </Column>
           </Figures>
-        </TradeCard>
+        </Entry>
       </Tappable>
     );
   }
 
   return (
-    <Tappable onPress={() => onOpenPost(item.id)}>
-      <Card>
+    <Tappable onPress={() => onOpenPost(item.id)} to={0.985}>
+      <Entry $first={first}>
         <Row gap={10}>
           <Identicon seed={item.author.wallet} size={26} />
           <Label numberOfLines={1} style={{ fontWeight: "700" }}>
@@ -292,7 +303,7 @@ function FeedRow({
         </Row>
 
         {/* The post's own words, at reading size. This is the content; on a
-            trade card the equivalent weight goes to the number. */}
+            trade entry the equivalent weight goes to the figure. */}
         <PostBody>{item.body}</PostBody>
 
         {item.coin ? (
@@ -301,7 +312,7 @@ function FeedRow({
             <Label muted numberOfLines={1} style={{ flex: 1 }}>
               {item.coin.name}
             </Label>
-            <Chevron>›</Chevron>
+            <Chevron size={15} />
           </CoinChip>
         ) : null}
 
@@ -309,20 +320,17 @@ function FeedRow({
             announcement, and this is supposed to be a social app. */}
         <Engagement>
           <ReplyGlyph />
-          <Label muted>
+          <Caption>
             {item.replyCount === 0
               ? "Reply"
               : `${item.replyCount} ${item.replyCount === 1 ? "reply" : "replies"}`}
-          </Label>
-          <Grow />
-          <Chevron>›</Chevron>
+          </Caption>
         </Engagement>
-      </Card>
+      </Entry>
     </Tappable>
   );
 }
 
-/** A speech bubble, drawn — a bordered circle with one square corner was not one. */
 function ReplyGlyph() {
   return (
     <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
@@ -335,6 +343,21 @@ function ReplyGlyph() {
     </Svg>
   );
 }
+
+/**
+ * A caveat about the record, set under it rather than on it.
+ *
+ * It was a white card, which put a note about the data at the same visual
+ * weight as the data. On the canvas, in muted ink, it reads as the footnote it
+ * is — and the sheet above keeps its edge.
+ */
+const Footnote = styled.Text`
+  margin-top: ${(p) => p.theme.space(3)}px;
+  padding-horizontal: ${(p) => p.theme.space(2)}px;
+  font-size: ${(p) => p.theme.type.caption.size}px;
+  line-height: ${(p) => p.theme.type.caption.height}px;
+  color: ${(p) => p.theme.colors.muted};
+`;
 
 const Page = styled(SafeAreaView)`
   flex: 1;
@@ -380,26 +403,7 @@ const Loading = styled.View`
   gap: ${(p) => p.theme.space(3)}px;
 `;
 
-/**
- * A trade card, which is a `Card` with a stripe down its left edge.
- *
- * `overflow: hidden` is what lets the stripe sit flush inside the corner
- * radius instead of poking out of it — the kind of two-pixel detail nobody
- * consciously sees and everybody notices when it is wrong.
- */
-const TradeCard = styled(Card)`
-  overflow: hidden;
-  padding-left: ${(p) => p.theme.space(5)}px;
-`;
 
-const Edge = styled.View<{ $tone: string }>`
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 4px;
-  background-color: ${(p) => p.$tone};
-`;
 
 const Verb = styled.Text<{ $tone: string }>`
   font-size: 13px;
@@ -425,49 +429,50 @@ const Grow = styled.View`
   flex: 1;
 `;
 
+/**
+ * The market a post is about, as a line item rather than a filled well.
+ *
+ * It was a grey rounded box inside a white card inside a sage canvas — three
+ * nested containers to say "this post names a coin". On a ruled sheet the
+ * reference is a line: ticker, name, and the way in. Nothing nests.
+ */
 const CoinChip = styled.Pressable`
   flex-direction: row;
   align-items: center;
   gap: ${(p) => p.theme.space(2)}px;
-  background-color: ${(p) => p.theme.colors.surfaceAlt};
-  padding-horizontal: ${(p) => p.theme.space(3)}px;
-  padding-vertical: ${(p) => p.theme.space(3)}px;
-  border-radius: ${(p) => p.theme.radius.md}px;
-  margin-top: ${(p) => p.theme.space(3)}px;
-`;
-
-const Figures = styled.View`
-  flex-direction: row;
-  margin-top: ${(p) => p.theme.space(3)}px;
-  padding-top: ${(p) => p.theme.space(3)}px;
-  border-top-width: 1px;
-  border-top-color: ${(p) => p.theme.colors.line};
+  padding-vertical: ${(p) => p.theme.space(2)}px;
+  margin-top: ${(p) => p.theme.space(2)}px;
 `;
 
 /**
- * Left-aligned, not centred.
+ * Three figures on a shared left edge, not centred in equal columns.
  *
- * Three figures centred in equal columns leaves their digits wandering, and
- * these are numbers people compare down a scrolling feed. A shared left edge
- * gives the eye one line to run along.
+ * These are numbers people compare down a scrolling list. Centring leaves the
+ * digits wandering between rows; a common left edge gives the eye one line to
+ * run along, which is the whole reason a ledger is ruled.
  */
-const Figure = styled.View`
+const Column = styled.View`
   flex: 1;
   gap: 2px;
 `;
 
+/**
+ * No rule above these.
+ *
+ * The sheet is already ruled between entries; a second hairline inside one, at
+ * the same weight, makes the eye read four separators of equal importance where
+ * there is one. Inside an entry the hierarchy is spacing.
+ */
+const Figures = styled.View`
+  flex-direction: row;
+  margin-top: ${(p) => p.theme.space(4)}px;
+`;
+
+
 const Engagement = styled.View`
   flex-direction: row;
   align-items: center;
-  gap: ${(p) => p.theme.space(2)}px;
+  gap: 6px;
   margin-top: ${(p) => p.theme.space(3)}px;
-  padding-top: ${(p) => p.theme.space(3)}px;
-  border-top-width: 1px;
-  border-top-color: ${(p) => p.theme.colors.line};
 `;
 
-const Chevron = styled.Text`
-  font-size: 18px;
-  font-weight: 700;
-  color: ${(p) => p.theme.colors.faint};
-`;

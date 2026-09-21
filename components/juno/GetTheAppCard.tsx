@@ -33,7 +33,7 @@ export function GetTheAppCard({ url = "https://juno.fun/app" }: { url?: string }
       </button>
 
       <div className="w-[130px] rounded-j-lg border border-j-line bg-j-surface p-3 shadow-[var(--j-shadow-pop)]">
-        <p className="mb-2 text-[13px] leading-none font-semibold">Get the App</p>
+        <p className="mb-2 text-[14px] leading-none font-semibold">Get the App</p>
         {/* The QR keeps a light tile regardless of theme — a scanner needs
             dark modules on a light field, not the other way round. */}
         <div className="relative overflow-hidden rounded-[6px] bg-white p-1.5">

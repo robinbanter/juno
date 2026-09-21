@@ -70,3 +70,6 @@ __pycache__/
 /juno-expo/ios
 /juno-expo/android
 /juno-expo/dist
+
+# Impeccable engine binary — downloaded per platform on first run
+.claude/skills/impeccable/scripts/bin/

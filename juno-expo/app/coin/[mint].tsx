@@ -6,26 +6,7 @@ import styled from "styled-components/native";
 
 import { CoinGlyph, Identicon } from "../../components/art";
 import { Candles } from "../../components/Candles";
-import {
-  Avatar,
-  Body,
-  Display,
-  Button,
-  Caption,
-  Card,
-  Col,
-  Delta,
-  Heading,
-  Label,
-  Mono,
-  Pill,
-  Placeholder,
-  Progress,
-  Row,
-  Skeleton,
-  Stat,
-  Title,
-} from "../../components/kit";
+import { Avatar, Body, Button, Caption, Card, ChevronLeft, Col, Delta, Display, ExternalGlyph, Heading, Label, Mono, Pill, Placeholder, Progress, Row, Skeleton, Stat, Title } from "../../components/kit";
 import { TradeSheet } from "../../components/TradeSheet";
 import { juno, type NavReference } from "../../lib/api";
 import { useWallet } from "../../lib/wallet";
@@ -64,7 +45,7 @@ export default function CoinScreen() {
     <Page edges={["top"]}>
       <Nav>
         <Back onPress={() => router.back()} hitSlop={12} accessibilityRole="button">
-          <BackMark>‹</BackMark>
+          <ChevronLeft />
         </Back>
       </Nav>
 
@@ -224,7 +205,8 @@ export default function CoinScreen() {
             )}
 
             <LinkTap onPress={() => Linking.openURL(juno.explorer("account", coin.pool))}>
-              <LinkText>View the pool on Solscan ↗</LinkText>
+              <LinkText>View the pool on Solscan</LinkText>
+              <ExternalGlyph />
             </LinkTap>
           </ScrollView>
 
@@ -335,12 +317,6 @@ const Back = styled.Pressable`
   justify-content: center;
 `;
 
-const BackMark = styled.Text`
-  font-size: 24px;
-  line-height: 26px;
-  font-weight: 700;
-  color: ${(p) => p.theme.colors.text};
-`;
 
 const Loading = styled.View`
   padding-horizontal: ${(p) => p.theme.space(4)}px;

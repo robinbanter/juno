@@ -18,6 +18,13 @@ import { AccessibilityInfo, Easing } from "react-native";
  * further to travel and reads as sluggish if it is rushed, so it gets a spring
  * rather than a longer duration — and a spring can be caught mid-flight by a
  * finger, which is the whole point on a surface people drag.
+ *
+ * There is no list-entrance constant here on purpose. A staggered cascade on a
+ * feed shipped briefly and was wrong: this app's surfaces are for completing a
+ * task, the feed can take fifteen seconds to read, and choreography on top of
+ * that is asking someone to watch it load. The skeletons say "loading"; the
+ * rows arrive. Motion in this app conveys state — a press, a sheet, a glyph
+ * turning — and nothing else.
  */
 export const motion = {
   /**
@@ -37,18 +44,6 @@ export const motion = {
   swap: 220,
   /** Closing a sheet. Deliberately shorter than the spring that opened it. */
   exit: 230,
-
-  /** How far a card lifts as it fades in. Small: this is punctuation, not a move. */
-  rise: 14,
-  /** Between staggered items. Past ~80ms a list starts to feel like it is loading. */
-  stagger: 45,
-  /**
-   * Stagger past this index is not worth waiting for.
-   *
-   * Without a cap, item 30 in a feed waits 1.4 seconds to appear — a decorative
-   * effect turning into a loading state.
-   */
-  staggerCap: 6,
 
   /**
    * The sheet's opening spring.

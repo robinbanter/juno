@@ -96,7 +96,7 @@ export function CreatorPanel({ coin }: { coin: Coin }) {
     <section className="mt-4 rounded-j border border-j-line p-4">
       <h2 className="text-[14px] font-semibold">You created this</h2>
 
-      <dl className="mt-3 flex flex-col gap-1.5 text-[13px]">
+      <dl className="mt-3 flex flex-col gap-1.5 text-[14px]">
         <div className="flex items-center justify-between">
           <dt className="text-j-muted">Unclaimed fees</dt>
           <dd className="font-semibold tabular-nums">

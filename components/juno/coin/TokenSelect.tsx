@@ -105,7 +105,7 @@ const MARKS: Record<string, string> = {
 function TokenMark({ symbol }: { symbol: string }) {
   return (
     <span
-      className="flex size-[18px] items-center justify-center rounded-full text-[9px] font-bold text-white"
+      className="flex size-[18px] items-center justify-center rounded-full text-[11px] font-bold text-white"
       style={{ background: MARKS[symbol] ?? "var(--j-line-strong)" }}
       aria-hidden="true"
     >

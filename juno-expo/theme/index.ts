@@ -1,3 +1,5 @@
+import { StyleSheet } from "react-native";
+
 import "styled-components/native";
 
 /**
@@ -61,6 +63,40 @@ export const theme = {
   radius: { sm: 10, md: 16, lg: 22, xl: 30, pill: 999 },
 
   space: (n: number) => n * 4,
+
+  /**
+   * One type scale, ratio ~1.15, and every size in the app comes from it.
+   *
+   * Before this the app used fourteen ad-hoc sizes between 11 and 44, which is
+   * what happens when each screen picks its own. A product UI carries more type
+   * elements than a brand surface, so the steps have to be *close* — exaggerated
+   * contrast between a label and the value beside it reads as noise, not
+   * hierarchy. Weight and colour do the separating at the small end; size only
+   * takes over at `title` and above.
+   *
+   * `display` carries negative tracking because the default spacing of a
+   * grotesque at 40px was drawn for 16px text and looks loose at this size.
+   */
+  type: {
+    micro: { size: 11, height: 14, tracking: 0.2 },
+    caption: { size: 12, height: 16, tracking: 0 },
+    label: { size: 14, height: 19, tracking: -0.1 },
+    body: { size: 16, height: 23, tracking: -0.1 },
+    lead: { size: 17, height: 25, tracking: -0.2 },
+    title: { size: 21, height: 26, tracking: -0.4 },
+    screen: { size: 30, height: 34, tracking: -0.8 },
+    display: { size: 40, height: 44, tracking: -1.2 },
+  },
+
+  /**
+   * The hairline a ledger is ruled with.
+   *
+   * 1px at the device's own scale — a "1px" rule that renders as a 3px grey bar
+   * on a 3× screen is the commonest way a light interface looks cheap. React
+   * Native's StyleSheet.hairlineWidth is the right value; this constant exists
+   * so the intent is named where it is used.
+   */
+  hairline: StyleSheet.hairlineWidth,
 
   /**
    * Light surfaces need far less shadow spread than dark ones to read as

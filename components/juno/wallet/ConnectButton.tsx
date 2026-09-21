@@ -65,7 +65,7 @@ export function ConnectButton() {
         aria-haspopup="menu"
         aria-expanded={open}
         className={cn(
-          "flex h-9 items-center gap-2 rounded-full border border-j-line-strong px-3 text-[13px] font-semibold",
+          "flex h-9 items-center gap-2 rounded-full border border-j-line-strong px-3 text-[14px] font-semibold",
           "transition-colors hover:bg-j-surface focus-visible:ring-2 focus-visible:ring-j-focus focus-visible:outline-none",
         )}
       >
@@ -86,7 +86,7 @@ export function ConnectButton() {
             href={explorer.account(address)}
             target="_blank"
             rel="noreferrer noopener"
-            className="block px-3 py-2 text-[13px] transition-colors hover:bg-j-bg"
+            className="block px-3 py-2 text-[14px] transition-colors hover:bg-j-bg"
           >
             View on Solscan
           </a>
@@ -96,7 +96,7 @@ export function ConnectButton() {
               void disconnect();
               setOpen(false);
             }}
-            className="flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] text-j-neg transition-colors hover:bg-j-bg"
+            className="flex w-full items-center gap-2 px-3 py-2 text-left text-[14px] text-j-neg transition-colors hover:bg-j-bg"
           >
             <LogOut size={14} />
             Disconnect

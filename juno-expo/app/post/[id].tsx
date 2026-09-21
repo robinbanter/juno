@@ -5,21 +5,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import styled from "styled-components/native";
 
 import { Identicon } from "../../components/art";
-import {
-  Body,
-  Button,
-  Caption,
-  Card,
-  Col,
-  Delta,
-  Heading,
-  Label,
-  Mono,
-  Placeholder,
-  Progress,
-  Row,
-  Skeleton,
-} from "../../components/kit";
+import { Body, Button, Caption, Card, ChevronLeft, Col, Delta, Heading, Label, Mono, Placeholder, Progress, Row, Skeleton } from "../../components/kit";
 import { juno, type PostDetail } from "../../lib/api";
 import { money, since, useApi } from "../../lib/useApi";
 import { useWallet } from "../../lib/wallet";
@@ -70,7 +56,7 @@ export default function PostScreen() {
     <Page edges={["top"]}>
       <Nav>
         <Back onPress={() => router.back()} hitSlop={12} accessibilityRole="button">
-          <BackMark>‹</BackMark>
+          <ChevronLeft />
         </Back>
         <Heading>Post</Heading>
       </Nav>
@@ -219,12 +205,6 @@ const Back = styled.Pressable`
   justify-content: center;
 `;
 
-const BackMark = styled.Text`
-  font-size: 24px;
-  line-height: 26px;
-  font-weight: 700;
-  color: ${(p) => p.theme.colors.text};
-`;
 
 const Padded = styled.View`
   padding: ${(p) => p.theme.space(4)}px;

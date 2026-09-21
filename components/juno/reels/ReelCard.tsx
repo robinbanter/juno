@@ -239,12 +239,12 @@ function ReelFooter({ coin, onBuy }: { coin: Coin; onBuy: () => void }) {
       <div>
         <Link
           href={`/coin/${coin.address}`}
-          className="text-[15px] font-semibold text-white hover:underline"
+          className="text-[16px] font-semibold text-white hover:underline"
         >
           {coin.name}
         </Link>
         {coin.description && (
-          <p className="mt-0.5 line-clamp-2 text-[13px] leading-snug text-white/75">
+          <p className="mt-0.5 line-clamp-2 text-[14px] leading-snug text-white/75">
             {coin.description}
           </p>
         )}

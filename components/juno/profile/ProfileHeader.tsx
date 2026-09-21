@@ -54,7 +54,7 @@ export function ProfileHeader({
       </div>
 
       {creator.bio && (
-        <p className="mt-4 text-[15px] leading-[1.45] text-j-ink">{creator.bio}</p>
+        <p className="mt-4 text-[16px] leading-[1.45] text-j-ink">{creator.bio}</p>
       )}
 
       {/* Wraps rather than overflowing: at 400px the four stats plus the X

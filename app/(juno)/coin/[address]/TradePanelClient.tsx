@@ -71,14 +71,14 @@ export function TradePanelClient({
       {state.status === "error" && (
         <p
           role="alert"
-          className="mt-3 rounded-j border border-j-danger/40 bg-j-danger/10 px-3 py-2 text-[13px] text-j-danger"
+          className="mt-3 rounded-j border border-j-danger/40 bg-j-danger/10 px-3 py-2 text-[14px] text-j-danger"
         >
           {state.message}
         </p>
       )}
 
       {state.status === "done" && (
-        <div className="mt-3 flex items-center justify-between gap-3 rounded-j border border-j-pos/40 bg-j-pos/10 px-3 py-2 text-[13px]">
+        <div className="mt-3 flex items-center justify-between gap-3 rounded-j border border-j-pos/40 bg-j-pos/10 px-3 py-2 text-[14px]">
           <span className="font-semibold text-j-pos">Trade confirmed</span>
           <span className="flex items-center gap-3">
             <a

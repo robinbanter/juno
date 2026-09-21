@@ -39,7 +39,7 @@ export default async function ReelsPage() {
   if (reels.length === 0 && unreadable) {
     return (
       <div className="flex h-[calc(100dvh-8rem)] flex-col items-center justify-center px-6 text-center">
-        <p className="text-[15px] font-semibold">Could not read the reels</p>
+        <p className="text-[16px] font-semibold">Could not read the reels</p>
         <p className="mt-1 max-w-[320px] text-[14px] text-j-muted">
           There are pools on {cluster()}, but the RPC would not serve them just
           now. Juno runs on the public endpoint, which rate-limits. Try again in
@@ -54,7 +54,7 @@ export default async function ReelsPage() {
   if (reels.length === 0 && missing > 0) {
     return (
       <div className="flex h-[calc(100dvh-8rem)] flex-col items-center justify-center px-6 text-center">
-        <p className="text-[15px] font-semibold">Could not read every pool</p>
+        <p className="text-[16px] font-semibold">Could not read every pool</p>
         <p className="mt-1 max-w-[320px] text-[14px] text-j-muted">
           {missing} of {rows.length} pools on {cluster()} would not load, so
           whether any of them is a reel is unknown. Try again in a moment.
@@ -66,14 +66,14 @@ export default async function ReelsPage() {
   if (reels.length === 0) {
     return (
       <div className="flex h-[calc(100dvh-8rem)] flex-col items-center justify-center px-6 text-center">
-        <p className="text-[15px] font-semibold">No reels yet</p>
+        <p className="text-[16px] font-semibold">No reels yet</p>
         <p className="mt-1 max-w-[320px] text-[14px] text-j-muted">
           A reel is a vertical video with its own bonding curve. Publish one and
           people can buy into it as they scroll.
         </p>
         <Link
           href="/create"
-          className="mt-4 inline-flex h-11 items-center rounded-full bg-j-pos px-5 text-[15px] font-semibold text-j-bg"
+          className="mt-4 inline-flex h-11 items-center rounded-full bg-j-pos px-5 text-[16px] font-semibold text-j-bg"
         >
           Create a reel
         </Link>

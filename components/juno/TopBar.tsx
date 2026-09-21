@@ -24,7 +24,7 @@ export function TopBar() {
           className="flex shrink-0 items-center gap-2 rounded-full pr-1 focus-visible:ring-2 focus-visible:ring-j-focus focus-visible:outline-none"
         >
           <JunoMark size={30} />
-          <span className="text-[19px] leading-none font-semibold tracking-tight">
+          <span className="text-[21px] leading-none font-semibold tracking-tight">
             juno
           </span>
         </Link>
@@ -42,7 +42,7 @@ export function TopBar() {
               type="search"
               autoComplete="off"
               placeholder="Search for creators, trends, or traders..."
-              className="h-11 w-full rounded-full bg-j-surface pr-4 pl-11 text-[15px] text-j-ink placeholder:text-j-faint focus-visible:ring-2 focus-visible:ring-j-focus focus-visible:outline-none"
+              className="h-11 w-full rounded-full bg-j-surface pr-4 pl-11 text-[16px] text-j-ink placeholder:text-j-faint focus-visible:ring-2 focus-visible:ring-j-focus focus-visible:outline-none"
             />
           </label>
         </form>

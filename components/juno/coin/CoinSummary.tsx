@@ -31,7 +31,7 @@ export function CoinSummary({ coin }: { coin: Coin }) {
 
         <div className="ml-auto flex shrink-0 items-center gap-1">
           {coin.holders !== null && (
-            <span className="text-[13px] text-j-muted">
+            <span className="text-[14px] text-j-muted">
               {compact(coin.holders, 1)} holders
             </span>
           )}
@@ -81,7 +81,7 @@ export function CoinSummary({ coin }: { coin: Coin }) {
       {coin.nav && <NavPanel nav={coin.nav} />}
 
       {coin.curve.graduated ? (
-        <p className="rounded-j bg-j-surface px-3 py-2 text-[13px] text-j-muted">
+        <p className="rounded-j bg-j-surface px-3 py-2 text-[14px] text-j-muted">
           Graduated — this coin now trades in a Meteora DAMM v2 pool.
         </p>
       ) : (

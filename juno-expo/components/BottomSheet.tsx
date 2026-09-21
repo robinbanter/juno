@@ -1,15 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
   BackHandler,
   Dimensions,
   Keyboard,
-  PanResponder,
   Platform,
   Pressable,
   StyleSheet,
   View,
 } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import * as Haptics from "expo-haptics";
 import styled from "styled-components/native";
 
@@ -29,12 +29,20 @@ import { theme } from "../theme";
  * spring picks up from wherever it was let go.
  *
  * It is not wrapped in `Modal` either. On iOS a `Modal` is presented in its own
- * `UIWindow`, and the JS responder system inside it never saw the touch moves
- * this drag is built on — the sheet was undraggable and only its buttons
- * worked. Rendered as an overlay in the ordinary view tree, the gesture behaves
- * like every other gesture in the app. What `Modal` was providing instead —
- * covering the tab bar, and the Android back button — is a sibling rendered
- * after `<Tabs>` and a `BackHandler` subscription.
+ * `UIWindow`, which put the sheet outside the ordinary view tree and made the
+ * drag untestable. What `Modal` was providing — covering the tab bar, and the
+ * Android back button — is a sibling rendered after `<Tabs>` and a
+ * `BackHandler` subscription.
+ *
+ * ## The drag is a native recognizer, not `PanResponder`
+ *
+ * `PanResponder` negotiates on the JS thread, and in this app that is the wrong
+ * thread to bet a gesture on: a feed read walks every pool against a
+ * rate-limited RPC and can hold JS for most of a minute. A drawer that ignores
+ * your finger while a list loads is worse than one that does not drag at all.
+ * `Gesture.Pan()` recognises natively, so the sheet answers the finger whatever
+ * JS is doing — and it composes with the scroll views a sheet's contents will
+ * eventually hold, which `PanResponder` does not.
  *
  * ## The motion, and why each number
  *
@@ -61,15 +69,12 @@ export function BottomSheet({
   visible,
   onClose,
   children,
-  /** Shown beside the grabber. Omit for a sheet whose content names itself. */
-  title,
   /** Set false for a sheet holding work someone could lose, e.g. a filled form. */
   dismissable = true,
 }: {
   visible: boolean;
   onClose: () => void;
   children: React.ReactNode;
-  title?: string;
   dismissable?: boolean;
 }) {
   const reduced = useReducedMotion();
@@ -157,38 +162,43 @@ export function BottomSheet({
     onClose();
   }, [onClose, y]);
 
-  const pan = useRef(
-    PanResponder.create({
-      // Claim the gesture only once it is clearly a vertical drag. A lower bar
-      // would steal taps from the buttons inside the sheet.
-      onMoveShouldSetPanResponder: (_event, gesture) =>
-        dismissable && Math.abs(gesture.dy) > 6 && Math.abs(gesture.dy) > Math.abs(gesture.dx),
-      onPanResponderGrant: () => {
-        dragging.current = true;
-      },
-      onPanResponderMove: (_event, gesture) => {
-        // Down follows the finger exactly; up is resisted rather than refused.
-        y.setValue(gesture.dy >= 0 ? gesture.dy : gesture.dy * motion.overdrag);
-      },
-      onPanResponderRelease: (_event, gesture) => {
-        dragging.current = false;
-        const far = gesture.dy > height.current * motion.dismissRatio;
-        const fast = gesture.vy > motion.dismissVelocity;
-        if (far || fast) {
-          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          dismiss();
-        } else {
-          settle();
-        }
-      },
-      // A gesture the system takes away (a call, a notification) must not leave
-      // the sheet parked wherever the finger was.
-      onPanResponderTerminate: () => {
-        dragging.current = false;
-        settle();
-      },
-    }),
-  ).current;
+  const pan = useMemo(
+    () =>
+      Gesture.Pan()
+        .enabled(dismissable)
+        // Only take over once it is clearly a vertical drag, so a finger that
+        // came down to press a row inside the sheet still presses it.
+        .activeOffsetY([-10, 10])
+        .failOffsetX([-20, 20])
+        .onUpdate((event) => {
+          dragging.current = true;
+          // Down follows the finger exactly; up is resisted rather than refused.
+          y.setValue(
+            event.translationY >= 0 ? event.translationY : event.translationY * motion.overdrag,
+          );
+        })
+        .onEnd((event) => {
+          dragging.current = false;
+          const far = event.translationY > height.current * motion.dismissRatio;
+          // velocityY is px/s here, where PanResponder reported px/ms.
+          const fast = event.velocityY / 1000 > motion.dismissVelocity;
+          if (far || fast) {
+            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            dismiss();
+          } else {
+            settle();
+          }
+        })
+        // A gesture the system takes away — a call, a notification — must not
+        // leave the sheet parked wherever the finger was.
+        .onFinalize((_event, success) => {
+          if (!success && dragging.current) {
+            dragging.current = false;
+            settle();
+          }
+        }),
+    [dismissable, dismiss, settle, y],
+  );
 
   useEffect(() => {
     if (visible) {
@@ -266,17 +276,21 @@ export function BottomSheet({
         />
       </Animated.View>
 
-      <Animated.View
-        onLayout={onLayout}
-        style={[styles.sheet, { transform: [{ translateY: Animated.add(y, lift) }] }]}
-        {...pan.panHandlers}
-      >
-        <Handle>
-          <Grabber />
-          {title ? <SheetTitle>{title}</SheetTitle> : null}
-        </Handle>
-        {children}
-      </Animated.View>
+      <GestureDetector gesture={pan}>
+        <Animated.View
+          onLayout={onLayout}
+          style={[styles.sheet, { transform: [{ translateY: Animated.add(y, lift) }] }]}
+        >
+          {/* The grab area is deliberately taller than the bar it draws: a 5pt
+              target is a 5pt target however good the gesture is. No label above
+              it — a sheet whose three rows name themselves does not need a word
+              announcing that it is a sheet. */}
+          <Handle>
+            <Grabber />
+          </Handle>
+          {children}
+        </Animated.View>
+      </GestureDetector>
     </View>
   );
 }
@@ -304,9 +318,8 @@ const styles = StyleSheet.create({
  */
 const Handle = styled.View`
   padding-top: ${(p) => p.theme.space(3)}px;
-  padding-bottom: ${(p) => p.theme.space(2)}px;
+  padding-bottom: ${(p) => p.theme.space(3)}px;
   align-items: center;
-  gap: ${(p) => p.theme.space(2)}px;
 `;
 
 const Grabber = styled.View`
@@ -314,12 +327,4 @@ const Grabber = styled.View`
   height: 5px;
   border-radius: 3px;
   background-color: ${(p) => p.theme.colors.lineStrong};
-`;
-
-const SheetTitle = styled.Text`
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.6px;
-  text-transform: uppercase;
-  color: ${(p) => p.theme.colors.faint};
 `;

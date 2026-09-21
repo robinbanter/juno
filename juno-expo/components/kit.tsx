@@ -1,5 +1,6 @@
 import React from "react";
 import { ActivityIndicator, Animated, Pressable, type StyleProp, type ViewStyle } from "react-native";
+import Svg, { Path } from "react-native-svg";
 import styled, { css } from "styled-components/native";
 
 import { usePressScale } from "./Press";
@@ -28,6 +29,46 @@ export const Card = styled.View`
   padding: ${(p) => p.theme.space(4)}px;
 `;
 
+/**
+ * One sheet of paper, ruled into entries.
+ *
+ * This replaces a card per row. A feed of identically-sized white rectangles
+ * floating on the canvas is the default shape of every generated interface, and
+ * it costs something real here: twelve shadows and twelve gaps of chrome around
+ * twelve rows of content, in an app whose subject is a list of things that
+ * happened. One surface with hairline rules is denser, quieter, and reads as
+ * what it is — a record.
+ *
+ * It also removes the nested-card problem by construction. A chip or a figure
+ * block inside a `Ledger` sits on the same sheet; there is no second card to
+ * nest.
+ */
+export const Ledger = styled.View`
+  background-color: ${(p) => p.theme.colors.surface};
+  border-radius: ${(p) => p.theme.radius.lg}px;
+  overflow: hidden;
+`;
+
+/** One entry. The rule goes above, so the first entry has none. */
+export const Entry = styled.View<{ $first?: boolean }>`
+  padding-horizontal: ${(p) => p.theme.space(4)}px;
+  padding-vertical: ${(p) => p.theme.space(4)}px;
+  border-top-width: ${(p) => (p.$first ? 0 : p.theme.hairline)}px;
+  border-top-color: ${(p) => p.theme.colors.line};
+`;
+
+/**
+ * A hairline at the device's own scale.
+ *
+ * A "1px" rule declared as 1 renders three device pixels thick on a 3× screen,
+ * which is the commonest reason a light interface looks heavier than it was
+ * drawn.
+ */
+export const Rule = styled.View`
+  height: ${(p) => p.theme.hairline}px;
+  background-color: ${(p) => p.theme.colors.line};
+`;
+
 /** A card that wants contrast — the one dark surface in a light app. */
 export const InkCard = styled.View`
   background-color: ${(p) => p.theme.colors.ink};
@@ -54,51 +95,84 @@ export const Spacer = styled.View<{ h?: number }>`
 /* Type                                                                */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Every size in the app comes from `theme.type`, so a step exists in one place
+ * and a screen cannot quietly invent a fifteenth.
+ */
+const step = (name: keyof typeof theme.type) => css`
+  font-size: ${theme.type[name].size}px;
+  line-height: ${theme.type[name].height}px;
+  letter-spacing: ${theme.type[name].tracking}px;
+`;
+
 export const Display = styled.Text`
-  font-size: 44px;
+  ${step("display")}
   font-weight: 800;
-  letter-spacing: -1.2px;
+  font-variant: tabular-nums;
   color: ${(p) => p.theme.colors.text};
 `;
 
 export const Title = styled.Text`
-  font-size: 28px;
+  ${step("screen")}
   font-weight: 800;
-  letter-spacing: -0.5px;
   color: ${(p) => p.theme.colors.text};
 `;
 
 export const Heading = styled.Text`
-  font-size: 19px;
+  ${step("title")}
   font-weight: 700;
-  letter-spacing: -0.2px;
   color: ${(p) => p.theme.colors.text};
 `;
 
 export const Body = styled.Text<{ muted?: boolean }>`
-  font-size: 15px;
-  line-height: 21px;
+  ${step("body")}
   color: ${(p) => (p.muted ? p.theme.colors.muted : p.theme.colors.text)};
 `;
 
 export const Label = styled.Text<{ muted?: boolean }>`
-  font-size: 13px;
+  ${step("label")}
   font-weight: 500;
   color: ${(p) => (p.muted ? p.theme.colors.muted : p.theme.colors.text)};
 `;
 
 export const Caption = styled.Text`
-  font-size: 11px;
+  ${step("caption")}
   font-weight: 500;
   color: ${(p) => p.theme.colors.faint};
 `;
 
-/** Figures that line up in columns. Never for a display-size number. */
+/**
+ * Figures that line up in columns.
+ *
+ * Not a monospace family — the platform face with `tabular-nums`, which is the
+ * difference between typesetting a number and dressing one up as "technical".
+ * A market app reads figures down a column all day; the digits have to hold
+ * their tracks, and nothing else about them needs to change.
+ */
 export const Mono = styled.Text<{ muted?: boolean }>`
-  font-size: 14px;
+  ${step("label")}
   font-weight: 600;
   font-variant: tabular-nums;
   color: ${(p) => (p.muted ? p.theme.colors.muted : p.theme.colors.text)};
+`;
+
+/**
+ * A figure at the size it deserves when it is the answer on the screen.
+ *
+ * Distinct from `Mono` because a price someone is deciding on and a price in a
+ * column are not the same typographic job, and setting both at 14px was the
+ * reason no screen had an obvious subject.
+ */
+export const Figure = styled.Text<{ tone?: "pos" | "neg" }>`
+  ${step("title")}
+  font-weight: 700;
+  font-variant: tabular-nums;
+  color: ${(p) =>
+    p.tone === "pos"
+      ? p.theme.colors.pos
+      : p.tone === "neg"
+        ? p.theme.colors.neg
+        : p.theme.colors.text};
 `;
 
 /* ------------------------------------------------------------------ */
@@ -233,6 +307,77 @@ const DeltaText = styled.Text<{ $fg: string }>`
 `;
 
 /**
+ * The app's chevron, drawn.
+ *
+ * It was the character `›`, which is a typographic mark set in the body face:
+ * it carried that face's own weight and baseline rather than the icon set's
+ * stroke, sat a pixel or two off centre, and changed size with the text around
+ * it. Every other glyph in this app is authored SVG at a 1.9 stroke; this one
+ * pretended to be.
+ */
+export function Chevron({ size = 16, color = theme.colors.faint }: GlyphProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="m9.5 5.5 6.5 6.5-6.5 6.5"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+/** The same stroke, pointing back. Used by every detail screen's back control. */
+export function ChevronLeft({ size = 22, color = theme.colors.text }: GlyphProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M14.5 5.5 8 12l6.5 6.5"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+/** Leaves the app. Drawn, for the same reason the chevron is. */
+export function ExternalGlyph({ size = 14, color = theme.colors.focus }: GlyphProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M14 4h6v6M20 4l-8.5 8.5"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M18 14.5V19a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h4.5"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+type GlyphProps = { size?: number; color?: string };
+
+/** Direction, at the weight of the figure it sits beside. */
+function Caret({ up, color }: { up: boolean; color: string }) {
+  return (
+    <Svg width={9} height={9} viewBox="0 0 12 12" fill={color}>
+      <Path d={up ? "M6 2.5 11 9.5H1z" : "M6 9.5 1 2.5h10z"} />
+    </Svg>
+  );
+}
+
+/**
  * A percentage with its direction.
  *
  * Null means unknown — a market whose whole history sits inside the window, or
@@ -246,13 +391,23 @@ export function Delta({ pct }: { pct: number | null | undefined }) {
     return <DeltaText $fg={theme.colors.faint}>—</DeltaText>;
   }
   const up = pct >= 0;
+  const fg = up ? theme.colors.pos : theme.colors.neg;
   return (
-    <DeltaText $fg={up ? theme.colors.pos : theme.colors.neg}>
-      {up ? "▲" : "▼"} {up ? "+" : ""}
-      {(pct * 100).toFixed(2)}%
-    </DeltaText>
+    <DeltaRow>
+      <Caret up={up} color={fg} />
+      <DeltaText $fg={fg}>
+        {up ? "+" : ""}
+        {(pct * 100).toFixed(2)}%
+      </DeltaText>
+    </DeltaRow>
   );
 }
+
+const DeltaRow = styled.View`
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+`;
 
 /** The green/red badge from the portfolio reference. */
 const BadgeBox = styled.View<{ $bg: string }>`

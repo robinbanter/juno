@@ -54,7 +54,7 @@ export function MobileNav() {
                 )}
               >
                 <Icon size={21} strokeWidth={active ? 2.2 : 1.75} />
-                <span className="text-[10px] leading-none">{label}</span>
+                <span className="text-[11px] leading-none">{label}</span>
               </Link>
             </li>
           );
@@ -73,7 +73,7 @@ export function MobileNav() {
               )}
             >
               <CircleUser size={21} strokeWidth={1.75} />
-              <span className="text-[10px] leading-none">Profile</span>
+              <span className="text-[11px] leading-none">Profile</span>
             </Link>
           ) : (
             <button
@@ -86,7 +86,7 @@ export function MobileNav() {
               )}
             >
               <CircleUser size={21} strokeWidth={1.75} />
-              <span className="text-[10px] leading-none">Connect</span>
+              <span className="text-[11px] leading-none">Connect</span>
             </button>
           )}
         </li>

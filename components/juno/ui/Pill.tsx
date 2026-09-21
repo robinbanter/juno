@@ -13,7 +13,7 @@ export function Pill({
   const interactive = Boolean(props.onClick);
   const classes = cn(
     "inline-flex max-w-full items-center gap-1.5 rounded-full bg-j-surface",
-    "px-3 py-1.5 text-[13px] font-medium text-j-ink",
+    "px-3 py-1.5 text-[14px] font-medium text-j-ink",
     interactive && "transition-colors hover:bg-j-line focus-visible:ring-2 focus-visible:ring-j-focus focus-visible:outline-none",
     className,
   );

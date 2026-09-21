@@ -23,7 +23,7 @@ export default async function ActivityPage() {
 
   return (
     <div className="mx-auto w-full max-w-[600px] px-4 pt-4 lg:px-8">
-      <h1 className="mb-1 text-[24px] font-bold tracking-tight">Activity</h1>
+      <h1 className="mb-1 text-[26px] font-bold tracking-tight">Activity</h1>
       {/* The standfirst used to promise "every trade". It walks pools against
           an endpoint that refuses, so on a throttled read it was promising
           something it had not done. It now says which it did. */}

@@ -20,14 +20,14 @@ export function GraduatedNotice({ coin, className }: { coin: Coin; className?: s
     <section
       className={cn("rounded-j-lg border border-j-line bg-j-surface p-4", className)}
     >
-      <h2 className="text-[15px] font-semibold text-j-pos">Graduated</h2>
-      <p className="mt-1 text-[13px] leading-relaxed text-j-muted">
+      <h2 className="text-[16px] font-semibold text-j-pos">Graduated</h2>
+      <p className="mt-1 text-[14px] leading-relaxed text-j-muted">
         This curve completed and migrated into a Meteora DAMM v2 pool. The
         bonding curve is closed; trading continues in the AMM, where the
         liquidity is permanently locked.
       </p>
 
-      <div className="mt-3 flex flex-col gap-1.5 text-[13px]">
+      <div className="mt-3 flex flex-col gap-1.5 text-[14px]">
         {damm && (
           <a
             href={explorer.account(damm)}

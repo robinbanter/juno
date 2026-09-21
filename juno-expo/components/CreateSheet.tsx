@@ -5,7 +5,7 @@ import styled from "styled-components/native";
 
 import { BottomSheet } from "./BottomSheet";
 import { Tappable } from "./Press";
-import { Body, Button, Caption, Col, Label, Row } from "./kit";
+import { Body, Button, Caption, Chevron, Col, Label, Row } from "./kit";
 import { juno } from "../lib/api";
 import { useWallet } from "../lib/wallet";
 import { theme } from "../theme";
@@ -83,7 +83,6 @@ export function CreateSheet({
     <BottomSheet
       visible={visible}
       onClose={onClose}
-      title={step === "choose" ? "Create" : "New post"}
       // A sheet holding typed words should not vanish on a stray downward
       // swipe over the keyboard.
       dismissable={step === "choose"}
@@ -191,7 +190,7 @@ function Option({
           <Label style={{ fontWeight: "700", fontSize: 16 }}>{title}</Label>
           <Caption>{blurb}</Caption>
         </Col>
-        <Chevron>›</Chevron>
+        <Chevron />
       </OptionRow>
     </Tappable>
   );
@@ -295,8 +294,3 @@ const Grow = styled.View`
   flex: 1;
 `;
 
-const Chevron = styled.Text`
-  font-size: 20px;
-  font-weight: 700;
-  color: ${(p) => p.theme.colors.faint};
-`;

@@ -28,7 +28,7 @@ export default function JunoError({
 
   return (
     <div className="mx-auto flex min-h-[60dvh] w-full max-w-[520px] flex-col items-center justify-center px-6 text-center">
-      <h1 className="text-[20px] font-semibold">
+      <h1 className="text-[21px] font-semibold">
         {rpcRefused ? "The network is not answering" : "Something broke"}
       </h1>
       <p className="mt-2 text-[14px] leading-relaxed text-j-muted">

@@ -14,8 +14,10 @@ import {
   Delta,
   DeltaBadge,
   Display,
+  Entry,
   Heading,
   Label,
+  Ledger,
   Mono,
   Pill,
   Placeholder,
@@ -139,62 +141,73 @@ export default function ProfileScreen() {
           <Caption>{wallet.mode === "local" ? "Device key · devnet" : "Embedded wallet"}</Caption>
         </Identity>
 
-        {/* Three-up stats, the reference's Trackers / PnL / WR row — but the
-            three figures this app can actually stand behind.
+        {/*
+          One statement, not two cards.
 
-            Three states, not two. `data` undefined is a read that failed.
-            `data.partial` with nothing found is a read that did not finish
-            looking — and "0 Positions, 0 Trades, $0" beside a badge admitting
-            some history could not be read is the screen contradicting itself.
-            Only a complete read of an empty wallet earns a zero. */}
-        <Card>
-          <Row>
-            <Stat value={counted(data?.positions.length, data?.partial)} label="Positions" />
-            <Stat
-              value={pnl === null ? "—" : money(pnl, currency)}
-              // Zero is neither a gain nor a loss, and it was rendering green.
-              tone={pnl === null || pnl === 0 ? undefined : pnl > 0 ? "pos" : "neg"}
-              label="P&L"
+          This was the hero-metric template: a three-up stat card, then a second
+          identical card with a big number and a badge. Two containers of the
+          same shape saying one thing, with the supporting figures *above* the
+          figure they support.
+
+          It is one sheet now, and it reads in the order someone asks the
+          questions: what is it worth, how has it moved, what is it made of.
+          The three figures sit under the value they belong to, ruled off — the
+          same ledger the rest of the app is set in.
+
+          Three states, not two. `data` undefined is a read that failed.
+          `data.partial` with nothing found is a read that did not finish
+          looking, and "0 Positions, 0 Trades, $0" beside a badge admitting some
+          history could not be read is the screen contradicting itself. Only a
+          complete read of an empty wallet earns a zero.
+        */}
+        <Ledger>
+          <Entry $first>
+            <Centered>
+              <Caption>Portfolio</Caption>
+              {portfolio.loading ? (
+                <Skeleton h={42} w="60%" />
+              ) : (
+                // A wallet holding nothing really is worth $0 and should say
+                // so. A wallet whose pools could not all be read is not, and
+                // must not — the server nulls `totalValue` in exactly that case.
+                <Display>
+                  {data && data.totalValue !== null
+                    ? money(data.totalValue, currency, { compact: false })
+                    : "—"}
+                </Display>
+              )}
+              <DeltaBadge pct={data?.totalPnlPct ?? null} />
+            </Centered>
+
+            <RangeRow>
+              <Segmented items={RANGES} value={range} onChange={setRange} />
+            </RangeRow>
+
+            <AreaChart
+              points={series}
+              bars={volumes}
+              format={(v) => money(v, currency, { compact: true })}
+              emptyLabel={
+                data?.partial
+                  ? "Some pools would not load — history unknown."
+                  : undefined
+              }
             />
-            <Stat value={counted(data?.history.length, data?.partial)} label="Trades" />
-          </Row>
-        </Card>
+          </Entry>
 
-        {/* Portfolio, per the portfolio reference: one big value, a signed
-            badge, a time range, then the chart. */}
-        <Card>
-          <Centered>
-            <Caption>Portfolio</Caption>
-            {portfolio.loading ? (
-              <Skeleton h={42} w="60%" />
-            ) : (
-              // A wallet holding nothing really is worth $0 and should say so.
-              // A wallet whose pools could not all be read is not, and must
-              // not — the server nulls `totalValue` in exactly that case.
-              <Display>
-                {data && data.totalValue !== null
-                  ? money(data.totalValue, currency, { compact: false })
-                  : "—"}
-              </Display>
-            )}
-            <DeltaBadge pct={data?.totalPnlPct ?? null} />
-          </Centered>
-
-          <RangeRow>
-            <Segmented items={RANGES} value={range} onChange={setRange} />
-          </RangeRow>
-
-          <AreaChart
-            points={series}
-            bars={volumes}
-            format={(v) => money(v, currency, { compact: true })}
-            emptyLabel={
-              data?.partial
-                ? "Some pools would not load — history unknown."
-                : undefined
-            }
-          />
-        </Card>
+          <Entry>
+            <Row>
+              <Stat value={counted(data?.positions.length, data?.partial)} label="Positions" />
+              <Stat
+                value={pnl === null ? "—" : money(pnl, currency)}
+                // Zero is neither a gain nor a loss, and it was rendering green.
+                tone={pnl === null || pnl === 0 ? undefined : pnl > 0 ? "pos" : "neg"}
+                label="P&L"
+              />
+              <Stat value={counted(data?.history.length, data?.partial)} label="Trades" />
+            </Row>
+          </Entry>
+        </Ledger>
 
         {data?.partial ? (
           <Pill

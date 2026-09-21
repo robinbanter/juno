@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Linking, Modal } from "react-native";
 import styled from "styled-components/native";
 
-import { Button, Caption, Col, Label, Pill, Row } from "./kit";
+import { Button, Caption, Col, ExternalGlyph, Label, Pill, Row } from "./kit";
 import { juno, type Coin } from "../lib/api";
 import { money, tokens } from "../lib/useApi";
 import { useWallet } from "../lib/wallet";
@@ -188,7 +188,8 @@ export function TradeSheet({
               {side === "buy" ? "Bought" : "Sold"} {receiving ?? ""} — confirmed on Solana.
             </Label>
             <LinkTap onPress={() => Linking.openURL(juno.explorer("tx", signature))}>
-              <LinkText>View the transaction ↗</LinkText>
+              <LinkText>View the transaction</LinkText>
+              <ExternalGlyph />
             </LinkTap>
             <Button label="Done" onPress={onDone} style={{ marginTop: 16, alignSelf: "stretch" }} />
           </Done>

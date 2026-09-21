@@ -195,7 +195,7 @@ export function CreateForm() {
             ) : (
               <Upload size={20} className="text-j-muted" />
             )}
-            <span className="text-[13px] font-medium">
+            <span className="text-[14px] font-medium">
               {uploading
                 ? "Pinning to IPFS…"
                 : format === "reel"
@@ -333,8 +333,8 @@ export function CreateForm() {
       )}
 
       <div className="rounded-j border border-j-line p-3">
-        <p className="text-[13px] font-semibold">Summary</p>
-        <dl className="mt-2 flex flex-col gap-1.5 text-[13px]">
+        <p className="text-[14px] font-semibold">Summary</p>
+        <dl className="mt-2 flex flex-col gap-1.5 text-[14px]">
           <SummaryRow label="Format">{format === "reel" ? "Reel" : "Post"}</SummaryRow>
           <SummaryRow label="Curve">{active.label}</SummaryRow>
           <SummaryRow label="Quote">{quote.symbol}</SummaryRow>
@@ -358,7 +358,7 @@ export function CreateForm() {
         </Button>
 
         {state.status === "error" && (
-          <p role="alert" className="mt-3 rounded-j border border-j-danger/40 bg-j-danger/10 px-3 py-2 text-[13px] text-j-danger">
+          <p role="alert" className="mt-3 rounded-j border border-j-danger/40 bg-j-danger/10 px-3 py-2 text-[14px] text-j-danger">
             {state.message}
           </p>
         )}
@@ -386,13 +386,13 @@ function LaunchResult({
   return (
     <div className="mt-6 flex flex-col gap-4">
       <div className="rounded-j border border-j-pos/40 bg-j-pos/10 px-4 py-3">
-        <p className="text-[15px] font-semibold text-j-pos">Pool is live</p>
-        <p className="mt-1 text-[13px] text-j-muted">
+        <p className="text-[16px] font-semibold text-j-pos">Pool is live</p>
+        <p className="mt-1 text-[14px] text-j-muted">
           The bonding curve is open on {cluster()}. Anyone can trade it now.
         </p>
       </div>
 
-      <dl className="flex flex-col gap-2 text-[13px]">
+      <dl className="flex flex-col gap-2 text-[14px]">
         <ProofRow label="Transaction" value={result.signature} href={explorer.tx(result.signature)} />
         <ProofRow label="Pool" value={result.pool} href={explorer.account(result.pool)} />
         <ProofRow label="Token mint" value={result.baseMint} href={explorer.token(result.baseMint)} />
@@ -509,7 +509,7 @@ function Field({
   return (
     <label className="flex flex-col gap-2">
       <span className="flex items-baseline gap-2">
-        <span className="text-[13px] font-semibold">{label}</span>
+        <span className="text-[14px] font-semibold">{label}</span>
         {optional && <span className="text-[12px] text-j-faint">optional</span>}
       </span>
       {hint && <span className="-mt-1 text-[12px] leading-snug text-j-muted">{hint}</span>}

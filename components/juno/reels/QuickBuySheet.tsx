@@ -72,8 +72,8 @@ export function QuickBuySheet({
         <div className="flex items-center gap-2.5">
           <Avatar src={coin.creator.avatarUrl} alt={coin.creator.handle} size={36} />
           <div className="min-w-0">
-            <p className="truncate text-[15px] font-semibold">{coin.name}</p>
-            <p className="text-[13px] text-j-muted">{coin.creator.handle}</p>
+            <p className="truncate text-[16px] font-semibold">{coin.name}</p>
+            <p className="text-[14px] text-j-muted">{coin.creator.handle}</p>
           </div>
         </div>
 
@@ -102,7 +102,7 @@ export function QuickBuySheet({
           ))}
         </div>
 
-        <dl className="mt-4 flex items-center justify-between text-[13px]">
+        <dl className="mt-4 flex items-center justify-between text-[14px]">
           <dt className="text-j-muted">You receive</dt>
           <dd className="font-semibold tabular-nums">
             {tokenAmount(estimated)} {coin.symbol}

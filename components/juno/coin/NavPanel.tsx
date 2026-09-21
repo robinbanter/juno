@@ -43,12 +43,12 @@ export function NavPanel({ nav, className }: { nav: NavReference; className?: st
       </div>
 
       <div className="flex items-baseline justify-between gap-2">
-        <span className="text-[20px] font-bold tabular-nums">
+        <span className="text-[21px] font-bold tabular-nums">
           {usd(nav.priceUsd, { compact: false })}
         </span>
         <span
           className={cn(
-            "text-[13px] font-semibold tabular-nums",
+            "text-[14px] font-semibold tabular-nums",
             outside ? "text-j-neg" : "text-j-pos",
           )}
         >

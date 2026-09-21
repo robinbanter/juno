@@ -69,7 +69,7 @@ export default async function ExplorePage({
   return (
     <div className="mx-auto w-full max-w-[1100px] px-4 pt-4 lg:px-8">
       <div className="mb-5 flex items-baseline gap-4">
-        <h1 className="text-[22px] font-bold tracking-tight">{heading}</h1>
+        <h1 className="text-[21px] font-bold tracking-tight">{heading}</h1>
         {!query && (
           <nav className="flex gap-3 text-[14px]">
             <SortLink href="/explore" label="Latest" active={sort !== "trending"} />
@@ -117,7 +117,7 @@ function EmptyState({ query, unreadable }: { query?: string; unreadable?: boolea
   if (unreadable) {
     return (
       <div className="py-20 text-center">
-        <p className="text-[15px] font-semibold">Could not read the market</p>
+        <p className="text-[16px] font-semibold">Could not read the market</p>
         <p className="mx-auto mt-1 max-w-sm text-[14px] text-j-muted">
           There are pools on {cluster()}, but the RPC would not serve them just
           now. Juno runs on the public endpoint, which rate-limits. Try again in
@@ -128,13 +128,13 @@ function EmptyState({ query, unreadable }: { query?: string; unreadable?: boolea
   }
   return (
     <div className="py-20 text-center">
-      <p className="text-[15px] font-semibold">No coins yet on {cluster()}</p>
+      <p className="text-[16px] font-semibold">No coins yet on {cluster()}</p>
       <p className="mt-1 text-[14px] text-j-muted">
         Every coin here is a live Meteora bonding-curve pool.
       </p>
       <Link
         href="/create"
-        className="mt-4 inline-flex h-11 items-center rounded-full bg-j-pos px-5 text-[15px] font-semibold text-j-bg"
+        className="mt-4 inline-flex h-11 items-center rounded-full bg-j-pos px-5 text-[16px] font-semibold text-j-bg"
       >
         Launch the first one
       </Link>
@@ -173,7 +173,7 @@ function CoinTile({ coin }: { coin: Coin }) {
         />
         {coin.format === "reel" && (
           <span
-            className="absolute top-2 right-2 flex items-center gap-1 rounded-full bg-black/55 px-2 py-1 text-[10px] font-semibold text-white backdrop-blur-sm"
+            className="absolute top-2 right-2 flex items-center gap-1 rounded-full bg-black/55 px-2 py-1 text-[11px] font-semibold text-white backdrop-blur-sm"
             aria-label="Reel"
           >
             <Clapperboard size={11} />
@@ -183,14 +183,14 @@ function CoinTile({ coin }: { coin: Coin }) {
         <CurveProgressBar curve={coin.curve} />
 
         {/* Which curve this launched on — the choice that shapes the market. */}
-        <span className="absolute bottom-2 left-2 rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-medium text-white backdrop-blur-sm">
+        <span className="absolute bottom-2 left-2 rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-medium text-white backdrop-blur-sm">
           {CURVE_PRESETS[coin.curvePreset]?.label ?? coin.curvePreset}
         </span>
       </div>
 
       <div className="mt-2 flex items-center gap-1.5">
         <Avatar src={coin.creator.avatarUrl} alt={coin.creator.handle} size={18} />
-        <span className="truncate text-[13px] font-medium">{coin.name}</span>
+        <span className="truncate text-[14px] font-medium">{coin.name}</span>
         {/* The ticker is how anyone actually refers to a coin, and a market
             grid without it makes the reader open a tile to find out. */}
         <span className="shrink-0 text-[11px] font-semibold tracking-wide text-j-faint tabular-nums">

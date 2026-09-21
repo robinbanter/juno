@@ -137,7 +137,7 @@ function Plot({
 
   return (
     <figure className="m-0 flex w-full flex-col">
-      <figcaption className="flex items-baseline justify-between px-4 pt-3 text-[13px]">
+      <figcaption className="flex items-baseline justify-between px-4 pt-3 text-[14px]">
         <span className="text-j-muted">
           Realised price ·{" "}
           {partial

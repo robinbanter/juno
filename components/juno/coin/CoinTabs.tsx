@@ -79,7 +79,7 @@ function HoldersList({ items }: { items: Holder[] | null }) {
   return (
     <ul className="divide-y divide-j-line">
       {items.map((holder) => (
-        <li key={holder.wallet} className="flex items-center gap-3 py-3 text-[13px]">
+        <li key={holder.wallet} className="flex items-center gap-3 py-3 text-[14px]">
           <span className="w-5 shrink-0 tabular-nums text-j-faint">{holder.rank}</span>
           <Avatar src={holder.actor.avatarUrl} alt={holder.actor.handle} size={22} />
           <span className="min-w-0 flex-1 truncate font-medium">
@@ -106,7 +106,7 @@ function CommentsList({ items }: { items: Comment[] }) {
         <li key={comment.id} className="flex gap-3 py-3">
           <Avatar src={comment.actor.avatarUrl} alt={comment.actor.handle} size={24} />
           <div className="min-w-0 flex-1">
-            <p className="flex items-center gap-2 text-[13px]">
+            <p className="flex items-center gap-2 text-[14px]">
               <span className="font-medium">{comment.actor.handle}</span>
               {comment.side && (
                 <span
@@ -137,7 +137,7 @@ function DetailsPanel({ coin }: { coin: Coin }) {
 
   return (
     <div className="flex flex-col gap-4 py-3">
-      <dl className="flex flex-col gap-2.5 text-[13px]">
+      <dl className="flex flex-col gap-2.5 text-[14px]">
         <Row label="Curve">{preset.label}</Row>
         <Row label="Quote token">{coin.quote.symbol}</Row>
         <Row label="Base mint" mono>
@@ -159,7 +159,7 @@ function DetailsPanel({ coin }: { coin: Coin }) {
         )}
       </dl>
 
-      <p className="rounded-j bg-j-surface px-3 py-2.5 text-[13px] leading-relaxed text-j-muted">
+      <p className="rounded-j bg-j-surface px-3 py-2.5 text-[14px] leading-relaxed text-j-muted">
         {preset.rationale}
       </p>
 

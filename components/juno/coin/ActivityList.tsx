@@ -34,7 +34,7 @@ export function ActivityList({
         // Until that exists a row shows what the RPC actually returned.
         const decoded = item.amount > 0 || item.valueUsd > 0;
         return (
-        <li key={item.id} className="flex items-center gap-3 py-3 text-[13px]">
+        <li key={item.id} className="flex items-center gap-3 py-3 text-[14px]">
           <Avatar src={item.actor.avatarUrl} alt={item.actor.handle} size={22} />
 
           <span className="flex min-w-0 flex-1 flex-col leading-tight">

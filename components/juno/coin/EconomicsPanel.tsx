@@ -42,7 +42,7 @@ function FeeDecay({ fee }: { fee: FeeSchedule }) {
   return (
     <section>
       <div className="flex items-baseline justify-between">
-        <h3 className="text-[13px] font-semibold">Trading fee</h3>
+        <h3 className="text-[14px] font-semibold">Trading fee</h3>
         <span className="text-[12px] tabular-nums text-j-muted">
           {(fee.currentBps / 100).toFixed(2)}% now
         </span>
@@ -92,7 +92,7 @@ function SupplySplit({ supply }: { supply: Tokenomics }) {
   return (
     <section>
       <div className="flex items-baseline justify-between">
-        <h3 className="text-[13px] font-semibold">Supply</h3>
+        <h3 className="text-[14px] font-semibold">Supply</h3>
         <span className="text-[12px] tabular-nums text-j-muted">
           {tokenAmount(supply.totalSupply)} total
         </span>

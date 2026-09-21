@@ -192,7 +192,7 @@ export function TradePanel({
             {buying && STABLES.has(token.symbol) && (
               <span
                 className={cn(
-                  "text-[28px] leading-none font-semibold",
+                  "text-[26px] leading-none font-semibold",
                   overBalance ? "text-j-danger" : "text-j-ink",
                 )}
               >
@@ -206,7 +206,7 @@ export function TradePanel({
               placeholder={buying ? "" : "0"}
               onChange={(e) => setAmount(e.target.value)}
               className={cn(
-                "w-full min-w-0 bg-transparent text-[28px] leading-none font-semibold tabular-nums outline-none placeholder:text-j-faint",
+                "w-full min-w-0 bg-transparent text-[26px] leading-none font-semibold tabular-nums outline-none placeholder:text-j-faint",
                 overBalance ? "text-j-danger" : "text-j-ink",
               )}
             />
@@ -229,7 +229,7 @@ export function TradePanel({
           )}
         </div>
 
-        <div className="mt-1.5 flex items-center justify-between text-[13px] text-j-muted">
+        <div className="mt-1.5 flex items-center justify-between text-[14px] text-j-muted">
           <span className="tabular-nums">{echo}</span>
           <span>
             {buying
@@ -263,7 +263,7 @@ export function TradePanel({
             ))}
       </div>
 
-      <dl className="flex flex-col gap-1.5 text-[13px]">
+      <dl className="flex flex-col gap-1.5 text-[14px]">
         <div className="flex items-center justify-between">
           <dt className="flex items-center gap-1 text-j-muted">
             Network fee
