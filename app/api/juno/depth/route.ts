@@ -58,10 +58,17 @@ export async function GET(request: Request) {
       return junoError("`impact` must be a ratio greater than zero, e.g. 0.01 for 1%");
     }
 
-    const [points, suggestion] = await Promise.all([
-      sampleDepth(snapshot, side, max),
-      budget === null ? Promise.resolve(null) : suggestSize(snapshot, side, budget, max),
-    ]);
+    /*
+     * Sequential, not parallel.
+     *
+     * Both read the curve's activation point, and firing them together made
+     * them race for the same uncached read — one won, the other paid for a
+     * second round trip. Run in order, the second is a cache hit, and the two
+     * are local arithmetic from there.
+     */
+    const points = await sampleDepth(snapshot, side, max);
+    const suggestion =
+      budget === null ? null : await suggestSize(snapshot, side, budget, max);
 
     return junoJson({
       mint,

@@ -34,7 +34,7 @@ import {
 import BN from "bn.js";
 
 import { isMainnet, rpcEndpoint } from "./cluster";
-import { gatedFetch, withRetry } from "./rpc";
+import { gatedFetch, withRetry, ttlCache } from "./rpc";
 import { buildPresetParams, type BuildPresetOptions } from "./curves";
 import type { CurveState, QuoteToken, TradeSide } from "./types";
 
@@ -350,8 +350,21 @@ async function readPoolSnapshot(
  * Exported so a caller that quotes many sizes against one pool pays for this
  * once instead of once per quote. See `quoteTrade`'s `currentPoint`.
  */
+const pointCache = ttlCache<BN>(10_000);
+
 export async function curvePoint(): Promise<BN> {
-  return getCurrentPoint(getConnection(), ActivationType.Timestamp);
+  /*
+   * Cached for ten seconds.
+   *
+   * It is a timestamp-derived activation point, so it moves continuously and
+   * matters not at all at this resolution — but it was an RPC round trip on
+   * every call, and the depth endpoint makes two of them per request before it
+   * has quoted anything. Against the public endpoint that was enough to earn
+   * an intermittent 503 on a route whose whole job is local arithmetic.
+   */
+  return pointCache.get("now", () =>
+    getCurrentPoint(getConnection(), ActivationType.Timestamp),
+  );
 }
 
 export type TradeQuote = {
