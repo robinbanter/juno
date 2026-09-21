@@ -66,6 +66,12 @@ describe("tokens", () => {
     expect(tokens(12.5)).toBe("12.50");
   });
 
+  it("does not claim four decimals of precision about zero", () => {
+    // "0.0000 of 50.00 SOL" was what a savings goal with no contributions
+    // read as. Zero has no fraction to show.
+    expect(tokens(0)).toBe("0");
+  });
+
   it("returns a dash rather than NaN", () => {
     expect(tokens(Number.NaN)).toBe("—");
   });

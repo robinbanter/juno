@@ -13,6 +13,8 @@ import {
   index,
   uniqueIndex,
   check,
+  primaryKey,
+  doublePrecision,
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 
@@ -1038,6 +1040,13 @@ export const followsRelations = relations(follows, ({ one }) => ({
    ================================================================== */
 export const junoCoinFormatEnum = pgEnum("juno_coin_format", ["post", "reel"]);
 
+/** How often a recurring buy comes due. */
+export const junoPlanCadenceEnum = pgEnum("juno_plan_cadence", [
+  "daily",
+  "weekly",
+  "monthly",
+]);
+
 export const junoPools = pgTable(
   "juno_pools",
   {
@@ -1122,5 +1131,113 @@ export const junoPosts = pgTable(
     index("juno_posts_author_idx").on(table.authorWallet),
     index("juno_posts_mint_idx").on(table.baseMint),
     index("juno_posts_parent_idx").on(table.parentId),
+  ],
+);
+
+/**
+ * Who follows whom.
+ *
+ * The app had no social graph at all, which is why it was a launchpad with a
+ * feed rather than a social trading app: nothing connected one wallet's
+ * decisions to another's attention. A follow is the smallest primitive that
+ * changes that, and every social-trading feature above it — a filtered feed, a
+ * copied position, a follower count — is a query against this table.
+ *
+ * Cluster-scoped like everything else here: a devnet demo must not surface a
+ * mainnet relationship. The primary key is the pair, so following twice is a
+ * no-op rather than a duplicate row.
+ */
+export const junoFollows = pgTable(
+  "juno_follows",
+  {
+    followerWallet: varchar("follower_wallet", { length: 44 }).notNull(),
+    targetWallet: varchar("target_wallet", { length: 44 }).notNull(),
+    cluster: varchar("cluster", { length: 16 }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.followerWallet, table.targetWallet, table.cluster] }),
+    index("juno_follows_target_idx").on(table.cluster, table.targetWallet),
+    index("juno_follows_follower_idx").on(table.cluster, table.followerWallet),
+  ],
+);
+
+/**
+ * Coins a wallet is keeping an eye on.
+ *
+ * Separate from a follow because the objects are different: you follow a
+ * person for their decisions and watch a coin for its price. Collapsing them
+ * into one "saved things" table would make every query filter on a discriminator
+ * and would stop either from carrying its own fields — a watch has a price
+ * alert, a follow does not.
+ */
+export const junoWatchlist = pgTable(
+  "juno_watchlist",
+  {
+    wallet: varchar("wallet", { length: 44 }).notNull(),
+    baseMint: varchar("base_mint", { length: 44 }).notNull(),
+    cluster: varchar("cluster", { length: 16 }).notNull(),
+
+    /**
+     * Alert when the coin's price crosses this, in the coin's own quote terms.
+     *
+     * Null means watching without an alert, which is the common case. The
+     * direction is not stored: it is derived from the price when the alert was
+     * set, so "tell me at $0.0005" means up if it is below that now and down if
+     * it is above.
+     */
+    alertPrice: doublePrecision("alert_price"),
+    /** The price when the alert was set, so the crossing direction is knowable. */
+    alertSetAtPrice: doublePrecision("alert_set_at_price"),
+
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.wallet, table.baseMint, table.cluster] }),
+    index("juno_watchlist_wallet_idx").on(table.cluster, table.wallet),
+    index("juno_watchlist_mint_idx").on(table.cluster, table.baseMint),
+  ],
+);
+
+/**
+ * A recurring buy someone has committed to.
+ *
+ * This is the savings half of the product and it is deliberately not a bot.
+ * Executing a swap on someone's behalf needs a delegate or a session key with
+ * spending authority, which this project does not have and should not fake —
+ * so the plan stores the *intent* (what, how much, how often) and the app tells
+ * you when it is due. The buy itself is the same server-built, device-signed
+ * transaction as any other, which is the only honest version of this feature.
+ *
+ * `contributed` and `fills` are written after a swap confirms, so the progress
+ * bar is a record of real transactions rather than of intentions.
+ */
+export const junoPlans = pgTable(
+  "juno_plans",
+  {
+    id: varchar("id", { length: 32 }).primaryKey(),
+    wallet: varchar("wallet", { length: 44 }).notNull(),
+    baseMint: varchar("base_mint", { length: 44 }).notNull(),
+    cluster: varchar("cluster", { length: 16 }).notNull(),
+
+    /** Quote-token amount per contribution. */
+    amount: doublePrecision("amount").notNull(),
+    /** How often it comes due. */
+    cadence: junoPlanCadenceEnum("cadence").notNull(),
+    /** Optional target, so progress means something. Quote terms. */
+    target: doublePrecision("target"),
+
+    /** Sum of contributions that actually confirmed on chain. */
+    contributed: doublePrecision("contributed").notNull().default(0),
+    /** How many confirmed. */
+    fills: integer("fills").notNull().default(0),
+    lastFilledAt: timestamp("last_filled_at", { withTimezone: true }),
+
+    active: boolean("active").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("juno_plans_wallet_idx").on(table.cluster, table.wallet),
+    index("juno_plans_mint_idx").on(table.cluster, table.baseMint),
   ],
 );

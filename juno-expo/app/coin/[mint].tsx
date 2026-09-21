@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Linking, RefreshControl, ScrollView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import styled from "styled-components/native";
@@ -7,8 +7,9 @@ import styled from "styled-components/native";
 import { CoinGlyph, Identicon } from "../../components/art";
 import { Candles } from "../../components/Candles";
 import { Avatar, Body, Button, Caption, Card, ChevronLeft, Col, Delta, Display, ExternalGlyph, Heading, Label, Mono, Pill, Placeholder, Progress, Row, Skeleton, Stat, Title } from "../../components/kit";
+import { AlertSheet, PlanSheet, SaveCard, WatchToggle, type SavedState } from "../../components/Save";
 import { TradeSheet } from "../../components/TradeSheet";
-import { juno, type NavReference } from "../../lib/api";
+import { juno, type NavReference, type Plan } from "../../lib/api";
 import { useWallet } from "../../lib/wallet";
 import { money, since, tokens, useApi } from "../../lib/useApi";
 import { theme } from "../../theme";
@@ -24,10 +25,43 @@ export default function CoinScreen() {
   const { mint } = useLocalSearchParams<{ mint: string }>();
   const router = useRouter();
   const [sheet, setSheet] = useState<"buy" | "sell" | null>(null);
+  const [savingsSheet, setSavingsSheet] = useState<"alert" | "plan" | null>(null);
+  /**
+   * The plan this buy is a contribution to, if any.
+   *
+   * Held while the trade sheet is open so the fill can be recorded against the
+   * right row — and cleared when the sheet closes, so an ordinary buy made
+   * straight afterwards is not silently counted towards a savings goal.
+   */
+  const [contributing, setContributing] = useState<Omit<Plan, "coin"> | null>(null);
 
   const wallet = useWallet();
   const detail = useApi(() => juno.coin(mint), [mint]);
   const coin = detail.data?.coin;
+
+  /*
+   * Watching, alerts and plans for this wallet on this coin.
+   *
+   * Postgres only — no chain reads — because this decides what a button says
+   * and the list endpoints that answer the same questions each hydrate every
+   * pool to do it. Held in local state as well as fetched, so a toggle shows
+   * immediately instead of after a round trip.
+   */
+  const savedRead = useApi(
+    async () => (wallet.address ? juno.saved(wallet.address, mint) : null),
+    [wallet.address, mint],
+  );
+  const [savedLocal, setSavedLocal] = useState<SavedState | null>(null);
+  const [savedError, setSavedError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!savedRead.data) return;
+    setSavedLocal({
+      watching: savedRead.data.watching,
+      alertPrice: savedRead.data.alertPrice,
+      alertSetAtPrice: savedRead.data.alertSetAtPrice,
+      plans: savedRead.data.plans,
+    });
+  }, [savedRead.data]);
 
   // What this wallet holds of this coin, so the sell sheet can show a real
   // balance instead of a dash. Read from the portfolio rather than a second
@@ -39,6 +73,16 @@ export default function CoinScreen() {
   const holding =
     portfolio.data?.positions.find((position) => position.baseMint === mint)?.balance ?? null;
 
+  /* What a buy would spend from. Read separately because it is the quote side,
+     which the portfolio does not cover: it accounts for coins held, not for the
+     SOL that buys them. */
+  const quoteMint = coin?.quote.mint ?? null;
+  const spendable = useApi(
+    async () =>
+      wallet.address && quoteMint ? juno.balance(wallet.address, quoteMint) : null,
+    [wallet.address, quoteMint],
+  );
+
   const art = coin ? juno.still(coin.media) : null;
 
   return (
@@ -47,6 +91,13 @@ export default function CoinScreen() {
         <Back onPress={() => router.back()} hitSlop={12} accessibilityRole="button">
           <ChevronLeft />
         </Back>
+        <NavGrow />
+        <WatchToggle
+          saved={savedLocal}
+          wallet={wallet.address}
+          baseMint={mint}
+          onChange={setSavedLocal}
+        />
       </Nav>
 
       {detail.loading ? (
@@ -174,6 +225,20 @@ export default function CoinScreen() {
 
             {coin.nav ? <NavBand nav={coin.nav} /> : null}
 
+            <SaveCard
+              coin={coin}
+              saved={savedLocal}
+              wallet={wallet.address}
+              error={savedError}
+              onEditAlert={() => setSavingsSheet("alert")}
+              onNewPlan={() => setSavingsSheet("plan")}
+              onContribute={(plan) => {
+                setContributing(plan);
+                setSheet("buy");
+              }}
+              onTogglePlan={(plan) => void togglePlan(plan)}
+            />
+
             <Heading style={{ marginTop: 6 }}>Activity</Heading>
             {(detail.data?.activity.length ?? 0) === 0 ? (
               <Card>
@@ -240,17 +305,93 @@ export default function CoinScreen() {
               coin={coin}
               side={sheet}
               holding={holding}
-              onClose={() => setSheet(null)}
+              quoteBalance={spendable.data?.balance ?? null}
+              initialAmount={sheet === "buy" && contributing ? String(contributing.amount) : ""}
+              onFilled={(spent) => void recordFill(spent)}
+              onClose={() => {
+                setSheet(null);
+                setContributing(null);
+              }}
               onDone={() => {
                 setSheet(null);
+                setContributing(null);
                 detail.refresh();
               }}
             />
           ) : null}
+
+          <AlertSheet
+            visible={savingsSheet === "alert"}
+            onClose={() => setSavingsSheet(null)}
+            coin={coin}
+            wallet={wallet.address}
+            saved={savedLocal}
+            onSaved={setSavedLocal}
+          />
+          <PlanSheet
+            visible={savingsSheet === "plan"}
+            onClose={() => setSavingsSheet(null)}
+            coin={coin}
+            wallet={wallet.address}
+            saved={savedLocal}
+            onSaved={setSavedLocal}
+          />
         </>
       )}
     </Page>
   );
+
+  /** Pause or resume, optimistically, rolling back if the write is refused. */
+  async function togglePlan(plan: Omit<Plan, "coin">) {
+    if (!savedLocal) return;
+    const next = !plan.active;
+    setSavedError(null);
+    setSavedLocal({
+      ...savedLocal,
+      plans: savedLocal.plans.map((row) =>
+        row.id === plan.id ? { ...row, active: next, due: next && row.due } : row,
+      ),
+    });
+    try {
+      await juno.setPlanActive(plan.id, next);
+    } catch (caught) {
+      setSavedLocal(savedLocal);
+      setSavedError(caught instanceof Error ? caught.message : "That could not be saved");
+    }
+  }
+
+  /**
+   * A buy confirmed on chain; if it was a contribution, write it down.
+   *
+   * Not optimistic, and deliberately so. Everything else on this card can be
+   * rolled back on a failed write; a contribution total is the one figure that
+   * is supposed to mean *this actually happened*, so it moves only once the
+   * server has agreed, and the row it returns is what replaces the local one.
+   */
+  async function recordFill(spent: number) {
+    const plan = contributing;
+    if (!plan || spent <= 0) return;
+    setSavedError(null);
+    try {
+      const { plan: fresh } = await juno.recordContribution(plan.id, spent);
+      setSavedLocal((current) =>
+        current === null
+          ? current
+          : {
+              ...current,
+              plans: current.plans.map((row) => (row.id === fresh.id ? { ...row, ...fresh } : row)),
+            },
+      );
+    } catch (caught) {
+      // The swap landed either way — this only failed to be *recorded*, and
+      // saying so is better than a progress bar that quietly did not move.
+      setSavedError(
+        caught instanceof Error
+          ? `The buy went through, but it was not recorded against your plan: ${caught.message}`
+          : "The buy went through, but it was not recorded against your plan.",
+      );
+    }
+  }
 }
 
 /**
@@ -304,8 +445,14 @@ const Page = styled(SafeAreaView)`
 `;
 
 const Nav = styled.View`
+  flex-direction: row;
+  align-items: center;
   padding-horizontal: ${(p) => p.theme.space(4)}px;
   padding-bottom: ${(p) => p.theme.space(2)}px;
+`;
+
+const NavGrow = styled.View`
+  flex: 1;
 `;
 
 const Back = styled.Pressable`

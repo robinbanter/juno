@@ -94,6 +94,15 @@ export type Coin = {
   /** The DBC config key the pool was launched from. */
   config: string;
   quote: QuoteToken;
+  /**
+   * USD price of one quote token, or null when no feed answered.
+   *
+   * Quote-denominated figures — a recurring-buy amount, a contribution total —
+   * are stored and signed for in quote units. Converting them for display needs
+   * this rate, and null has to stay null: a missing SOL price means the dollar
+   * figure is unknown, not that it equals the SOL figure.
+   */
+  quoteUsdRate: number | null;
 
   marketCap: number;
   /**

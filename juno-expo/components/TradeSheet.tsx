@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Linking, Modal } from "react-native";
 import styled from "styled-components/native";
 
@@ -29,6 +29,14 @@ import { theme } from "../theme";
  * cost three of them.
  */
 
+/**
+ * How long a quote is trusted before Buy rebuilds it.
+ *
+ * A Solana blockhash lasts about 150 slots — roughly a minute. Thirty seconds
+ * leaves room for the sign-and-send round trip to finish inside that window.
+ */
+const STALE_QUOTE_MS = 30_000;
+
 const QUICK_BUY = [0.1, 0.25, 0.5, 1];
 const QUICK_SELL = [0.25, 0.5, 0.75, 1];
 
@@ -41,6 +49,8 @@ export function TradeSheet({
   onDone,
   holding = null,
   quoteBalance = null,
+  initialAmount = "",
+  onFilled,
 }: {
   coin: Coin;
   side: "buy" | "sell";
@@ -50,14 +60,40 @@ export function TradeSheet({
   holding?: number | null;
   /** Quote-token balance, for a buy. Null when unknown. */
   quoteBalance?: number | null;
+  /**
+   * Pre-filled amount, for a buy opened from somewhere that already knows the
+   * size — a recurring-buy contribution. Editable: it is a starting point, not
+   * a lock, because the whole point of signing each one is that you can change
+   * your mind about this week.
+   */
+  initialAmount?: string;
+  /**
+   * A swap **confirmed**, with the quote amount that was spent or received.
+   *
+   * Fires on the signature landing, not on the sheet closing. Anything that
+   * records a fill has to hang off this and only this: a callback on close
+   * would count a trade that errored, and one on submit would count a
+   * transaction that never made it into a block.
+   */
+  onFilled?: (quoteAmount: number) => void;
 }) {
   const wallet = useWallet();
-  const [amount, setAmount] = useState("");
+  const [amount, setAmount] = useState(initialAmount);
   const [quote, setQuote] = useState<Awaited<ReturnType<typeof juno.buildSwap>> | null>(null);
   const [quoting, setQuoting] = useState(false);
   const [stage, setStage] = useState<Stage>("entry");
   const [error, setError] = useState<string | null>(null);
   const [signature, setSignature] = useState<string | null>(null);
+  /**
+   * When the quote on screen was built.
+   *
+   * A quote carries the blockhash the transaction is signed against, and a
+   * Solana blockhash is good for roughly a minute. Someone who opens this
+   * sheet, thinks about it, and then taps Buy was getting "something went
+   * wrong" from an expired one — for a transaction that was never broadcast
+   * and could have simply been rebuilt.
+   */
+  const quotedAt = useRef(0);
 
   const value = Number(amount || "0");
   const valid = Number.isFinite(value) && value > 0;
@@ -99,7 +135,10 @@ export function TradeSheet({
           side,
           amountIn: value,
         });
-        if (!cancelled) setQuote(built);
+        if (!cancelled) {
+          setQuote(built);
+          quotedAt.current = Date.now();
+        }
       } catch (caught) {
         if (!cancelled) {
           setQuote(null);
@@ -137,14 +176,36 @@ export function TradeSheet({
       const address = wallet.address ?? (await wallet.connect());
       if (!address) throw new Error("No wallet available");
 
-      const signed = await wallet.sign(quote.unsigned.transaction);
+      /*
+       * Re-quote if the one on screen has gone stale.
+       *
+       * Rebuilding is cheap next to a failed submit, and it is also *more*
+       * correct: the bonding curve moves, so a minute-old quote is not only
+       * carrying a dead blockhash, it is quoting a price nobody would get now.
+       * The rebuilt quote replaces the visible one before signing, so what is
+       * signed is what the sheet last showed.
+       */
+      let live = quote;
+      if (Date.now() - quotedAt.current > STALE_QUOTE_MS) {
+        live = await juno.buildSwap({
+          mint: coin.address,
+          owner: address,
+          side,
+          amountIn: value,
+        });
+        setQuote(live);
+        quotedAt.current = Date.now();
+      }
+
+      const signed = await wallet.sign(live.unsigned.transaction);
       const { signature: landed } = await juno.submit({
         transaction: signed,
-        window: quote.window,
-        poolAddress: quote.pool,
+        window: live.window,
+        poolAddress: live.pool,
       });
       setSignature(landed);
       setStage("done");
+      onFilled?.(value);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "The trade failed");
       setStage("entry");

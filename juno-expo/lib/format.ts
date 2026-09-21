@@ -86,9 +86,18 @@ function subscripted(abs: number): string {
   return `0.0${marker}${digits}`;
 }
 
-/** Token balances and trade sizes. */
+/**
+ * Token balances and trade sizes.
+ *
+ * Four decimals under one, because a curve's tokens are often worth a
+ * hundred-thousandth of anything and two would round a real balance to
+ * nothing. Zero is the exception: `0.0000` is four digits of precision about a
+ * quantity that has none, and it read especially badly beside a figure at a
+ * different scale — "0.0000 of 50.00 SOL" in a savings goal.
+ */
 export function tokens(value: number): string {
   if (!Number.isFinite(value)) return "—";
+  if (value === 0) return "0";
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`;
   if (value >= 1_000) return `${Math.round(value).toLocaleString("en-US")}`;
   return value.toFixed(value < 1 ? 4 : 2);

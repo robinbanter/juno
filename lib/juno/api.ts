@@ -17,7 +17,11 @@ const CORS_HEADERS: Record<string, string> = {
   // the caller's origin, and the only state-changing route submits a
   // transaction that is already signed by a key we never see.
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+  // PATCH and DELETE are here because the plans route uses them: a preflight
+  // that omits a method the route implements is a route the Expo client cannot
+  // call from its own origin, and the failure looks like a network error rather
+  // than a CORS one.
+  "Access-Control-Allow-Methods": "GET,POST,PATCH,DELETE,OPTIONS",
   "Access-Control-Allow-Headers": "content-type",
   "Access-Control-Max-Age": "86400",
 };

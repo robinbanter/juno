@@ -285,10 +285,20 @@ export async function submitSigned(params: {
   const connection = getConnection();
   const raw = Buffer.from(params.transaction, "base64");
 
-  const signature = await connection.sendRawTransaction(raw, {
-    skipPreflight: false,
-    maxRetries: 3,
-  });
+  let signature: string;
+  try {
+    signature = await connection.sendRawTransaction(raw, {
+      skipPreflight: false,
+      maxRetries: 3,
+    });
+  } catch (error) {
+    // A cluster refusing *this transaction* is not a fault in this server, and
+    // reporting it as one ("Something went wrong on our side") is the worst
+    // possible answer: it hides the one thing the person can act on. Preflight
+    // is on precisely so this reason exists — throwing it as a CallerError is
+    // what lets it reach the phone.
+    throw new CallerError(explainSubmitFailure(error), 422);
+  }
 
   const window = params.window ?? (await connection.getLatestBlockhash("confirmed"));
   const result = await connection.confirmTransaction(
@@ -301,7 +311,10 @@ export async function submitSigned(params: {
   );
 
   if (result.value.err) {
-    throw new Error(`Transaction failed on-chain: ${JSON.stringify(result.value.err)}`);
+    throw new CallerError(
+      `${explainSubmitFailure(result.value.err)} The transaction is on-chain as ${signature}.`,
+      422,
+    );
   }
 
   // The price, curve and history all just moved. Drop them so the next read
@@ -312,4 +325,55 @@ export async function submitSigned(params: {
   }
 
   return { signature, invalidated: params.poolAddress };
+}
+
+/**
+ * A transaction the cluster would not take, said in a sentence.
+ *
+ * Solana reports these three ways — a `SendTransactionError` with simulation
+ * logs, a bare `{ InstructionError: [i, ...] }` object from confirmation, and
+ * an ordinary message — and none of them is something to put in front of
+ * someone who is trying to buy $2 of a coin. What they need is which of the
+ * handful of real causes it was.
+ *
+ * Anything unrecognised keeps its original text rather than being flattened
+ * into a friendly non-answer. A wrong specific reason is worse than an
+ * unfamiliar true one.
+ */
+function explainSubmitFailure(error: unknown): string {
+  const logs: string[] =
+    (error as { logs?: string[] } | null)?.logs ??
+    (error as { transactionLogs?: string[] } | null)?.transactionLogs ??
+    [];
+  const text = [
+    error instanceof Error ? error.message : "",
+    typeof error === "object" && error !== null && !(error instanceof Error)
+      ? JSON.stringify(error)
+      : String(error ?? ""),
+    logs.join("\n"),
+  ].join("\n");
+
+  if (/insufficient lamports|insufficient funds for rent|Transfer: insufficient/i.test(text)) {
+    return "Not enough SOL in this wallet to cover the trade and its fees.";
+  }
+  if (/0x1771|SlippageToleranceExceeded|ExceededSlippage/i.test(text)) {
+    return "The price moved past your slippage while this was being signed. Try again for a fresh quote.";
+  }
+  if (/Blockhash not found|block height exceeded|TransactionExpired/i.test(text)) {
+    return "This quote expired before it was submitted. Try again for a fresh one.";
+  }
+  if (/already been processed|AlreadyProcessed/i.test(text)) {
+    return "This transaction was already submitted.";
+  }
+  if (/PoolCompleted|CurveComplete|0x177(4|5)/i.test(text)) {
+    return "This curve has finished. Trading continues in its migrated pool.";
+  }
+  if (/signature verification|missing required signature|Signature verification failed/i.test(text)) {
+    return "The signature on this transaction did not verify. Try again.";
+  }
+
+  const first = error instanceof Error ? error.message : text.split("\n")[0];
+  return first && first.trim().length > 0
+    ? `The cluster refused this transaction: ${first.trim()}`
+    : "The cluster refused this transaction.";
 }

@@ -234,6 +234,7 @@ export async function hydratePool(
     pool: row.poolAddress,
     config: row.configAddress,
     quote: quoteFromRow(row, snapshot.quoteDecimals),
+    quoteUsdRate: quoteUsd,
     marketCap: priceUsd * TOTAL_SUPPLY,
     marketCapCurrency: quoteUsd === null ? quoteFromRow(row, snapshot.quoteDecimals).symbol : "USD",
     // Market cap is price times a fixed supply, so its change is the price's.

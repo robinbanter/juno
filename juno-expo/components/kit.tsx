@@ -648,14 +648,20 @@ const Track = styled.View`
 
 const Fill = styled.View<{ $pct: number }>`
   height: 6px;
+  /* A floor so a real but tiny fraction is still visible as a tick — but only
+     above zero, which the caller filters out before this renders. */
   width: ${(p) => Math.max(2, Math.min(100, p.$pct))}%;
   background-color: ${(p) => (p.$pct > 70 ? p.theme.colors.lime : p.theme.colors.pos)};
 `;
 
+/**
+ * Progress toward a goal — graduation, or a savings target.
+ *
+ * Exactly zero draws an empty track. The 2% floor above exists so that a pool
+ * 0.3% of the way to graduating still shows something; applied at zero it drew
+ * a sliver of progress for a plan that had never been filled, which is a claim
+ * about the world that nothing in the data supports.
+ */
 export function Progress({ pct }: { pct: number }) {
-  return (
-    <Track>
-      <Fill $pct={pct} />
-    </Track>
-  );
+  return <Track>{pct > 0 ? <Fill $pct={pct} /> : null}</Track>;
 }

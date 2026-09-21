@@ -103,6 +103,8 @@ export const api = {
   get: <T>(path: string, timeoutMs?: number) => request<T>(path, { timeoutMs }),
   post: <T>(path: string, body: unknown, timeoutMs?: number) =>
     request<T>(path, { method: "POST", body: JSON.stringify(body), timeoutMs }),
+  patch: <T>(path: string, body: unknown, timeoutMs?: number) =>
+    request<T>(path, { method: "PATCH", body: JSON.stringify(body), timeoutMs }),
 };
 
 /* ------------------------------------------------------------------ */
@@ -141,6 +143,14 @@ export type Coin = {
   pool: string;
   config: string;
   quote: { mint: string; symbol: string; decimals: number };
+  /**
+   * USD price of one quote token, or null when no feed answered.
+   *
+   * Quote-denominated figures — a recurring-buy amount, a contribution — are
+   * signed for in quote units; this is what converts them for display, and
+   * null has to stay null rather than collapsing to one-to-one.
+   */
+  quoteUsdRate: number | null;
   marketCap: number;
   marketCapCurrency: string;
   marketCapChangePct: number | null;
@@ -274,11 +284,154 @@ export type LaunchBuild = {
   pool: string;
 };
 
+
+/* ------------------------------------------------------------------ */
+/* Social trading and savings                                          */
+/* ------------------------------------------------------------------ */
+
+export type Trader = {
+  wallet: string;
+  /** Profit already taken. The rank is on this and nothing else. */
+  realised: number;
+  /** Open position against cost. Null when the buys predate the read window. */
+  unrealised: number | null;
+  trades: number;
+  coins: number;
+  /** Null when no sell had a cost to compare against — unmeasured, not zero. */
+  winRate: number | null;
+  bestExit: number | null;
+  holding: number;
+  isCreator: boolean;
+  followers: number;
+};
+
+export type WatchItem = {
+  baseMint: string;
+  watchedAt: string;
+  alertPrice: number | null;
+  /** Null when the coin could not be priced: an alert cannot be judged against a price nobody read. */
+  alertCrossed: "up" | "down" | null;
+  coin: {
+    address: string;
+    name: string;
+    symbol: string;
+    priceUsd: number;
+    marketCap: number;
+    currency: string;
+    changePct: number | null;
+    progress: number;
+    graduated: boolean;
+    media: { kind: "image" | "video"; url: string; posterUrl?: string };
+  } | null;
+};
+
+export type Plan = {
+  id: string;
+  baseMint: string;
+  amount: number;
+  cadence: "daily" | "weekly" | "monthly";
+  target: number | null;
+  /** Only moves when a swap confirms — a record of transactions, not intentions. */
+  contributed: number;
+  fills: number;
+  lastFilledAt: string | null;
+  nextDueAt: string;
+  due: boolean;
+  active: boolean;
+  /**
+   * `amount`, `target` and `contributed` are **quote-token units** — SOL or
+   * USDC, whatever this pool is priced in, because that is what a buy is
+   * signed for. `quoteSymbol` labels them; `quoteUsdRate` converts them, and
+   * is null when no feed answered.
+   */
+  coin: {
+    address: string;
+    name: string;
+    symbol: string;
+    priceUsd: number;
+    currency: string;
+    quoteSymbol: string;
+    quoteUsdRate: number | null;
+    media?: { kind: "image" | "video"; url: string; posterUrl?: string };
+  } | null;
+};
+
 /* ------------------------------------------------------------------ */
 /* Calls                                                               */
 /* ------------------------------------------------------------------ */
 
 export const juno = {
+  /** Traders ranked by profit taken. `partial` when the walk came back short. */
+  leaderboard: (limit = 20) =>
+    api.get<{ cluster: string; partial: boolean; poolsRead: number; traders: Trader[] }>(
+      `/api/juno/leaderboard?limit=${limit}`,
+    ),
+
+  followStats: (wallet: string, viewer?: string | null) =>
+    api.get<{
+      wallet: string;
+      followers: number;
+      following: number;
+      /** Null when there is no viewer — different from "does not follow". */
+      viewerFollows: boolean | null;
+      followingList: string[];
+    }>(`/api/juno/follow?wallet=${wallet}${viewer ? `&viewer=${viewer}` : ""}`),
+
+  setFollow: (follower: string, target: string, on: boolean) =>
+    api.post<{ target: string; isFollowing: boolean; followers: number; following: number }>(
+      "/api/juno/follow",
+      { follower, target, follow: on },
+    ),
+
+  /**
+   * This wallet's relationship to one coin — watching, alert, plans.
+   *
+   * Postgres only. The list endpoints answer the same questions but hydrate
+   * every pool from the chain to do it, which the coin screen cannot afford to
+   * wait for just to decide what a button says.
+   */
+  saved: (wallet: string, baseMint: string) =>
+    api.get<{
+      wallet: string;
+      baseMint: string;
+      watching: boolean;
+      alertPrice: number | null;
+      /** The price when the alert was set — the direction is derived from it. */
+      alertSetAtPrice: number | null;
+      plans: Omit<Plan, "coin">[];
+    }>(`/api/juno/saved?wallet=${wallet}&baseMint=${baseMint}`),
+
+  watchlist: (wallet: string) =>
+    api.get<{ wallet: string; items: WatchItem[]; missing: number }>(
+      `/api/juno/watchlist?wallet=${wallet}`,
+    ),
+
+  setWatch: (input: {
+    wallet: string;
+    baseMint: string;
+    watch: boolean;
+    alertPrice?: number;
+    priceNow?: number;
+  }) => api.post<{ baseMint: string; watching: boolean }>("/api/juno/watchlist", input),
+
+  plans: (wallet: string) =>
+    api.get<{ wallet: string; plans: Plan[]; missing: number }>(`/api/juno/plans?wallet=${wallet}`),
+
+  createPlan: (input: {
+    wallet: string;
+    baseMint: string;
+    amount: number;
+    cadence: "daily" | "weekly" | "monthly";
+    target?: number | null;
+  }) => api.post<{ id: string }>("/api/juno/plans", input),
+
+  /** Called only after a swap confirms, so progress records real transactions. */
+  recordContribution: (id: string, contributed: number) =>
+    api.patch<{ plan: Plan }>("/api/juno/plans", { id, contributed }),
+
+  setPlanActive: (id: string, active: boolean) =>
+    api.patch<{ id: string; active: boolean }>("/api/juno/plans", { id, active }),
+
   feed: (limit = 40) =>
     api.get<{
       cluster: string;
@@ -377,6 +530,15 @@ export const juno = {
     uri?: string;
     quoteMint?: string;
   }) => api.post<LaunchBuild>("/api/juno/tx/launch", input),
+
+  /**
+   * What this wallet can spend of one token. `null` when the read failed —
+   * not zero, which would grey out a button over a network hiccup.
+   */
+  balance: (wallet: string, mint: string) =>
+    api.get<{ wallet: string; mint: string; balance: number | null }>(
+      `/api/juno/tx/balance?wallet=${wallet}&mint=${mint}`,
+    ),
 
   submit: (input: { transaction: string; window?: BlockhashWindow; poolAddress?: string }) =>
     // Submitting waits for confirmation, which is slower than a read.
