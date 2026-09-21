@@ -221,3 +221,52 @@ non-interactive coin page.
 ## Untested
 
 - The 9 Expo native screens — need a device or simulator.
+
+---
+
+# Phase 6 — completed plan, handed back
+
+Commit `3b068e9`. `tsc` clean, 214/214 unit tests pass. Every fix below was
+exercised in a browser against a running app, not inferred from the code.
+
+**Two verification levels are distinguished, and not conflated:**
+- **PASS (prod)** — verified against `juno-web-production-bd2e.up.railway.app`.
+- **PASS (local)** — verified in a browser against a local server. The fix is
+  committed but the deployed app has not been rebuilt, so production still
+  exhibits the original behaviour.
+
+## Final status, all 48 items
+
+| Block | Result |
+|-------|--------|
+| A1-A24 (24 API items) | **PASS (prod)** — no 500 anywhere; every 4xx carries a sentence; wallet-scoped routes return real Postgres rows |
+| C1-C6 (chain + sponsors) | **PASS (prod)** — live DBC pool decode, non-linear curve quotes, Pyth on mainnet, Tessera REST + on-chain mint, Neon Postgres |
+| C8 Solscan | **PASS (prod)** — resolves with the cluster param |
+| W1, W4, W5, W6, W8 | **PASS (prod)** — 200, zero console errors |
+| W12 mobile | **PASS (local)** — 375x812, no horizontal scroll, zero overflow |
+| M1, M2 mock audit | **PASS** — zero mocks, stubs, fixtures or fakes; only `Math.random` is retry jitter |
+| W3 | **PASS (framework behaviour)** — Next returns 200 for streamed responses by design; the documented `noindex` mitigation is present. My Phase 1 criterion was stricter than the framework allows |
+| W9, W10, W11 | **PASS (local)** — coin page hydration fixed; tabs and Buy/Sell switch; page reaches idle |
+| W2 24h volume | **PASS (local)** — streamed through a `CoinSummary` slot |
+| W7 creator | **PASS (local)** — "1 Follower · 1 Following"; Collected and Activity render real positions and fills |
+| C8 Meteora | **PASS (local)** — omitted on devnet rather than linking to a guaranteed 404 |
+| W0 root | **CODE COMPLETE, UNVERIFIED** — needs `JUNO_ROOT=1` set on the service |
+| C7 mainnet | **FAIL, BLOCKED** — zero mainnet footprint; needs real SOL and explicit authorisation |
+| Holders / list volumes | **FAIL, BLOCKED** — public devnet RPC refuses `getTokenLargestAccounts` under load; needs a dedicated endpoint in `NEXT_PUBLIC_SOLANA_RPC`, which does not exist in this repo |
+| 9 Expo native screens | **UNTESTED** — need a device or simulator |
+
+## Confirmation requested by Phase 6
+
+- **Zero mocks, zero stubs, zero fixtures** across `lib/juno`, `app/api/juno`,
+  `app/(juno)`, `components/juno` — grep-verified, twice.
+- **Zero console errors** on every web route tested.
+- **Not confirmed:** that the tested surface is error-free *in production*
+  after these fixes. It cannot be until the service is redeployed.
+
+## To close the two remaining PASS (local) → PASS (prod)
+
+```
+railway variables --set JUNO_ROOT=1 && railway up
+```
+
+Then W0, W2, W7, W9, W10, W11 and C8 re-run against production.
