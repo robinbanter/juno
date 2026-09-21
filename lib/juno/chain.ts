@@ -249,6 +249,7 @@ export async function hydratePool(
           volume: point.volume * rate,
         }))
       : undefined,
+    priceHistoryPartial: history ? history.partial : undefined,
     nav,
     creatorRewards,
     holders,

@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
 
+import { junoJson, junoOptions } from "@/lib/juno/api";
 import { CURVE_PRESETS } from "@/lib/juno/curves";
 import { getDbcClient } from "@/lib/juno/dbc";
 import { listPools, recordLaunch } from "@/lib/juno/registry";
@@ -9,12 +9,14 @@ export const runtime = "nodejs";
 // The registry is a live index of on-chain state; a cached response would
 // hide a launch that just confirmed.
 export const dynamic = "force-dynamic";
+/** The Expo client is a different origin; the preflight has to answer. */
+export const OPTIONS = junoOptions;
 
 const BASE58 = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 
 export async function GET() {
   const rows = await listPools();
-  return NextResponse.json({ pools: rows });
+  return junoJson({ pools: rows });
 }
 
 /**
@@ -29,7 +31,7 @@ export async function POST(request: Request) {
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "Body must be JSON" }, { status: 400 });
+    return junoJson({ error: "Body must be JSON" }, { status: 400 });
   }
 
   const str = (key: string) => (typeof body[key] === "string" ? (body[key] as string) : "");
@@ -52,20 +54,20 @@ export async function POST(request: Request) {
     creatorWallet,
   })) {
     if (!BASE58.test(value)) {
-      return NextResponse.json({ error: `${key} is not an address` }, { status: 400 });
+      return junoJson({ error: `${key} is not an address` }, { status: 400 });
     }
   }
   if (!name || !symbol || !createSignature) {
-    return NextResponse.json(
+    return junoJson(
       { error: "name, symbol and createSignature are required" },
       { status: 400 },
     );
   }
   if (!CURVE_PRESETS[curvePreset]) {
-    return NextResponse.json({ error: "Unknown curve preset" }, { status: 400 });
+    return junoJson({ error: "Unknown curve preset" }, { status: 400 });
   }
   if (format !== "post" && format !== "reel") {
-    return NextResponse.json({ error: "format must be post or reel" }, { status: 400 });
+    return junoJson({ error: "format must be post or reel" }, { status: 400 });
   }
 
   // The chain is the authority on whether this pool exists, and on who its
@@ -73,7 +75,7 @@ export async function POST(request: Request) {
   // caller attribute someone else's pool to themselves.
   const onChain = await getDbcClient().state.getPool(poolAddress);
   if (!onChain) {
-    return NextResponse.json(
+    return junoJson(
       { error: "No such pool on this cluster" },
       { status: 404 },
     );
@@ -83,13 +85,13 @@ export async function POST(request: Request) {
   }).poolState;
 
   if (state.baseMint.toBase58() !== baseMint) {
-    return NextResponse.json({ error: "baseMint does not match the pool" }, { status: 400 });
+    return junoJson({ error: "baseMint does not match the pool" }, { status: 400 });
   }
   if (state.creator.toBase58() !== creatorWallet) {
-    return NextResponse.json({ error: "creatorWallet does not match the pool" }, { status: 400 });
+    return junoJson({ error: "creatorWallet does not match the pool" }, { status: 400 });
   }
   if (state.config.toBase58() !== configAddress) {
-    return NextResponse.json({ error: "configAddress does not match the pool" }, { status: 400 });
+    return junoJson({ error: "configAddress does not match the pool" }, { status: 400 });
   }
 
   const num = (key: string) =>
@@ -114,5 +116,5 @@ export async function POST(request: Request) {
     createSignature,
   });
 
-  return NextResponse.json({ pool: row }, { status: 201 });
+  return junoJson({ pool: row }, { status: 201 });
 }

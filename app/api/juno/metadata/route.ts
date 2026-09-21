@@ -1,10 +1,12 @@
-import { NextResponse } from "next/server";
 
+import { junoJson, junoOptions } from "@/lib/juno/api";
 import { CURVE_PRESETS } from "@/lib/juno/curves";
 import { pinTokenMetadata } from "@/lib/juno/pinata";
 import type { CurvePresetId } from "@/lib/juno/types";
 
 export const runtime = "nodejs";
+/** The Expo client is a different origin; the preflight has to answer. */
+export const OPTIONS = junoOptions;
 
 /**
  * Pin the Metaplex metadata JSON a mint will point at.
@@ -15,14 +17,14 @@ export const runtime = "nodejs";
  */
 export async function POST(request: Request) {
   if (!process.env.PINATA_JWT) {
-    return NextResponse.json({ error: "Metadata pinning is not configured" }, { status: 503 });
+    return junoJson({ error: "Metadata pinning is not configured" }, { status: 503 });
   }
 
   let body: Record<string, unknown>;
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "Body must be JSON" }, { status: 400 });
+    return junoJson({ error: "Body must be JSON" }, { status: 400 });
   }
 
   const str = (k: string) => (typeof body[k] === "string" ? (body[k] as string) : "");
@@ -31,7 +33,7 @@ export async function POST(request: Request) {
   const preset = str("curvePreset") as CurvePresetId;
 
   if (!name || !symbol) {
-    return NextResponse.json({ error: "name and symbol are required" }, { status: 400 });
+    return junoJson({ error: "name and symbol are required" }, { status: 400 });
   }
 
   // The curve is part of what the token *is*, so it travels in the metadata
@@ -58,9 +60,9 @@ export async function POST(request: Request) {
       externalUrl: str("externalUrl") || undefined,
       attributes,
     });
-    return NextResponse.json(pinned, { status: 201 });
+    return junoJson(pinned, { status: 201 });
   } catch (error) {
-    return NextResponse.json(
+    return junoJson(
       { error: error instanceof Error ? error.message : "Pin failed" },
       { status: 502 },
     );

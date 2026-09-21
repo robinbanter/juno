@@ -130,7 +130,9 @@ export default function ProfileScreen() {
             three figures this app can actually stand behind. */}
         <Card>
           <Row>
-            <Stat value={String(data?.positions.length ?? 0)} label="Positions" />
+            {/* `data` is undefined when the portfolio read failed, and "0
+                Positions" there is a measurement nobody took. A dash is. */}
+            <Stat value={data ? String(data.positions.length) : "—"} label="Positions" />
             <Stat
               value={
                 data?.totalPnl === null || data?.totalPnl === undefined
@@ -146,7 +148,7 @@ export default function ProfileScreen() {
                     : "neg"
               }
             />
-            <Stat value={String(data?.history.length ?? 0)} label="Trades" />
+            <Stat value={data ? String(data.history.length) : "—"} label="Trades" />
           </Row>
         </Card>
 
@@ -158,7 +160,11 @@ export default function ProfileScreen() {
             {portfolio.loading ? (
               <Skeleton h={42} w="60%" />
             ) : (
-              <Display>{money(data?.totalValue ?? 0, currency, { compact: false })}</Display>
+              // A wallet holding nothing really is worth $0 and should say so.
+              // A wallet whose value could not be read is not, and must not.
+              <Display>
+                {data ? money(data.totalValue, currency, { compact: false }) : "—"}
+              </Display>
             )}
             <DeltaBadge pct={data?.totalPnlPct ?? null} />
           </Centered>
@@ -187,7 +193,11 @@ export default function ProfileScreen() {
             <Card>
               <Body style={{ color: theme.colors.neg }}>{portfolio.error}</Body>
             </Card>
-          ) : (data?.positions.length ?? 0) === 0 ? (
+          ) : !data ? (
+            <Card>
+              <Body muted>Holdings could not be read.</Body>
+            </Card>
+          ) : data.positions.length === 0 ? (
             <Card>
               <Body muted>
                 Nothing held yet. Buy a coin from the Trade tab and it shows up here.

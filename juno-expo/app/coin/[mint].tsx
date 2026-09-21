@@ -131,7 +131,8 @@ export default function CoinScreen() {
               <Divider />
 
               <Candles
-                ticks={coin.priceHistory ?? []}
+                ticks={coin.priceHistory}
+                partial={coin.priceHistoryPartial === true}
                 livePrice={coin.priceUsd}
                 format={(v: number) => price(v, coin.marketCapCurrency)}
               />
@@ -183,7 +184,14 @@ export default function CoinScreen() {
             <Heading style={{ marginTop: 6 }}>Activity</Heading>
             {(detail.data?.activity.length ?? 0) === 0 ? (
               <Card>
-                <Body muted>No trades yet.</Body>
+                {/* An empty list that was never successfully read is not an
+                    empty market. Saying "No trades yet" there is a claim the
+                    app did not earn. */}
+                <Body muted>
+                  {detail.data?.activityPartial
+                    ? "Trade history could not be read — the RPC is rate-limiting."
+                    : "No trades yet."}
+                </Body>
               </Card>
             ) : (
               detail.data!.activity.slice(0, 12).map((row) => (

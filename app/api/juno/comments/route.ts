@@ -1,20 +1,22 @@
-import { NextResponse } from "next/server";
 
+import { junoJson, junoOptions } from "@/lib/juno/api";
 import { cluster } from "@/lib/juno/cluster";
 import { getPool } from "@/lib/juno/registry";
 import { addComment, listComments, MAX_COMMENT } from "@/lib/juno/social";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+/** The Expo client is a different origin; the preflight has to answer. */
+export const OPTIONS = junoOptions;
 
 const BASE58 = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 
 export async function GET(request: Request) {
   const mint = new URL(request.url).searchParams.get("coin") ?? "";
   if (!BASE58.test(mint)) {
-    return NextResponse.json({ error: "coin is not an address" }, { status: 400 });
+    return junoJson({ error: "coin is not an address" }, { status: 400 });
   }
-  return NextResponse.json({ comments: await listComments(mint, cluster()) });
+  return junoJson({ comments: await listComments(mint, cluster()) });
 }
 
 export async function POST(request: Request) {
@@ -22,7 +24,7 @@ export async function POST(request: Request) {
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "Body must be JSON" }, { status: 400 });
+    return junoJson({ error: "Body must be JSON" }, { status: 400 });
   }
 
   const str = (k: string) => (typeof body[k] === "string" ? (body[k] as string) : "");
@@ -31,16 +33,16 @@ export async function POST(request: Request) {
   const text = str("body").trim();
 
   if (!BASE58.test(coinMint)) {
-    return NextResponse.json({ error: "coin is not an address" }, { status: 400 });
+    return junoJson({ error: "coin is not an address" }, { status: 400 });
   }
   if (!BASE58.test(wallet)) {
-    return NextResponse.json({ error: "wallet is not an address" }, { status: 400 });
+    return junoJson({ error: "wallet is not an address" }, { status: 400 });
   }
   if (!text) {
-    return NextResponse.json({ error: "Comment is empty" }, { status: 400 });
+    return junoJson({ error: "Comment is empty" }, { status: 400 });
   }
   if (text.length > MAX_COMMENT) {
-    return NextResponse.json(
+    return junoJson(
       { error: `Comment is over ${MAX_COMMENT} characters` },
       { status: 400 },
     );
@@ -50,7 +52,7 @@ export async function POST(request: Request) {
   // an open write endpoint keyed on an arbitrary string.
   const pool = await getPool(coinMint);
   if (!pool) {
-    return NextResponse.json({ error: "No such coin" }, { status: 404 });
+    return junoJson({ error: "No such coin" }, { status: 404 });
   }
 
   const side = str("side");
@@ -63,5 +65,5 @@ export async function POST(request: Request) {
     signature: str("signature") || undefined,
   });
 
-  return NextResponse.json({ comment }, { status: 201 });
+  return junoJson({ comment }, { status: 201 });
 }

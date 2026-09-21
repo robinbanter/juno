@@ -150,6 +150,8 @@ export type Coin = {
   holders: number | null;
   priceUsd: number;
   priceHistory?: Array<{ t: string; price: number; volume: number; side: "buy" | "sell" }>;
+  /** The swap read was cut short — the ticks above are a prefix, not the history. */
+  priceHistoryPartial?: boolean;
   nav?: NavReference | null;
   curve: CurveState;
   curvePreset: string;
@@ -277,9 +279,16 @@ export const juno = {
     ),
 
   coin: (mint: string) =>
-    api.get<{ coin: Coin; activity: Activity[]; holders: Holder[]; launchSignature: string }>(
-      `/api/juno/coins/${mint}`,
-    ),
+    api.get<{
+      coin: Coin;
+      activity: Activity[];
+      /** The swap walk was cut short — an empty `activity` is not "no trades". */
+      activityPartial: boolean;
+      holders: Holder[];
+      /** The holder read was refused — an empty `holders` is not "no holders". */
+      holdersUnreadable: boolean;
+      launchSignature: string;
+    }>(`/api/juno/coins/${mint}`),
 
   portfolio: (wallet: string) => api.get<Portfolio>(`/api/juno/portfolio/${wallet}`),
 

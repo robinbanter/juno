@@ -138,6 +138,16 @@ export type Coin = {
    * empty when loaded and the pool has never traded.
    */
   priceHistory?: PricePoint[];
+  /**
+   * True when the signature read was cut short, so `priceHistory` is a prefix
+   * of the real history rather than all of it.
+   *
+   * An empty *partial* history is the dangerous case: it looks identical to a
+   * pool that has never traded, and the chart said "No trades yet" on a coin
+   * whose own activity list showed four fills on the same screen. The chart
+   * reads this flag to tell "nobody traded" apart from "we could not read".
+   */
+  priceHistoryPartial?: boolean;
   /** Where the underlying is marked, for an equity-preset launch. Coin page only. */
   nav?: NavReference | null;
 

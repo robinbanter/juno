@@ -46,13 +46,19 @@ type Scaled = PricePoint & { x: number; y: number };
 export function PriceChart({ coin }: { coin: Coin }) {
   const points = coin.priceHistory;
   const currency = coin.marketCapCurrency;
+  const partial = coin.priceHistoryPartial === true;
 
   if (!points) return <ChartFrame>Price history was not loaded for this view.</ChartFrame>;
 
   if (points.length === 0) {
+    // An empty *partial* read is not an empty market. The two were conflated
+    // here, and the chart announced "No trades yet" on a coin whose activity
+    // list, three hundred pixels away, was showing four real fills.
     return (
       <ChartFrame>
-        No trades yet — this pool has no price history to draw.
+        {partial
+          ? "Trade history could not be read — the RPC is rate-limiting. This pool may well have traded."
+          : "No trades yet — this pool has no price history to draw."}
       </ChartFrame>
     );
   }
@@ -68,17 +74,20 @@ export function PriceChart({ coin }: { coin: Coin }) {
     );
   }
 
-  return <Plot points={points} currency={currency} name={coin.name} />;
+  return <Plot points={points} currency={currency} name={coin.name} partial={partial} />;
 }
 
 function Plot({
   points,
   currency,
   name,
+  partial,
 }: {
   points: PricePoint[];
   currency: string;
   name: string;
+  /** The read was cut short, so these are the newest trades, not every trade. */
+  partial: boolean;
 }) {
   const [hover, setHover] = useState<number | null>(null);
 
@@ -130,7 +139,10 @@ function Plot({
     <figure className="m-0 flex w-full flex-col">
       <figcaption className="flex items-baseline justify-between px-4 pt-3 text-[13px]">
         <span className="text-j-muted">
-          Realised price · {scaled.length} trades
+          Realised price ·{" "}
+          {partial
+            ? `${scaled.length} trades read — history incomplete`
+            : `${scaled.length} trades`}
         </span>
         {/* The signed figure is what carries direction for a reader who cannot
             separate the two line colours. */}

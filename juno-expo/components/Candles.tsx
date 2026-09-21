@@ -36,10 +36,21 @@ const PLOT_W = W - AXIS_W - 6;
 
 export function Candles({
   ticks,
+  partial = false,
   livePrice,
   format,
 }: {
-  ticks: Tick[];
+  /** Undefined when the history was never requested for this view. */
+  ticks: Tick[] | undefined;
+  /**
+   * The swap read was cut short, so `ticks` is a prefix of the real history.
+   *
+   * An empty partial read is the case worth separating: it is indistinguishable
+   * from a pool that has never traded, and saying "No trades yet" there is a
+   * claim the app did not earn — the coin's own activity list often shows fills
+   * on the same screen.
+   */
+  partial?: boolean;
   /** The current curve price, marked on the axis. */
   livePrice: number;
   format: (value: number) => string;
@@ -47,10 +58,10 @@ export function Candles({
   // Chosen from the data's own span, then the reader can override. A fixed
   // default showed four trades made minutes apart as a single fat candle.
   const [bucket, setBucket] = useState<Bucket | null>(null);
-  const resolved = bucket ?? defaultBucket(ticks);
+  const resolved = bucket ?? defaultBucket(ticks ?? []);
   const [active, setActive] = useState<number | null>(null);
 
-  const candles = useMemo(() => toCandles(ticks, resolved), [ticks, resolved]);
+  const candles = useMemo(() => toCandles(ticks ?? [], resolved), [ticks, resolved]);
 
   const scale = useMemo(() => {
     if (candles.length === 0) return null;
@@ -67,7 +78,13 @@ export function Candles({
     return (
       <Frame>
         <Empty>
-          <Caption>No trades yet — nothing to chart.</Caption>
+          <Caption>
+            {ticks === undefined
+              ? "Price history was not loaded for this view."
+              : partial
+                ? "Trade history could not be read — the RPC is rate-limiting."
+                : "No trades yet — nothing to chart."}
+          </Caption>
         </Empty>
         <Segmented items={BUCKETS} value={resolved} onChange={setBucket} />
       </Frame>
@@ -89,6 +106,7 @@ export function Candles({
           cannot do anyway. */}
       <Readout>
         <ReadoutRow>
+          {partial ? <Caption>partial ·</Caption> : null}
           <Caption>O</Caption>
           <Mono>{format(shown.open)}</Mono>
           <Caption>H</Caption>
