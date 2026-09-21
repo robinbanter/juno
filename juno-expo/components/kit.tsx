@@ -61,12 +61,38 @@ export const Ledger = styled.View`
   width: 100%;
 `;
 
-/** One entry. The rule goes above, so the first entry has none. */
-export const Entry = styled.View<{ $first?: boolean }>`
+/**
+ * A stack of separate cards, where a `Ledger` is one continuous sheet.
+ *
+ * A ledger is right when the rows are a *record* — a list of fills, a table of
+ * holders — because a shared edge is what makes them read as one document. It
+ * is wrong for a feed, where each entry is somebody's separate utterance: run
+ * together with only a hairline between them, one person's post and the next
+ * person's trade looked like paragraphs of the same thing.
+ */
+export const Stack = styled.View`
+  align-self: stretch;
+  width: 100%;
+  gap: ${(p) => p.theme.space(3)}px;
+`;
+
+/**
+ * One entry.
+ *
+ * Inside a `Ledger` the rule goes above, so the first entry has none. Inside a
+ * `Stack` each entry is its own card: `$card` gives it the surface and the
+ * radius the sheet would otherwise have provided, and drops the rule, because
+ * a gap already separates them and doing both is saying it twice.
+ */
+export const Entry = styled.View<{ $first?: boolean; $card?: boolean }>`
   padding-horizontal: ${(p) => p.theme.space(4)}px;
   padding-vertical: ${(p) => p.theme.space(4)}px;
-  border-top-width: ${(p) => (p.$first ? 0 : p.theme.hairline)}px;
+  border-top-width: ${(p) => (p.$first || p.$card ? 0 : p.theme.hairline)}px;
   border-top-color: ${(p) => p.theme.colors.line};
+  ${(p) =>
+    p.$card
+      ? `background-color: ${p.theme.colors.surface}; border-radius: ${p.theme.radius.lg}px;`
+      : ""}
 `;
 
 /**

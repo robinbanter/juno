@@ -18,12 +18,12 @@ import {
   ExternalGlyph,
   Entry,
   Label,
-  Ledger,
   Mono,
   Placeholder,
   Row,
   Segmented,
   Skeleton,
+  Stack,
   Title,
 } from "../../components/kit";
 import { juno, type FeedItem } from "../../lib/api";
@@ -181,18 +181,18 @@ export default function SocialScreen() {
         // Shaped like the ledger it precedes, on the same sheet, so the page
         // does not change structure when the content lands.
         <Loading>
-          <Ledger>
+          <Stack>
             {[0, 1, 2, 3].map((i) => (
-              <Entry key={i} $first={i === 0}>
+              <Entry key={i} $card>
                 <Row gap={10}>
-                  <Skeleton h={26} w={26} round={13} />
+                  <Skeleton h={30} w={30} round={15} />
                   <Skeleton h={13} w="38%" />
                 </Row>
                 <Skeleton h={12} w="92%" style={{ marginTop: 14 }} />
                 <Skeleton h={12} w="58%" style={{ marginTop: 8 }} />
               </Entry>
             ))}
-          </Ledger>
+          </Stack>
         </Loading>
       ) : feed.error ? (
         // A dead end with no way out of it is the worst version of this
@@ -277,18 +277,18 @@ export default function SocialScreen() {
               />
             )
           ) : (
-            <Ledger>
-              {items.map((item, index) => (
+            <Stack>
+              {items.map((item) => (
                 <FeedRow
                   key={`${item.kind}:${item.id}`}
                   item={item}
-                  first={index === 0}
+                  first={false}
                   onOpen={(mint) => router.push(`/coin/${mint}`)}
                   onOpenPost={(postId) => setReplying(postId)}
                   onOpenTrader={(target) => router.push(`/trader/${target}` as never)}
                 />
               ))}
-            </Ledger>
+            </Stack>
           )}
 
           {/* Posts are complete; trades are walked against an endpoint that
@@ -336,7 +336,7 @@ function FeedRow({
     const up = move !== null && move >= 0;
 
     return (
-      <Entry $first={first}>
+      <Entry $first={first} $card>
         <Row gap={10} align="center">
           <Byline
             onPress={() => onOpenTrader(item.actor.wallet)}
@@ -440,7 +440,7 @@ function FeedRow({
      * thing that goes somewhere else.
      */
     <Tappable onPress={() => onOpenPost(item.id)} to={0.99}>
-    <Entry $first={first}>
+    <Entry $first={first} $card>
       <Row gap={10} align="center">
         <Byline
           onPress={() => onOpenTrader(item.author.wallet)}
