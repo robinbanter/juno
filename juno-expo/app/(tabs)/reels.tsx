@@ -13,6 +13,7 @@ import {
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
   type GestureResponderEvent,
   type ViewToken,
 } from "react-native";
@@ -68,9 +69,18 @@ const DOUBLE_MS = 260;
 export default function ReelsScreen() {
   const router = useRouter();
   const { start } = useLocalSearchParams<{ start?: string }>();
-  // The container's size, not the window's: on web the app sits in a
-  // phone-width frame narrower than the window.
-  const [page, setPage] = useState({ width: 0, height: 0 });
+  /*
+   * The container's size, not the window's: on web the app sits in a
+   * phone-width frame narrower than the window. It starts as the window's
+   * size, capped to that frame, and is corrected by the first layout — so the
+   * feed does not sit on "Loading" waiting for a measurement that a
+   * backgrounded browser tab may never deliver.
+   */
+  const window_ = useWindowDimensions();
+  const [page, setPage] = useState(() => ({
+    width: Platform.OS === "web" ? Math.min(window_.width, 480) : window_.width,
+    height: window_.height,
+  }));
   const pageH = page.height;
   const width = page.width;
 

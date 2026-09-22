@@ -248,6 +248,10 @@ export function PriceLine({
               </>
             ) : null}
           </Svg>
+        ) : series.length >= 2 ? (
+          // Enough to draw, not yet measured. An empty plot until the width
+          // arrives — this said "No trades yet." over a coin with thirteen.
+          <Empty />
         ) : (
           <Empty>
             <Caption>

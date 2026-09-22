@@ -6,7 +6,7 @@ import styled from "styled-components/native";
 
 import { CoinArt, Identicon } from "../../components/art";
 import { Tappable } from "../../components/Press";
-import { TradeSheet } from "../../components/TradeSheet";
+import { QuickTrade } from "../../components/QuickTrade";
 import {
   Body,
   Button,
@@ -67,8 +67,14 @@ export default function TraderScreen() {
 
   const [copying, setCopying] = useState<Coin | null>(null);
 
-  const stats = useApi(() => juno.followStats(target, me.address), [target, me.address]);
-  const portfolio = useApi(() => juno.portfolio(target), [target]);
+  // A malformed address owns nothing and has no page. Checked before any read,
+  // so a bad link gets a way out rather than a "Try again" that cannot work.
+  const valid = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(target ?? "");
+  const stats = useApi(
+    () => (valid ? juno.followStats(target, me.address) : Promise.resolve(null)),
+    [target, me.address, valid],
+  );
+  const portfolio = useApi(() => (valid ? juno.portfolio(target) : Promise.resolve(null)), [target, valid]);
   /*
    * The board is read whole and this wallet picked out of it.
    *
@@ -88,9 +94,11 @@ export default function TraderScreen() {
 
   useEffect(() => {
     if (!stats.data) return;
-    setFollows(stats.data.viewerFollows);
+    // No wallet yet means "not following" — a Follow that creates the wallet
+    // on the way — rather than an unknown that disabled the button for good.
+    setFollows(stats.data.viewerFollows ?? (me.address ? null : false));
     setFollowers(stats.data.followers);
-  }, [stats.data]);
+  }, [stats.data, me.address]);
 
   /**
    * Follow, optimistically, with the count moving too.
@@ -100,7 +108,7 @@ export default function TraderScreen() {
    * either one being briefly wrong.
    */
   const toggleFollow = useCallback(async () => {
-    if (!me.address || follows === null || saving) return;
+    if (follows === null || saving) return;
     const next = !follows;
     const before = { follows, followers };
     setSaving(true);
@@ -108,7 +116,8 @@ export default function TraderScreen() {
     setFollows(next);
     setFollowers((count) => (count === null ? count : Math.max(0, count + (next ? 1 : -1))));
     try {
-      const result = await juno.setFollow(me.address, target, next);
+      const address = me.address ?? (await me.connect());
+      const result = await juno.setFollow(address, target, next);
       // The server's count is authoritative — it has seen every other follow.
       setFollowers(result.followers);
       setFollows(result.isFollowing);
@@ -119,10 +128,27 @@ export default function TraderScreen() {
     } finally {
       setSaving(false);
     }
-  }, [me.address, follows, followers, saving, target]);
+  }, [me, follows, followers, saving, target]);
 
   const self = me.address === target;
   const positions = portfolio.data?.positions ?? [];
+
+  if (!valid) {
+    return (
+      <Page edges={["top"]}>
+        <Nav>
+          <Back onPress={() => router.back()} hitSlop={12} accessibilityRole="button">
+            <ChevronLeft />
+          </Back>
+        </Nav>
+        <Placeholder
+          title="No such wallet"
+          detail="That is not a Solana address. The link may be cut short."
+          action={<Button label="Back to the feed" onPress={() => router.replace("/(tabs)/social" as never)} />}
+        />
+      </Page>
+    );
+  }
 
   return (
     <Page edges={["top"]}>
@@ -178,7 +204,7 @@ export default function TraderScreen() {
               label={follows === null ? "…" : follows ? "Following" : "Follow"}
               variant={follows ? "quiet" : "lime"}
               loading={saving}
-              disabled={follows === null || !me.address}
+              disabled={follows === null}
               onPress={() => void toggleFollow()}
               style={{ marginTop: 10, minWidth: 160 }}
             />
@@ -300,7 +326,7 @@ export default function TraderScreen() {
       </ScrollView>
 
       {copying ? (
-        <TradeSheet
+        <QuickTrade
           coin={copying}
           side="buy"
           onClose={() => setCopying(null)}

@@ -55,15 +55,32 @@ import type { CurvePresetId, TradeSide } from "./types";
 const PACKET_LIMIT = 1232;
 
 /**
- * Where a launch starts and where it graduates, in quote-token terms.
+ * Where a launch starts and where it graduates, **in US dollars**.
  *
  * Market caps are a launch parameter rather than a property of the curve
- * preset — the same shape can be opened at any size. These mirror the defaults
- * the web launch form and `npm run juno:launch` already use, so a coin launched
- * from the phone is the same coin launched from anywhere else.
+ * preset — the same shape can be opened at any size. The curve takes them in
+ * quote-token units, and these were passed straight through: right for a
+ * USDC pool, and 1,000 *SOL* for a SOL one. Every coin launched from the
+ * phone — which launches in SOL — opened at a ~$118k market cap and would
+ * only graduate at ~$3M. They are dollars now, converted at the quote
+ * token's live price when the launch is built.
  */
-const DEFAULT_INITIAL_MARKET_CAP = 1_000;
-const DEFAULT_MIGRATION_MARKET_CAP = 25_000;
+const DEFAULT_INITIAL_MARKET_CAP_USD = 1_000;
+const DEFAULT_MIGRATION_MARKET_CAP_USD = 25_000;
+
+/** The default market caps restated in this quote token's units. */
+async function defaultCapsIn(quoteMint: string): Promise<{ initial: number; migration: number }> {
+  const usd = await quoteTokenUsdPrice(quoteMint).catch(() => null);
+  if (usd === null || !(usd > 0)) {
+    throw new CallerError(
+      "The quote token's price could not be read, so the launch size cannot be set. Try again in a moment.",
+    );
+  }
+  return {
+    initial: DEFAULT_INITIAL_MARKET_CAP_USD / usd,
+    migration: DEFAULT_MIGRATION_MARKET_CAP_USD / usd,
+  };
+}
 
 export type UnsignedTransaction = {
   /** Base64 of the serialised, not-yet-fully-signed transaction. */
@@ -238,6 +255,13 @@ export async function buildLaunch(
 
   const creator = new PublicKey(request.creator);
 
+  // Explicit caps are taken as given, in quote units — the scripts rely on
+  // that. Only the defaults are dollars, converted here.
+  const caps =
+    request.initialMarketCap === undefined || request.migrationMarketCap === undefined
+      ? await defaultCapsIn(quote.mint)
+      : null;
+
   const plan = await planLaunch({
     payer: creator,
     creator,
@@ -246,8 +270,8 @@ export async function buildLaunch(
     symbol: request.symbol,
     uri: request.uri,
     preset: request.preset,
-    initialMarketCap: request.initialMarketCap ?? DEFAULT_INITIAL_MARKET_CAP,
-    migrationMarketCap: request.migrationMarketCap ?? DEFAULT_MIGRATION_MARKET_CAP,
+    initialMarketCap: request.initialMarketCap ?? caps!.initial,
+    migrationMarketCap: request.migrationMarketCap ?? caps!.migration,
   } satisfies LaunchRequest);
 
   // One blockhash for both steps. They are signed together on the device and
