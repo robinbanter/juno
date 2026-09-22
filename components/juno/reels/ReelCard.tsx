@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { Heart, MessageCircle, Play, Share2, Volume2, VolumeX } from "lucide-react";
+import { Check, Heart, MessageCircle, Play, Share2, Volume2, VolumeX } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { compact, money, usd } from "@/lib/juno/format";
@@ -144,6 +144,38 @@ function ReelSideRail({
   onLike: () => void;
   onToggleMuted: () => void;
 }) {
+
+  /*
+   * Share copies the link to this coin.
+   *
+   * `navigator.share` is the better affordance on a phone, but it only exists
+   * in a secure context and throws if the viewer dismisses the sheet, so the
+   * clipboard is the fallback and the dismissal is not an error. Either way
+   * the icon confirms for a moment, because a share control that gives no
+   * feedback reads as another dead button.
+   */
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) return;
+    const timer = setTimeout(() => setCopied(false), 1600);
+    return () => clearTimeout(timer);
+  }, [copied]);
+
+  async function onShare() {
+    const url = `${window.location.origin}/coin/${coin.address}`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: coin.name, url });
+        return;
+      }
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+    } catch {
+      // A dismissed share sheet and a blocked clipboard are both "nothing
+      // happened", not failures worth shouting about.
+    }
+  }
+
   return (
     <div className="absolute right-3 bottom-32 z-10 flex flex-col items-center gap-5 sm:right-5">
       {/*
@@ -166,12 +198,28 @@ function ReelSideRail({
         />
       </ReelAction>
 
-      <ReelAction label="Comments" count={coin.commentCount}>
+      {/*
+        Both of these used to be drawn and wired to nothing.
+        
+        A count sat under the comment icon, so it looked like the most
+        clickable thing on the card, and tapping it did nothing at all —
+        the one interaction a viewer is most likely to try on a reel. An
+        ornament shaped exactly like a control is worse than no control.
+      */}
+      <ReelAction
+        label="Comments"
+        count={coin.commentCount}
+        href={`/coin/${coin.address}?tab=comments`}
+      >
         <MessageCircle size={26} className="text-white" />
       </ReelAction>
 
-      <ReelAction label="Share">
-        <Share2 size={24} className="text-white" />
+      <ReelAction label={copied ? "Link copied" : "Share"} onClick={onShare}>
+        {copied ? (
+          <Check size={24} className="text-j-pos" />
+        ) : (
+          <Share2 size={24} className="text-white" />
+        )}
       </ReelAction>
 
       <ReelAction label={muted ? "Unmute" : "Mute"} onClick={onToggleMuted}>
@@ -185,31 +233,51 @@ function ReelSideRail({
   );
 }
 
+/**
+ * One rail control, as a button or as a link.
+ *
+ * An action that navigates is a link — so it opens in a new tab on
+ * middle-click, has a real destination in the status bar, and is announced as
+ * a link rather than as a button that mysteriously changes the page.
+ */
 function ReelAction({
   label,
   count,
   onClick,
+  href,
   children,
 }: {
   label: string;
   count?: number;
   onClick?: () => void;
+  href?: string;
   children: React.ReactNode;
 }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={label}
-      title={label}
-      className="flex flex-col items-center gap-1 rounded-full transition-transform active:scale-90 focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none"
-    >
+  const className =
+    "flex flex-col items-center gap-1 rounded-full transition-transform active:scale-90 focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none";
+
+  const inner = (
+    <>
       {children}
       {count !== undefined && (
         <span className="text-[11px] font-semibold text-white tabular-nums drop-shadow">
           {compact(count, 1)}
         </span>
       )}
+    </>
+  );
+
+  if (href) {
+    return (
+      <Link href={href} aria-label={label} title={label} className={className}>
+        {inner}
+      </Link>
+    );
+  }
+
+  return (
+    <button type="button" onClick={onClick} aria-label={label} title={label} className={className}>
+      {inner}
     </button>
   );
 }
@@ -227,7 +295,7 @@ function ReelFooter({ coin, onBuy }: { coin: Coin; onBuy: () => void }) {
   return (
     <div className="absolute inset-x-0 bottom-0 z-10 flex flex-col gap-3 p-4 pr-20 pb-6 sm:pr-24">
       <Link
-        href={`/creator/${coin.creator.handle}`}
+        href={`/creator/${coin.creator.wallet}`}
         className="flex w-fit items-center gap-2 rounded-full focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none"
       >
         <Avatar src={coin.creator.avatarUrl} alt={coin.creator.handle} size={32} />

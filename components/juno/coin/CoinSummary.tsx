@@ -39,7 +39,7 @@ export function CoinSummary({
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-2">
         <Link
-          href={`/creator/${coin.creator.handle}`}
+          href={`/creator/${coin.creator.wallet}`}
           className="flex min-w-0 items-center gap-2 rounded-full transition-opacity hover:opacity-70"
         >
           <Avatar src={coin.creator.avatarUrl} alt={coin.creator.displayName} size={24} />

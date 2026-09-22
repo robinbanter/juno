@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
 import { cn } from "@/lib/utils";
 import { money, percent, shortAddress, since, tokenAmount, usd } from "@/lib/juno/format";
@@ -13,6 +14,8 @@ import { CommentComposer } from "./CommentComposer";
 import { EconomicsPanel } from "./EconomicsPanel";
 
 type TabId = "activity" | "holders" | "comments" | "details";
+
+const TAB_IDS: readonly TabId[] = ["activity", "holders", "comments", "details"];
 
 export function CoinTabs({
   coin,
@@ -27,7 +30,31 @@ export function CoinTabs({
   holders: HolderBook | null;
   comments: Comment[];
 }) {
-  const [tab, setTab] = useState<TabId>("activity");
+  /*
+   * The tab is addressable.
+   *
+   * A reel's comment button, a shared link, a notification — all of them want
+   * to land on one particular tab of this page, and without a param in the URL
+   * the only thing they could do was drop you on Activity and leave you to
+   * find it. The native app has had `useLinkedState` for this; the web page
+   * had nothing.
+   *
+   * Seeded from the param and then kept in step with it, because seeding alone
+   * does nothing when the screen is already mounted — Next reuses this
+   * component across a client-side navigation, `useState` runs once, and the
+   * tab would simply not move.
+   */
+  const params = useSearchParams();
+  const asked = params.get("tab");
+  const linked = TAB_IDS.includes(asked as TabId) ? (asked as TabId) : null;
+
+  const [tab, setTab] = useState<TabId>(linked ?? "activity");
+  const applied = useRef<TabId | null>(linked);
+  useEffect(() => {
+    if (linked === null || linked === applied.current) return;
+    applied.current = linked;
+    setTab(linked);
+  }, [linked]);
   // Seeded from the server render, then extended optimistically as the
   // visitor posts — so their own comment never waits on a refetch.
   const [posted, setPosted] = useState<Comment[]>([]);
