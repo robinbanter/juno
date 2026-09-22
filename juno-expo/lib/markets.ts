@@ -94,7 +94,7 @@ export function loadMarkets(viewer?: string | null) {
 }
 
 async function readMarkets(viewer?: string | null) {
-  const { coins, missing } = await juno.coins(undefined, { viewer });
+  const { coins, missing } = await juno.coins(undefined, { social: true, viewer, nav: true });
   const needsTessera = coins.some((coin) => coin.reference === undefined);
   const tessera = needsTessera ? await juno.tessera().catch(() => null) : null;
   const tesseraMarkets = new Set(

@@ -197,18 +197,30 @@ export default function TradeScreen() {
               );
             }
             return (
-              <Ledger>
-                {list.map((coin, index) => (
-                  <MarketRow
+              <View style={{ gap: 14 }}>
+                {sort === "stocks" ? (
+                  <Intro
+                    pill="Priced by Pyth"
+                    title="Listed names, on a curve."
+                    body="Each tracker is a Meteora bonding curve, marked against the stock's live Pyth price."
+                  />
+                ) : (
+                  <Intro
+                    pill="Launched on DBC"
+                    title="Every post is a market."
+                    body="Posts and reels launched as coins. Early buyers ride the curve; creators earn the fees."
+                  />
+                )}
+                {list.map((coin) => (
+                  <MarketCard
                     key={coin.address}
                     coin={coin}
-                    first={index === 0}
                     stock={sort === "stocks"}
                     onOpen={() => router.push(`/coin/${coin.address}`)}
                     onTrade={() => setTrade(coin)}
                   />
                 ))}
-              </Ledger>
+              </View>
             );
           })()}
         </ScrollView>
@@ -231,7 +243,15 @@ export default function TradeScreen() {
 }
 
 /** What this list is, once, in the app's one dark panel. */
-function Intro() {
+function Intro({
+  pill = "Marked by Tessera",
+  title = "Own the curve before the IPO.",
+  body = "Companies that have not listed yet, each with a Meteora bonding curve priced against its Tessera mark.",
+}: {
+  pill?: string;
+  title?: string;
+  body?: string;
+}) {
   return (
     <View style={styles.intro}>
       <Svg style={StyleSheet.absoluteFill} width="100%" height="100%">
@@ -245,13 +265,10 @@ function Intro() {
       </Svg>
       <View style={styles.introPill}>
         <View style={styles.introDot} />
-        <Text style={styles.introPillText}>Marked by Tessera</Text>
+        <Text style={styles.introPillText}>{pill}</Text>
       </View>
-      <Text style={styles.introTitle}>Own the curve before the IPO.</Text>
-      <Text style={styles.introBody}>
-        Companies that have not listed yet, each with a Meteora bonding curve priced against its
-        Tessera mark.
-      </Text>
+      <Text style={styles.introTitle}>{title}</Text>
+      <Text style={styles.introBody}>{body}</Text>
     </View>
   );
 }
@@ -352,10 +369,14 @@ function CompanyCard({
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({ label, value, tone }: { label: string; value: string; tone?: "pos" | "neg" }) {
   return (
     <View style={{ flex: 1, gap: 3 }}>
-      <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit>
+      <Text
+        style={[styles.statValue, tone ? { color: tone === "pos" ? theme.colors.pos : theme.colors.neg } : null]}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+      >
         {value}
       </Text>
       <Text style={styles.statLabel}>{label}</Text>
@@ -363,16 +384,33 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
-/** One market, as a line: identity, worth, curve — and the way in. */
-function MarketRow({
+/** The company behind a listed ticker, where the tracker's own name is only "NVDAx Issuance". */
+const LISTED: Record<string, { name: string; venue: string }> = {
+  AAPL: { name: "Apple", venue: "Nasdaq" },
+  MSFT: { name: "Microsoft", venue: "Nasdaq" },
+  NVDA: { name: "NVIDIA", venue: "Nasdaq" },
+  TSLA: { name: "Tesla", venue: "Nasdaq" },
+  AMZN: { name: "Amazon", venue: "Nasdaq" },
+  GOOGL: { name: "Alphabet", venue: "Nasdaq" },
+  META: { name: "Meta", venue: "Nasdaq" },
+};
+
+/**
+ * One market, as a card — the same shape as a pre-IPO company.
+ *
+ * A stock card leads with the thing the tracker is *of*: the company, its
+ * live Pyth price, and how far the curve sits from that price. A meme card
+ * leads with the post: its art, who made it, and the social numbers that are
+ * the only fundamentals a meme has. Both end on the curve and the Trade
+ * button, because that part is the same product either way.
+ */
+function MarketCard({
   coin,
-  first,
   stock,
   onOpen,
   onTrade,
 }: {
   coin: Coin;
-  first: boolean;
   stock: boolean;
   onOpen: () => void;
   onTrade: () => void;
@@ -380,35 +418,94 @@ function MarketRow({
   const pct = coin.curve.progress * 100;
   // `Equity.US.NVDA/USD` → `NVDA`: the ticker is what a trader reads.
   const ticker = stock && coin.reference ? coin.reference.id.split(".").pop()?.split("/")[0] ?? null : null;
+  const listed = ticker ? LISTED[ticker] : undefined;
+  const nav = coin.nav ?? null;
+  const deviation = nav?.deviation ?? null;
 
   return (
     <Tappable onPress={onOpen} to={0.985}>
-      <Entry $first={first}>
-        <Row gap={12}>
+      <View style={styles.company}>
+        <View style={styles.companyHead}>
           {stock ? (
             <View style={styles.tickerTile}>
               {/* Sized by length rather than `adjustsFontSizeToFit`, which web ignores. */}
               <Text
-                style={[styles.tickerTileText, { fontSize: (ticker ?? coin.symbol).length > 3 ? 11 : 14 }]}
+                style={[styles.tickerTileText, { fontSize: (ticker ?? coin.symbol).length > 3 ? 12 : 15 }]}
                 numberOfLines={1}
               >
                 {(ticker ?? coin.symbol).slice(0, 4)}
               </Text>
             </View>
           ) : (
-            <CoinArt uri={juno.still(coin.media)} seed={coin.address} size={44} radius={14} />
+            <CoinArt uri={juno.still(coin.media)} seed={coin.address} size={48} radius={14} />
           )}
-          <Col gap={2} style={{ flex: 1 }}>
-            <Label numberOfLines={1} style={{ fontWeight: "700" }}>
-              {coin.name}
-            </Label>
-            <Caption numberOfLines={1}>
-              ${coin.symbol} · {stock ? `Pyth ${ticker ?? ""}`.trim() : coin.curvePreset} ·{" "}
-              {money(coin.marketCap, coin.marketCapCurrency)}
-            </Caption>
-          </Col>
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={styles.companyName} numberOfLines={1}>
+              {stock ? (listed?.name ?? coin.name) : coin.name}
+            </Text>
+            <Text style={styles.companySector} numberOfLines={1}>
+              {stock
+                ? `${listed?.venue ?? "Listed"} · ${ticker ?? coin.symbol} · Pyth`
+                : `by ${coin.creator.handle} · ${coin.format === "reel" ? "reel" : "post"}`}
+            </Text>
+          </View>
+          <View style={[styles.preBadge, stock ? styles.badgeInk : styles.badgeHeart]}>
+            <Text style={[styles.preBadgeText, stock ? styles.badgeInkText : styles.badgeHeartText]}>
+              {stock ? "LISTED" : coin.format === "reel" ? "REEL" : "MEME"}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.stats}>
+          {stock ? (
+            <>
+              {/* Absent, not zero, when the feed did not answer — or when the
+                  server predates the reference read. */}
+              <Stat
+                label={nav?.state === "closed" ? "Last close" : "Pyth price"}
+                value={nav ? money(nav.priceUsd, "USD", { compact: false }) : "—"}
+              />
+              <View style={styles.statRule} />
+              <Stat label="Market cap" value={money(coin.marketCap, coin.marketCapCurrency)} />
+              <View style={styles.statRule} />
+              <Stat
+                label="Curve vs price"
+                value={deviation === null ? "—" : `${deviation >= 0 ? "+" : ""}${(deviation * 100).toFixed(2)}%`}
+                tone={deviation === null ? undefined : nav?.withinBand ? "pos" : "neg"}
+              />
+            </>
+          ) : (
+            <>
+              <Stat label="Market cap" value={money(coin.marketCap, coin.marketCapCurrency)} />
+              <View style={styles.statRule} />
+              <Stat label="Likes" value={coin.likes === undefined ? "—" : count(coin.likes) || "0"} />
+              <View style={styles.statRule} />
+              <Stat label="Replies" value={coin.commentCount === undefined ? "—" : count(coin.commentCount) || "0"} />
+            </>
+          )}
+        </View>
+
+        <View style={styles.market}>
+          <View style={{ flex: 1, gap: 6 }}>
+            <Text style={styles.marketName} numberOfLines={1}>
+              ${coin.symbol} <Text style={styles.marketPreset}>{coin.curvePreset}</Text>
+            </Text>
+            <View style={styles.rowCurve}>
+              <View style={styles.rowTrack}>
+                <View
+                  style={[
+                    styles.rowFill,
+                    { width: `${coin.curve.graduated ? 100 : pct > 0 ? Math.max(2, Math.min(100, pct)) : 0}%` },
+                  ]}
+                />
+              </View>
+              <Text style={styles.marketMeta}>
+                {coin.curve.graduated ? "Graduated" : `${pct.toFixed(pct < 1 && pct > 0 ? 2 : 0)}%`}
+              </Text>
+            </View>
+          </View>
           {coin.curve.graduated ? (
-            <Pill label="Graduated" />
+            <Pill label="On DAMM v2" />
           ) : (
             <Tappable onPress={onTrade} to={0.94}>
               <View style={styles.tradeButton} accessibilityRole="button" accessibilityLabel={`Trade $${coin.symbol}`}>
@@ -416,19 +513,8 @@ function MarketRow({
               </View>
             </Tappable>
           )}
-        </Row>
-        <View style={styles.rowCurve}>
-          <View style={styles.rowTrack}>
-            <View
-              style={[
-                styles.rowFill,
-                { width: `${coin.curve.graduated ? 100 : pct > 0 ? Math.max(2, Math.min(100, pct)) : 0}%` },
-              ]}
-            />
-          </View>
-          <Caption>{coin.curve.graduated ? "Graduated" : `${pct.toFixed(pct < 1 && pct > 0 ? 2 : 0)}%`}</Caption>
         </View>
-      </Entry>
+      </View>
     </Tappable>
   );
 }
@@ -482,6 +568,10 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.limeSoft,
   },
   preBadgeText: { fontSize: 10, fontWeight: "900", letterSpacing: 0.6, color: theme.colors.onLime },
+  badgeInk: { backgroundColor: theme.colors.ink },
+  badgeInkText: { color: theme.colors.lime },
+  badgeHeart: { backgroundColor: "rgba(255,45,111,0.12)" },
+  badgeHeartText: { color: theme.colors.heart },
 
   stats: {
     flexDirection: "row",
@@ -512,8 +602,8 @@ const styles = StyleSheet.create({
   tradeText: { fontSize: 14, fontWeight: "800", color: theme.colors.onLime },
 
   tickerTile: {
-    width: 44,
-    height: 44,
+    width: 48,
+    height: 48,
     borderRadius: 14,
     padding: 4,
     alignItems: "center",
@@ -522,7 +612,7 @@ const styles = StyleSheet.create({
   },
   tickerTileText: { fontSize: 13, fontWeight: "900", color: theme.colors.lime, letterSpacing: -0.2 },
 
-  rowCurve: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 12 },
+  rowCurve: { flexDirection: "row", alignItems: "center", gap: 10 },
   rowTrack: { flex: 1, height: 4, borderRadius: 2, backgroundColor: theme.colors.line, overflow: "hidden" },
   rowFill: { height: 4, borderRadius: 2, backgroundColor: theme.colors.pos },
 });

@@ -384,10 +384,12 @@ export default function CoinScreen() {
           {/* Say something, or take a position. The two things this screen is
               for, always within reach of a thumb. */}
           <Actions>
-            <Tappable onPress={() => setCommentsOpen(true)} to={0.97} style={{ flex: 1 }}>
+            {/* The glyph alone. The word beside it was the one label on a bar
+                whose other half says Buy, and it read as a second primary
+                action competing with the one that matters. */}
+            <Tappable onPress={() => setCommentsOpen(true)} to={0.94}>
               <PostTap accessibilityRole="button" accessibilityLabel="Comment on this coin">
                 <PostGlyph />
-                <PostText>Post</PostText>
               </PostTap>
             </Tappable>
             {coin.curve.graduated ? (
@@ -398,7 +400,7 @@ export default function CoinScreen() {
                 variant="lime"
                 tall
                 onPress={() => setSheet("buy")}
-                style={{ flex: 1.4 }}
+                style={{ flex: 1 }}
               />
             )}
           </Actions>
@@ -864,7 +866,7 @@ function CopyGlyph() {
 
 function PostGlyph() {
   return (
-    <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+    <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
       <Path
         d="M20 12.4c0 3.9-3.6 7-8 7a9 9 0 0 1-2.4-.3L5 21l1.2-3.3A6.6 6.6 0 0 1 4 12.4c0-3.9 3.6-7 8-7s8 3.1 8 7z"
         stroke={theme.colors.text}
@@ -1129,20 +1131,12 @@ const Actions = styled.View`
 `;
 
 const PostTap = styled.View`
-  flex-direction: row;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  width: 54px;
   height: 54px;
   border-radius: ${(p) => p.theme.radius.pill}px;
   background-color: ${(p) => p.theme.colors.surfaceAlt};
-`;
-
-const PostText = styled.Text`
-  font-size: ${(p) => p.theme.type.lead.size}px;
-  font-weight: 800;
-  letter-spacing: ${(p) => p.theme.type.lead.tracking}px;
-  color: ${(p) => p.theme.colors.text};
 `;
 
 const GraduatedNote = styled.Text`

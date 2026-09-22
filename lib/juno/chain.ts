@@ -211,6 +211,15 @@ export async function hydratePool(
      * visitor sees a priced market immediately instead of a spinner.
      */
     history?: boolean;
+    /**
+     * Read the NAV reference without the rest of the detailed set.
+     *
+     * A list of stock trackers is pointless without the stock's price, and
+     * the reference is one Pyth account read — nothing like the holder and
+     * history walks `detailed` also pays for. It only costs anything on rows
+     * that name a reference; a post has none and skips it.
+     */
+    nav?: boolean;
   } = {},
 ): Promise<Coin | null> {
   // Null means no USD feed. The pool is then reported in its own quote token
@@ -259,7 +268,7 @@ export async function hydratePool(
           : null,
         navFor(row, priceUsd, preset).catch(() => null),
       ]).catch(() => [null, null, null, null] as const)
-    : [null, null, null, null];
+    : [null, null, null, options.nav ? await navFor(row, priceUsd, preset).catch(() => null) : null];
 
   // null, not 0: `largest` is null when the RPC refused, and "0 holders" is
   // a claim we would not have earned.
@@ -515,6 +524,7 @@ export async function globalActivity(
 export async function hydratePools(
   rows: JunoPoolRow[],
   width = 2,
+  options: { nav?: boolean } = {},
 ): Promise<{ coins: Coin[]; missing: number }> {
   const out: Array<Coin | null> = new Array(rows.length).fill(null);
   let cursor = 0;
@@ -522,7 +532,7 @@ export async function hydratePools(
   async function worker() {
     while (cursor < rows.length) {
       const index = cursor++;
-      out[index] = await hydratePool(rows[index]).catch(() => null);
+      out[index] = await hydratePool(rows[index], { nav: options.nav }).catch(() => null);
     }
   }
 

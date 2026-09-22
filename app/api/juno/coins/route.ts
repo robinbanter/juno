@@ -21,7 +21,10 @@ export async function GET(request: Request) {
     const limit = Math.min(Number(url.searchParams.get("limit") ?? 40) || 40, 60);
     const sort = url.searchParams.get("sort");
 
-    const { coins, missing } = await hydratePools(await listPools(limit));
+    // `?nav=1`: each tracker's reference price too — see `hydratePool`.
+    const { coins, missing } = await hydratePools(await listPools(limit), 2, {
+      nav: url.searchParams.get("nav") === "1",
+    });
 
     if (sort === "marketCap") {
       coins.sort((a, b) => b.marketCap - a.marketCap);

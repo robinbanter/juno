@@ -574,8 +574,13 @@ export const juno = {
 
   coins: (
     sort?: "marketCap" | "graduating",
-    /** Likes and comment counts too, and whether `viewer` liked each. */
-    social?: { viewer?: string | null },
+    extra?: {
+      /** Likes and comment counts too, and whether `viewer` liked each. */
+      social?: boolean;
+      viewer?: string | null;
+      /** Each tracker's reference price — a Pyth or Tessera read per tracker. */
+      nav?: boolean;
+    },
   ) =>
     api.get<{
       cluster: string;
@@ -584,8 +589,8 @@ export const juno = {
       missing: number;
     }>(
       `/api/juno/coins?limit=40${sort ? `&sort=${sort}` : ""}${
-        social ? `&social=1${social.viewer ? `&viewer=${social.viewer}` : ""}` : ""
-      }`,
+        extra?.social ? `&social=1${extra.viewer ? `&viewer=${extra.viewer}` : ""}` : ""
+      }${extra?.nav ? "&nav=1" : ""}`,
     ),
 
   /** Pre-IPO companies from Tessera, each with the Juno markets marked against it. */
