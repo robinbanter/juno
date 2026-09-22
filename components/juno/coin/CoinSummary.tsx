@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Check, Coins, Copy, DollarSign, Flame, MoreHorizontal, Share } from "lucide-react";
+import { Check, Coins, Copy, DollarSign, Flame, Share } from "lucide-react";
 
 import { CURVE_PRESETS } from "@/lib/juno/curves";
 import { compact, money } from "@/lib/juno/format";
@@ -52,12 +52,18 @@ export function CoinSummary({
               {compact(coin.holders, 1)} holders
             </span>
           )}
-          <IconButton label="Share" className="size-9 border-0">
-            <Share size={17} strokeWidth={1.75} />
-          </IconButton>
-          <IconButton label="More options" className="size-9 border-0">
-            <MoreHorizontal size={17} strokeWidth={1.75} />
-          </IconButton>
+          {/*
+            Share works; "More options" is gone.
+
+            Both were drawn and wired to nothing, at the top of the page a
+            judge lands on first. Share had somewhere obvious to go, so it goes
+            there. "More options" had no menu behind it and nothing to put in
+            one — every link it might plausibly have held (pool, mint, config,
+            launch transaction) is already a labelled row further down this
+            same column. A button that opens nothing is worse than the space
+            it occupied.
+          */}
+          <ShareCoin address={coin.address} />
         </div>
       </div>
 
@@ -124,6 +130,42 @@ export function CoinSummary({
         </div>
       )}
     </div>
+  );
+}
+
+/** Copies a link to this coin, and says so for a moment. */
+function ShareCoin({ address }: { address: string }) {
+  const [copied, setCopied] = useState(false);
+
+  return (
+    <IconButton
+      label={copied ? "Link copied" : "Share"}
+      className="size-9 border-0"
+      onClick={async () => {
+        const url = `${window.location.origin}/coin/${address}`;
+        try {
+          // The share sheet where there is one — it is the better affordance
+          // on a phone, and it throws rather than resolving when the viewer
+          // dismisses it, which is not a failure.
+          if (navigator.share) {
+            await navigator.share({ url });
+            return;
+          }
+          await navigator.clipboard.writeText(url);
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1500);
+        } catch {
+          // Dismissed, or a clipboard blocked without a gesture. Nothing
+          // happened, and nothing needs saying about it.
+        }
+      }}
+    >
+      {copied ? (
+        <Check size={17} strokeWidth={1.75} className="text-j-pos" />
+      ) : (
+        <Share size={17} strokeWidth={1.75} />
+      )}
+    </IconButton>
   );
 }
 

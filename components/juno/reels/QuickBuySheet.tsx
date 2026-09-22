@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 
@@ -7,7 +8,7 @@ import { cn } from "@/lib/utils";
 import { tokenAmount, usd } from "@/lib/juno/format";
 import type { Coin } from "@/lib/juno/types";
 import { Avatar } from "../ui/Avatar";
-import { Button } from "../ui/Button";
+import { buttonClass } from "../ui/Button";
 import { Delta } from "../ui/Delta";
 
 const PRESETS = [2, 20, 50, 100];
@@ -43,7 +44,21 @@ export function QuickBuySheet({
 
   if (!coin) return null;
 
-  const estimated = coin.priceUsd > 0 ? amount / coin.priceUsd : 0;
+  /*
+   * What this buys at the price on screen — an approximation, labelled.
+   *
+   * This divides an amount by the spot price, which is a straight line through
+   * a bonding curve. It is close for a small buy and progressively wrong for a
+   * large one, and it does not include the fee. The sheet used to print it as
+   * a flat "You receive" figure under a footnote claiming it "quotes price
+   * against the live curve" — a claim it never made good on, because quoting
+   * the curve needs the pool snapshot this sheet never reads.
+   *
+   * Rather than pull the whole trade machinery into a scroll-by sheet, the
+   * figure says it is approximate and the real quote lives one tap away on the
+   * coin page, where the curve actually gets asked.
+   */
+  const approximate = coin.priceUsd > 0 ? amount / coin.priceUsd : null;
 
   return (
     <div
@@ -103,18 +118,32 @@ export function QuickBuySheet({
         </div>
 
         <dl className="mt-4 flex items-center justify-between text-[14px]">
-          <dt className="text-j-muted">You receive</dt>
+          <dt className="text-j-muted">Roughly</dt>
           <dd className="font-semibold tabular-nums">
-            {tokenAmount(estimated)} {coin.symbol}
+            {approximate === null ? (
+              <span className="text-j-faint">&mdash;</span>
+            ) : (
+              <>
+                ≈ {tokenAmount(approximate)} {coin.symbol}
+              </>
+            )}
           </dd>
         </dl>
 
-        <Button variant="buy" size="lg" className="mt-4 w-full">
+        {/*
+          The sheet does not trade. It used to present a full-width "Buy $20"
+          that was wired to nothing whatsoever — the primary control on the
+          surface, dead on arrival, directly above a line promising a quote
+          against the live curve. It opens the coin page, which has the real
+          quote, the real impact figure and the wallet flow.
+        */}
+        <Link href={`/coin/${coin.address}`} className={buttonClass("buy", "lg", "mt-4 w-full")}>
           Buy {usd(amount)}
-        </Button>
+        </Link>
 
         <p className="mt-3 text-center text-[12px] text-j-faint">
-          Connect a wallet to trade. Quotes price against the live curve.
+          An estimate at the current price — it does not include price impact or
+          fees. The coin page quotes the curve itself.
         </p>
       </div>
     </div>

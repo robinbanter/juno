@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
+import { useWallet } from "@solana/wallet-adapter-react";
+import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 
 import { compact, money } from "@/lib/juno/format";
 import type { Coin, Creator } from "@/lib/juno/types";
@@ -17,6 +19,7 @@ import { ProfileTabs, type ProfileTabId } from "@/components/juno/profile/Profil
 export function ProfileView({
   creator,
   coins,
+  viewerFollows = null,
   positions = [],
   trades = [],
   portfolioPartial = false,
@@ -25,6 +28,8 @@ export function ProfileView({
 }: {
   creator: Creator;
   coins: Coin[];
+  /** Whether the signed-in viewer already follows this creator, when known. */
+  viewerFollows?: boolean | null;
   /** What this wallet holds now, from `loadPortfolio`. */
   positions?: CreatorPosition[];
   /** Every fill this wallet signed, newest first, flattened across pools. */
@@ -42,7 +47,52 @@ export function ProfileView({
   missing?: number;
 }) {
   const [tab, setTab] = useState<ProfileTabId>("posts");
-  const [following, setFollowing] = useState(false);
+  /*
+   * Following was a lie the button told itself.
+   *
+   * `onFollow` flipped this boolean and nothing else. The label changed to
+   * "Following", the visitor believed they had followed someone, and no row
+   * was written anywhere — a fabricated success state on the one action this
+   * profile exists to offer, while `/api/juno/follow` sat there working.
+   *
+   * It writes now. The optimistic flip stays, because a follow that waits on a
+   * round trip feels broken, but a failed write rolls it back rather than
+   * leaving the lie on screen.
+   */
+  const { publicKey } = useWallet();
+  const { setVisible } = useWalletModal();
+  const [following, setFollowing] = useState(viewerFollows ?? false);
+  const [busy, setBusy] = useState(false);
+
+  const onFollow = useCallback(async () => {
+    // Nobody to follow *as*. The modal is the next step, not an error.
+    if (!publicKey) {
+      setVisible(true);
+      return;
+    }
+    const next = !following;
+    setFollowing(next);
+    setBusy(true);
+    try {
+      const response = await fetch("/api/juno/follow", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          follower: publicKey.toBase58(),
+          target: creator.wallet,
+          follow: next,
+        }),
+      });
+      if (!response.ok) throw new Error(await response.text());
+      const result = (await response.json()) as { isFollowing?: boolean };
+      // The server's answer wins over the optimistic guess.
+      if (typeof result.isFollowing === "boolean") setFollowing(result.isFollowing);
+    } catch {
+      setFollowing(!next);
+    } finally {
+      setBusy(false);
+    }
+  }, [following, publicKey, setVisible, creator.wallet]);
 
   const { posts, reels } = useMemo(
     () => ({
@@ -57,7 +107,8 @@ export function ProfileView({
       <ProfileHeader
         creator={creator}
         following={following}
-        onFollow={() => setFollowing((v) => !v)}
+        onFollow={onFollow}
+        busy={busy}
       />
       <ProfileTabs value={tab} onChange={setTab} />
 

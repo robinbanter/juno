@@ -22,6 +22,32 @@ const SIZES: Record<Size, string> = {
   lg: "h-[52px] px-6 text-[16px]",
 };
 
+/**
+ * The button's own classes, for the times the element has to be something else.
+ *
+ * An action that navigates should be an `<a>` — real destination, real
+ * middle-click, announced as a link — while still looking like the button it
+ * sits beside. Exported so that case does not have to copy the class list and
+ * then drift away from it.
+ */
+export function buttonClass(
+  variant: Variant = "outline",
+  size: Size = "md",
+  className?: string,
+) {
+  return cn(
+    "inline-flex items-center justify-center gap-2 rounded-full font-semibold",
+    "transition-colors duration-150 outline-none",
+    // The offset colour must be named: it defaults to white, which draws
+    // a white halo around every focused control on a dark canvas.
+    "focus-visible:ring-2 focus-visible:ring-j-focus focus-visible:ring-offset-2 focus-visible:ring-offset-j-bg",
+    "disabled:cursor-not-allowed disabled:opacity-40",
+    VARIANTS[variant],
+    SIZES[size],
+    className,
+  );
+}
+
 export function Button({
   variant = "outline",
   size = "md",
@@ -33,17 +59,7 @@ export function Button({
 }) {
   return (
     <button
-      className={cn(
-        "inline-flex items-center justify-center gap-2 rounded-full font-semibold",
-        "transition-colors duration-150 outline-none",
-        // The offset colour must be named: it defaults to white, which draws
-        // a white halo around every focused control on a dark canvas.
-        "focus-visible:ring-2 focus-visible:ring-j-focus focus-visible:ring-offset-2 focus-visible:ring-offset-j-bg",
-        "disabled:cursor-not-allowed disabled:opacity-40",
-        VARIANTS[variant],
-        SIZES[size],
-        className,
-      )}
+      className={buttonClass(variant, size, className)}
       {...props}
     />
   );

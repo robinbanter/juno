@@ -1,11 +1,11 @@
 "use client";
 
-import { Bell, ChevronDown, Mail, MoreHorizontal } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
 import { compact } from "@/lib/juno/format";
 import type { Creator } from "@/lib/juno/types";
 import { Avatar } from "../ui/Avatar";
-import { Button, IconButton } from "../ui/Button";
+import { Button } from "../ui/Button";
 import { Delta } from "../ui/Delta";
 
 /**
@@ -15,15 +15,14 @@ import { Delta } from "../ui/Delta";
 export function ProfileHeader({
   creator,
   following = false,
-  onBuy,
   onFollow,
-  onMessage,
+  busy = false,
 }: {
   creator: Creator;
   following?: boolean;
-  onBuy?: () => void;
   onFollow?: () => void;
-  onMessage?: () => void;
+  /** A follow write is in flight; the button says so rather than flickering. */
+  busy?: boolean;
 }) {
   return (
     <section className="px-4 pt-2 sm:px-0">
@@ -34,23 +33,20 @@ export function ProfileHeader({
           <h1 className="truncate text-[26px] leading-tight font-bold tracking-tight">
             ${creator.ticker}
           </h1>
-          <button
-            type="button"
-            className="-ml-0.5 mt-0.5 flex items-center gap-1 rounded px-0.5 text-[14px] text-j-muted transition-colors hover:text-j-ink focus-visible:ring-2 focus-visible:ring-j-focus focus-visible:outline-none"
-          >
-            <span className="truncate">{creator.displayName}</span>
-            <ChevronDown size={15} aria-hidden="true" />
-          </button>
+          {/* Was a button with a disclosure chevron and no handler — the
+              chevron promised a menu that did not exist. It is the wallet's
+              short address, so it is text. */}
+          <p className="mt-0.5 truncate text-[14px] text-j-muted">{creator.displayName}</p>
         </div>
 
-        <div className="flex shrink-0 items-center gap-2">
-          <IconButton label="Notify me about this creator">
-            <Bell size={19} strokeWidth={1.75} />
-          </IconButton>
-          <IconButton label="More options">
-            <MoreHorizontal size={19} strokeWidth={1.75} />
-          </IconButton>
-        </div>
+        {/*
+          A bell and an overflow menu used to sit here, both wired to nothing.
+          Notifications for a creator are not stored anywhere — there is no
+          subscription table and no delivery — so the bell was an offer this
+          app cannot keep, and the menu had no items. Removed rather than left
+          as decoration; Follow beside them is the real subscription, and it
+          persists.
+        */}
       </div>
 
       {creator.bio && (
@@ -99,21 +95,26 @@ export function ProfileHeader({
         )}
       </div>
 
+      {/*
+        Follow is the only one of these that was ever real.
+
+        "Buy" sat first and largest and was handed no handler — there is no
+        creator coin to buy here, only the coins this wallet launched, and each
+        of those has its own buy on its own page. "Message" was the same: Juno
+        has no messaging, so the envelope was an affordance for a feature that
+        does not exist. Both removed rather than left to be clicked.
+      */}
       <div className="mt-4 flex items-center gap-2">
-        <Button variant="buy" size="lg" className="flex-1" onClick={onBuy}>
-          Buy
-        </Button>
         <Button
           variant={following ? "outline" : "contrast"}
           size="lg"
           className="flex-1"
           onClick={onFollow}
+          disabled={busy}
         >
+          {busy && <Loader2 size={15} className="animate-spin" />}
           {following ? "Following" : "Follow"}
         </Button>
-        <IconButton label="Message" className="size-[52px]" onClick={onMessage}>
-          <Mail size={19} strokeWidth={1.75} />
-        </IconButton>
       </div>
     </section>
   );
