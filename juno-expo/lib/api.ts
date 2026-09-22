@@ -184,6 +184,43 @@ export type Coin = {
   nav?: NavReference | null;
   curve: CurveState;
   curvePreset: string;
+  /**
+   * What the market is marked against, from the registry. Null for a post or
+   * reel; undefined from a server that predates the field.
+   */
+  reference?: { source: "pyth" | "tessera"; id: string } | null;
+  /** Present when the list was asked for `social=1`. */
+  likes?: number;
+  commentCount?: number;
+  viewerLiked?: boolean | null;
+};
+
+/** A pre-IPO company as Tessera publishes it, with the Juno markets marked against it. */
+export type TesseraCompany = {
+  id: string;
+  name: string;
+  sector: string;
+  mint: string;
+  markPrice: number;
+  holders: number;
+  markValuation: number;
+  supply: number | null;
+  floatUsd: number | null;
+  shareOfCompany: number | null;
+  onChain: { transferFeeBps: number | null; blocked: string | null } | null;
+  markets: Array<{
+    address: string;
+    name: string;
+    symbol: string;
+    priceUsd: number;
+    marketCap: number;
+    currency: string;
+    curvePreset: string;
+    progress: number;
+    graduated: boolean;
+    deviation: number | null;
+    withinBand: boolean | null;
+  }>;
 };
 
 export type Activity = {
@@ -535,15 +572,34 @@ export const juno = {
       `/api/juno/feed?limit=${limit}${following ? `&following=${following}` : ""}`,
     ),
 
-  coins: (sort?: "marketCap" | "graduating") =>
+  coins: (
+    sort?: "marketCap" | "graduating",
+    /** Likes and comment counts too, and whether `viewer` liked each. */
+    social?: { viewer?: string | null },
+  ) =>
     api.get<{
       cluster: string;
       coins: Coin[];
       /** Registry rows the server could not price — the list is short by this many. */
       missing: number;
     }>(
-      `/api/juno/coins?limit=40${sort ? `&sort=${sort}` : ""}`,
+      `/api/juno/coins?limit=40${sort ? `&sort=${sort}` : ""}${
+        social ? `&social=1${social.viewer ? `&viewer=${social.viewer}` : ""}` : ""
+      }`,
     ),
+
+  /** Pre-IPO companies from Tessera, each with the Juno markets marked against it. */
+  tessera: () =>
+    api.get<{ cluster: string; tokens: TesseraCompany[] }>("/api/juno/tessera"),
+
+  /** Like counts for a page of coins, and whether `viewer` liked each. */
+  likes: (coins: string[], viewer?: string | null) =>
+    api.get<{ counts: Record<string, { likes: number; comments: number; viewerLiked: boolean | null }> }>(
+      `/api/juno/likes?coins=${coins.join(",")}${viewer ? `&viewer=${viewer}` : ""}`,
+    ),
+
+  setLike: (input: { coin: string; wallet: string; like: boolean }) =>
+    api.post<{ coin: string; likes: number; liked: boolean }>("/api/juno/likes", input),
 
   coin: (mint: string) =>
     api.get<{

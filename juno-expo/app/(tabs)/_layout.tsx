@@ -1,6 +1,6 @@
 import React, { useRef, useState } from "react";
 import { Tabs, usePathname, useRouter } from "expo-router";
-import { Animated, Platform } from "react-native";
+import { Animated, Platform, StyleSheet } from "react-native";
 import Svg, { Circle, Path, Rect } from "react-native-svg";
 import styled from "styled-components/native";
 
@@ -40,6 +40,12 @@ export default function TabsLayout() {
   // `tabBarButton`, so reading it left every slot looking inactive — the lime
   // pill never appeared on the tab you were actually on.
   const pathname = usePathname();
+  /*
+   * Reels are the one dark room in the app. A white bar across the bottom of
+   * a full-bleed video is a light left on in a cinema, so on that tab the bar
+   * goes to night and its glyphs to white.
+   */
+  const night = pathname.startsWith("/reels");
 
   const slot =
     (label: string, Icon: (p: { color: string }) => React.ReactElement, href: string) =>
@@ -48,6 +54,7 @@ export default function TabsLayout() {
         label={label}
         icon={Icon}
         active={pathname.startsWith(href.replace("/(tabs)", ""))}
+        night={night}
         onPress={() => router.push(href as never)}
       />
     );
@@ -62,8 +69,9 @@ export default function TabsLayout() {
         headerShown: false,
         tabBarShowLabel: false,
         tabBarStyle: {
-          backgroundColor: theme.colors.surface,
-          borderTopWidth: 0,
+          backgroundColor: night ? theme.colors.night : theme.colors.surface,
+          borderTopWidth: night ? StyleSheet.hairlineWidth : 0,
+          borderTopColor: theme.colors.nightLine,
           height: Platform.OS === "ios" ? 86 : 70,
           paddingTop: 10,
           paddingBottom: Platform.OS === "ios" ? 26 : 10,
@@ -87,7 +95,9 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="post"
         options={{
-          tabBarButton: () => <PostSlot open={creating} onPress={() => setCreating((on) => !on)} />,
+          tabBarButton: () => (
+            <PostSlot open={creating} night={night} onPress={() => setCreating((on) => !on)} />
+          ),
         }}
       />
       <Tabs.Screen
@@ -126,11 +136,13 @@ function Slot({
   label,
   icon: Icon,
   active,
+  night = false,
   onPress,
 }: {
   label: string;
   icon: (props: { color: string }) => React.ReactElement;
   active: boolean;
+  night?: boolean;
   onPress: () => void;
 }) {
   return (
@@ -141,7 +153,7 @@ function Slot({
       accessibilityLabel={label}
       accessibilityState={{ selected: active }}
     >
-      <Icon color={active ? theme.colors.onLime : theme.colors.faint} />
+      <Icon color={active ? theme.colors.onLime : night ? theme.colors.onNightMuted : theme.colors.faint} />
     </SlotBox>
   );
 }
@@ -159,7 +171,7 @@ function Slot({
  * sheet travels; the two read as one gesture rather than two animations that
  * happened to start together.
  */
-function PostSlot({ open, onPress }: { open: boolean; onPress: () => void }) {
+function PostSlot({ open, night = false, onPress }: { open: boolean; night?: boolean; onPress: () => void }) {
   const reduced = useReducedMotion();
   const { scale, onPressIn, onPressOut } = usePressScale(0.9);
   const turn = useRef(new Animated.Value(0)).current;
@@ -185,7 +197,7 @@ function PostSlot({ open, onPress }: { open: boolean; onPress: () => void }) {
       accessibilityLabel={open ? "Close" : "Create — post, coin or reel"}
     >
       <Animated.View style={{ transform: [{ scale }] }}>
-        <PostDisc>
+        <PostDisc $night={night}>
           <Animated.View style={{ transform: [{ rotate }] }}>
             <Svg width={24} height={24} viewBox="0 0 24 24">
               <Path
@@ -219,11 +231,11 @@ const PostBox = styled.Pressable`
   justify-content: center;
 `;
 
-const PostDisc = styled.View`
+const PostDisc = styled.View<{ $night: boolean }>`
   width: 48px;
   height: 44px;
   border-radius: ${(p) => p.theme.radius.pill}px;
-  background-color: ${(p) => p.theme.colors.ink};
+  background-color: ${(p) => (p.$night ? "rgba(255,255,255,0.12)" : p.theme.colors.ink)};
   align-items: center;
   justify-content: center;
 `;

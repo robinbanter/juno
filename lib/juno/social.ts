@@ -156,3 +156,85 @@ export async function addComment(input: {
 export async function countComments(coinMint: string, cluster: string): Promise<number> {
   return (await comments()).countDocuments({ coinMint, cluster });
 }
+
+/* ------------------------------------------------------------------ */
+/* Likes                                                               */
+/* ------------------------------------------------------------------ */
+
+/**
+ * One wallet liking one coin.
+ *
+ * Keyed on the triple, uniquely, so a like is a fact rather than a counter: a
+ * double tap that fires twice, or two devices on one key, cannot inflate the
+ * count. The count is always `countDocuments`, never an incremented field that
+ * could drift from the rows it claims to summarise.
+ */
+type LikeDoc = { coinMint: string; cluster: string; wallet: string; createdAt: Date };
+
+async function likes(): Promise<Collection<LikeDoc>> {
+  const collection = (await db()).collection<LikeDoc>("likes");
+  await collection
+    .createIndex({ coinMint: 1, cluster: 1, wallet: 1 }, { unique: true })
+    .catch(() => undefined);
+  return collection;
+}
+
+/** Like or unlike. Idempotent both ways. Returns the count after the write. */
+export async function setLike(input: {
+  coinMint: string;
+  cluster: string;
+  wallet: string;
+  like: boolean;
+}): Promise<{ likes: number; liked: boolean }> {
+  const collection = await likes();
+  const key = { coinMint: input.coinMint, cluster: input.cluster, wallet: input.wallet };
+  if (input.like) {
+    await collection.updateOne(key, { $setOnInsert: { ...key, createdAt: new Date() } }, { upsert: true });
+  } else {
+    await collection.deleteOne(key);
+  }
+  return {
+    likes: await collection.countDocuments({ coinMint: input.coinMint, cluster: input.cluster }),
+    liked: input.like,
+  };
+}
+
+export type SocialCounts = { likes: number; comments: number; viewerLiked: boolean | null };
+
+/**
+ * Likes and comments for many coins in two aggregate reads.
+ *
+ * A reel rail and a feed card both show these, for a whole page of coins at
+ * once. Per-coin `countDocuments` would be 2N round trips to answer one
+ * screen; grouping is two regardless of N.
+ *
+ * `viewerLiked` is null without a viewer — "did not like" and "nobody asked
+ * who is looking" are different answers.
+ */
+export async function socialCounts(
+  mints: string[],
+  cluster: string,
+  viewer?: string | null,
+): Promise<Map<string, SocialCounts>> {
+  const out = new Map<string, SocialCounts>();
+  for (const mint of mints) out.set(mint, { likes: 0, comments: 0, viewerLiked: viewer ? false : null });
+  if (mints.length === 0) return out;
+
+  const match = { coinMint: { $in: mints }, cluster };
+  const [likeRows, commentRows, mine] = await Promise.all([
+    (await likes())
+      .aggregate<{ _id: string; n: number }>([{ $match: match }, { $group: { _id: "$coinMint", n: { $sum: 1 } } }])
+      .toArray(),
+    (await comments())
+      .aggregate<{ _id: string; n: number }>([{ $match: match }, { $group: { _id: "$coinMint", n: { $sum: 1 } } }])
+      .toArray(),
+    viewer
+      ? (await likes()).find({ ...match, wallet: viewer }, { projection: { coinMint: 1 } }).toArray()
+      : Promise.resolve([] as Array<{ coinMint: string }>),
+  ]);
+
+  for (const row of likeRows) out.get(row._id)!.likes = row.n;
+  for (const row of commentRows) out.get(row._id)!.comments = row.n;
+  for (const row of mine) out.get(row.coinMint)!.viewerLiked = true;
+  return out;
+}

@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import * as SecureStore from "expo-secure-store";
 import { Keypair, Transaction } from "@solana/web3.js";
+import { Platform } from "react-native";
 
 import { juno } from "./api";
 
@@ -58,9 +59,33 @@ const WalletContext = createContext<WalletState | null>(null);
 /** Keychain entry holding the local devnet key. */
 const LOCAL_KEY = "juno.devnet.signer.v1";
 
+/**
+ * Where the key is kept: the keychain on a phone, `localStorage` on web.
+ *
+ * `expo-secure-store` ships an empty module for web, so every call threw and
+ * the web build could never hold a wallet — likes, follows and trades all
+ * failed at the first step without saying why. A devnet key in a browser's
+ * storage is exactly as recoverable as one in a simulator's keychain, which
+ * is to say not at all; the profile screen already says so.
+ */
+const store = {
+  get: (key: string): Promise<string | null> =>
+    Platform.OS === "web"
+      ? Promise.resolve(globalThis.localStorage?.getItem(key) ?? null)
+      : SecureStore.getItemAsync(key),
+  set: (key: string, value: string): Promise<void> =>
+    Platform.OS === "web"
+      ? Promise.resolve(globalThis.localStorage?.setItem(key, value))
+      : SecureStore.setItemAsync(key, value),
+  remove: (key: string): Promise<void> =>
+    Platform.OS === "web"
+      ? Promise.resolve(globalThis.localStorage?.removeItem(key))
+      : SecureStore.deleteItemAsync(key),
+};
+
 async function loadLocalKeypair(): Promise<Keypair | null> {
   try {
-    const stored = await SecureStore.getItemAsync(LOCAL_KEY);
+    const stored = await store.get(LOCAL_KEY);
     if (!stored) return null;
     return Keypair.fromSecretKey(Uint8Array.from(JSON.parse(stored) as number[]));
   } catch {
@@ -71,7 +96,7 @@ async function loadLocalKeypair(): Promise<Keypair | null> {
 
 async function createLocalKeypair(): Promise<Keypair> {
   const keypair = Keypair.generate();
-  await SecureStore.setItemAsync(LOCAL_KEY, JSON.stringify([...keypair.secretKey]));
+  await store.set(LOCAL_KEY, JSON.stringify([...keypair.secretKey]));
   return keypair;
 }
 
@@ -106,7 +131,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   }, [keypair]);
 
   const disconnect = useCallback(async () => {
-    await SecureStore.deleteItemAsync(LOCAL_KEY);
+    await store.remove(LOCAL_KEY);
     setKeypair(null);
   }, []);
 

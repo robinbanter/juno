@@ -159,6 +159,16 @@ export type Coin = {
   priceHistoryPartial?: boolean;
   /** Where the underlying is marked, for an equity-preset launch. Coin page only. */
   nav?: NavReference | null;
+  /**
+   * What this market is marked against, read from the registry row — no RPC.
+   *
+   * `nav` above is the live mark and costs a read, so list views skip it. That
+   * left a list unable to say which coins are stock trackers and which are
+   * someone's post, which is the first thing the app sorts on: pre-IPO names
+   * and listed stocks belong on the Trade tab, posts and reels in the feed.
+   * Null is a post or a reel — a photo has no underlying.
+   */
+  reference?: { source: "pyth" | "tessera"; id: string } | null;
 
   curve: CurveState;
   /** Which `lib/juno/curves.ts` preset this pool was launched with. */
@@ -166,6 +176,8 @@ export type Coin = {
   /** Social counters, shown on the reel rail. */
   likes?: number;
   commentCount?: number;
+  /** Whether the asking wallet liked it. Null when nobody said who is asking. */
+  viewerLiked?: boolean | null;
   /** Present once the pool has graduated into DAMM v2. */
   graduatedPool?: string;
   /**

@@ -16,7 +16,7 @@ import { feeSchedule, tokenomics } from "./economics";
 import { identicon } from "./identicon";
 import { activityFromSwap } from "./activity";
 import { mediaKind, mediaSrc } from "./media";
-import { isTesseraRef, tesseraOnChain, tesseraToken } from "./tessera";
+import { isTesseraRef, tesseraOnChain, tesseraToken, TESSERA_PREFIX } from "./tessera";
 import { tryRead, ttlCache } from "./rpc";
 import {
   changeWithin,
@@ -326,6 +326,11 @@ export async function hydratePool(
       : undefined,
     priceHistoryPartial: history ? history.partial : undefined,
     nav,
+    reference: row.navFeedId
+      ? isTesseraRef(row.navFeedId)
+        ? { source: "tessera", id: row.navFeedId.slice(TESSERA_PREFIX.length) }
+        : { source: "pyth", id: row.navFeedId }
+      : null,
     creatorRewards,
     holders,
     priceUsd,

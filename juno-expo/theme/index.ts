@@ -55,6 +55,16 @@ export const theme = {
     posSoft: "rgba(14,159,110,0.12)",
     negSoft: "rgba(217,45,32,0.10)",
 
+    /** A like. Used for the heart and nothing else, so it always means one thing. */
+    heart: "#FF2D6F",
+
+    /** Reels are the one dark surface: video wants a black room. */
+    night: "#07080A",
+    nightRaised: "rgba(18,21,24,0.78)",
+    nightLine: "rgba(255,255,255,0.14)",
+    onNight: "#FFFFFF",
+    onNightMuted: "rgba(255,255,255,0.72)",
+
     focus: "#2E5BFF",
     /** Chart series, in fixed order. Never cycled. */
     series: ["#2E5BFF", "#0E9F6E", "#C77700", "#8B5CF6"],
