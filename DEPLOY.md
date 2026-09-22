@@ -1,8 +1,37 @@
 # Deploying Juno
 
-Two surfaces. The **Next.js app** is deployed and serves both the web UI and the
-API the mobile app talks to. The **Expo app** is not deployed — it runs on a
-simulator or a device and points at the deployed API.
+Two surfaces, both live:
+
+| | Where | URL |
+|---|---|---|
+| **API** (the Next.js app) | Railway, service `juno-web` | https://juno-web-production-bd2e.up.railway.app |
+| **App** (the Expo app, web build) | Vercel, project `juno-app` | https://juno-app-chi.vercel.app |
+
+The Expo app also runs on a simulator or a device against the same API.
+
+**Redeploying the API** is an upload from this machine, not a git push —
+Railway is not connected to the repo:
+
+```bash
+railway up --service juno-web --detach
+```
+
+**Redeploying the app** exports the web build and uploads it. The API URL is
+compiled in from `juno-expo/.env` at export time, and `vercel.web.json` is the
+single-page rewrite that lets a deep link like `/trade?sort=stocks` load:
+
+```bash
+cd juno-expo
+npx expo export --platform web
+cp vercel.web.json dist/vercel.json
+cd dist
+npx vercel link --yes --project juno-app --scope nicolas-projects-f497bb7f
+npx vercel deploy --prod --yes
+```
+
+`dist/` is rebuilt on every export, so it is linked each time — to `juno-app`
+by name, so the deploy lands on the project that owns the
+`juno-app-chi.vercel.app` alias rather than on a new project called `dist`.
 
 ---
 
