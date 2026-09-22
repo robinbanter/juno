@@ -181,11 +181,50 @@ async function balanceOf(wallet: string, mint: string): Promise<number> {
   }, 0);
 }
 
+/**
+ * Every token this wallet holds, by mint, in two reads — or null if either
+ * read was refused.
+ *
+ * The walk used to ask each pool separately whether the wallet held its
+ * token: fifteen reads to learn, usually, "no" fourteen times, against an
+ * endpoint that throttles bursts. And `balanceOf` answers a refused read with
+ * 0, so a throttled check turned a real holding into nothing — a wallet that
+ * had just bought saw "holdings unknown" with the coin missing. One read per
+ * token program answers the question for every pool at once, and a refusal
+ * is reported as a refusal.
+ */
+async function heldBalances(wallet: string): Promise<Map<string, number> | null> {
+  const programs = [
+    "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+    "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+  ];
+  const held = new Map<string, number>();
+  for (const programId of programs) {
+    const accounts = await tryRead(() =>
+      getConnection().getParsedTokenAccountsByOwner(new PublicKey(wallet), {
+        programId: new PublicKey(programId),
+      }),
+    );
+    if (!accounts) return null;
+    for (const account of accounts.value) {
+      const info = (
+        account.account.data.parsed as {
+          info?: { mint?: string; tokenAmount?: { uiAmount?: number | null } };
+        }
+      ).info;
+      if (!info?.mint) continue;
+      held.set(info.mint, (held.get(info.mint) ?? 0) + (info.tokenAmount?.uiAmount ?? 0));
+    }
+  }
+  return held;
+}
+
 async function positionFor(
   wallet: string,
   row: JunoPoolRow,
+  known?: number,
 ): Promise<{ position: Position | null; partial: boolean }> {
-  const balance = await balanceOf(wallet, row.baseMint);
+  const balance = known ?? (await balanceOf(wallet, row.baseMint));
 
   const quoteUsd = await quoteTokenUsdPrice(row.quoteMint).catch(() => null);
   const rate = quoteUsd ?? 1;
@@ -266,14 +305,30 @@ export async function loadPortfolio(
   }
 
   const rows = await listPools(options.poolLimit ?? 40);
+
+  if (await provablyUntouched(wallet, rows)) {
+    return { wallet, positions: [], history: [], ...totalsFor([], false).portfolio, partial: false };
+  }
+
+  /*
+   * Walk only the pools this wallet holds. `positionFor` reads history only
+   * for a held pool, so a pool at zero balance could never produce a position
+   * — reading its price and snapshot anyway was pure cost. If the balance read
+   * itself is refused, fall back to asking pool by pool, as before.
+   */
+  const held = await heldBalances(wallet);
+  const walk = held
+    ? rows.filter((row) => (held.get(row.baseMint) ?? 0) > 0)
+    : rows;
+
   const positions: Position[] = [];
   let partial = false;
   let cursor = 0;
 
   async function worker() {
-    while (cursor < rows.length) {
-      const row = rows[cursor++];
-      const result = await positionFor(wallet, row).catch(() => ({
+    while (cursor < walk.length) {
+      const row = walk[cursor++];
+      const result = await positionFor(wallet, row, held?.get(row.baseMint)).catch(() => ({
         position: null,
         partial: true,
       }));
@@ -283,7 +338,7 @@ export async function loadPortfolio(
   }
 
   await Promise.all(
-    Array.from({ length: Math.min(options.width ?? 3, rows.length) }, worker),
+    Array.from({ length: Math.min(options.width ?? 3, walk.length) }, worker),
   );
 
   positions.sort((a, b) => b.value - a.value);
@@ -297,6 +352,61 @@ export async function loadPortfolio(
     ...totals.portfolio,
     partial,
   };
+}
+
+/**
+ * True when this wallet can be shown, from its own records, to have never
+ * traded on Juno — so "nothing held" is a measurement, not a shrug.
+ *
+ * The full walk reads every pool's history, and on the public RPC some of
+ * those reads are refused. For a brand-new wallet that made every answer
+ * "partial": a person who had just created a wallet was told their holdings
+ * could not be read. But a new wallet is cheap to prove empty directly:
+ *
+ * 1. It holds no token of any Juno mint (both token programs checked), and
+ * 2. none of its transactions — read in full, and only when there are ten or
+ *    fewer — touches a Juno pool.
+ *
+ * Any doubt at all — a refused read, more than ten transactions, a Juno token
+ * in hand — returns false and the full walk runs as before.
+ */
+async function provablyUntouched(wallet: string, rows: JunoPoolRow[]): Promise<boolean> {
+  const connection = getConnection();
+  const owner = new PublicKey(wallet);
+  const mints = new Set(rows.map((row) => row.baseMint));
+  const pools = new Set(rows.map((row) => row.poolAddress));
+
+  try {
+    const programs = [
+      new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"),
+      new PublicKey("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"),
+    ];
+    for (const programId of programs) {
+      const accounts = await connection.getParsedTokenAccountsByOwner(owner, { programId });
+      const holdsJuno = accounts.value.some((account) => {
+        const info = (account.account.data as { parsed?: { info?: { mint?: string; tokenAmount?: { uiAmount?: number } } } })
+          .parsed?.info;
+        return !!info?.mint && mints.has(info.mint) && (info.tokenAmount?.uiAmount ?? 0) > 0;
+      });
+      if (holdsJuno) return false;
+    }
+
+    const signatures = await connection.getSignaturesForAddress(owner, { limit: 11 });
+    if (signatures.length > 10) return false;
+    for (const { signature } of signatures) {
+      const tx = await connection.getTransaction(signature, { maxSupportedTransactionVersion: 0 });
+      if (!tx) return false;
+      const keys = tx.transaction.message.getAccountKeys({
+        accountKeysFromLookups: tx.meta?.loadedAddresses,
+      });
+      for (let i = 0; i < keys.length; i += 1) {
+        if (pools.has(keys.get(i)!.toBase58())) return false;
+      }
+    }
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**

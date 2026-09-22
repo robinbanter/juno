@@ -112,6 +112,8 @@ export const api = {
 /* ------------------------------------------------------------------ */
 
 export const WSOL_MINT = "So11111111111111111111111111111111111111112";
+/** Circle's devnet USDC — the quote token of Juno's USDC-priced pools. */
+export const USDC_DEVNET = "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU";
 
 export type CurveState = {
   progress: number;
@@ -714,7 +716,72 @@ export const juno = {
     format: "post" | "reel";
     curvePreset: string;
     createSignature: string;
+    description?: string | null;
+    mediaUrl?: string | null;
+    posterUrl?: string | null;
+    mediaMime?: string | null;
+    mediaWidth?: number | null;
+    mediaHeight?: number | null;
   }) => api.post<{ pool: unknown }>("/api/juno/pools", input),
+
+  /**
+   * Pin a photo or video to IPFS. A video comes back with a poster frame.
+   *
+   * Multipart, so it bypasses the JSON helper. `file` is a web `File` in the
+   * browser and the `{ uri, name, type }` shape React Native's fetch uploads
+   * from on a phone.
+   */
+  upload: async (file: Blob | { uri: string; name: string; type: string }) => {
+    const form = new FormData();
+    form.append("file", file as Blob);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 120_000);
+    try {
+      const response = await fetch(`${API_URL}/api/juno/upload`, {
+        method: "POST",
+        body: form,
+        signal: controller.signal,
+      });
+      const body = (await response.json().catch(() => null)) as
+        | {
+            uri: string;
+            url: string;
+            mimeType: string;
+            posterUri?: string;
+            posterUrl?: string;
+            width: number | null;
+            height: number | null;
+            error?: string;
+          }
+        | null;
+      if (!response.ok || !body) {
+        throw new ApiError(body?.error ?? `Upload failed (${response.status})`, response.status);
+      }
+      return body;
+    } catch (error) {
+      if (error instanceof ApiError) throw error;
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new ApiError("The upload timed out. Try a shorter clip or a better connection.", 0);
+      }
+      throw new ApiError("Could not upload the file. Check your connection.", 0);
+    } finally {
+      clearTimeout(timer);
+    }
+  },
+
+  /** Devnet SOL for this wallet, from the public faucet or the operator's. */
+  faucet: (wallet: string) =>
+    api.post<{ signature: string; amount: number; source: string }>("/api/juno/faucet", { wallet }, 90_000),
+
+  /** Pin the token's metadata, which the mint points at forever. */
+  pinMetadata: (input: {
+    name: string;
+    symbol: string;
+    description?: string;
+    curvePreset: string;
+    imageUrl?: string;
+    mimeType?: string;
+  }) => api.post<{ uri: string }>("/api/juno/metadata", input),
 
   buildSwap: (
     input: {

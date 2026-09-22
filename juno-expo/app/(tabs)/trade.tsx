@@ -723,7 +723,9 @@ function TraderBoard({
                     <Caption>
                       {trader.trades} {trader.trades === 1 ? "fill" : "fills"} ·{" "}
                       {trader.coins} {trader.coins === 1 ? "coin" : "coins"}
-                      {trader.followers > 0 ? ` · ${trader.followers} following` : ""}
+                      {trader.followers > 0
+                        ? ` · ${trader.followers} ${trader.followers === 1 ? "follower" : "followers"}`
+                        : ""}
                     </Caption>
                   </Col>
                   <Col gap={2} style={{ alignItems: "flex-end" }}>

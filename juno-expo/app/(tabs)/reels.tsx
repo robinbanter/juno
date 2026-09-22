@@ -13,7 +13,6 @@ import {
   StyleSheet,
   Text,
   View,
-  useWindowDimensions,
   type GestureResponderEvent,
   type ViewToken,
 } from "react-native";
@@ -36,7 +35,7 @@ import { Tappable } from "../../components/Press";
 import { QuickTrade } from "../../components/QuickTrade";
 import { juno, type Coin } from "../../lib/api";
 import { count, invalidateMarkets, loadMarkets } from "../../lib/markets";
-import { useReducedMotion } from "../../lib/motion";
+import { useReducedMotion, nativeDriver } from "../../lib/motion";
 import { shareCoin, useFollow, useLike, useViewerOnce } from "../../lib/social";
 import { money, useApi } from "../../lib/useApi";
 import { theme } from "../../theme";
@@ -69,8 +68,11 @@ const DOUBLE_MS = 260;
 export default function ReelsScreen() {
   const router = useRouter();
   const { start } = useLocalSearchParams<{ start?: string }>();
-  const { width } = useWindowDimensions();
-  const [pageH, setPageH] = useState(0);
+  // The container's size, not the window's: on web the app sits in a
+  // phone-width frame narrower than the window.
+  const [page, setPage] = useState({ width: 0, height: 0 });
+  const pageH = page.height;
+  const width = page.width;
 
   const once = useViewerOnce();
   const reels = useApi(async () => {
@@ -108,7 +110,9 @@ export default function ReelsScreen() {
   const sheetOpen = trade !== null || talking !== null;
 
   return (
-    <View style={styles.screen} onLayout={(event) => setPageH(event.nativeEvent.layout.height)}>
+    <View style={styles.screen} onLayout={(event) =>
+        setPage({ width: event.nativeEvent.layout.width, height: event.nativeEvent.layout.height })
+      }>
       {reels.loading || reels.data === null || pageH === 0 ? (
         <NightState busy title="Loading reels" />
       ) : reels.error ? (
@@ -504,7 +508,7 @@ function ReelVideo({
       toValue: Math.min(1, currentTime / duration),
       duration: 250,
       easing: Easing.linear,
-      useNativeDriver: true,
+      useNativeDriver: nativeDriver,
     }).start();
   });
 
@@ -512,7 +516,7 @@ function ReelVideo({
   // the reel's first frame rather than a black rectangle.
   useEventListener(player, "playingChange", ({ isPlaying }) => {
     if (isPlaying) {
-      Animated.timing(cover, { toValue: 0, duration: 220, useNativeDriver: true }).start();
+      Animated.timing(cover, { toValue: 0, duration: 220, useNativeDriver: nativeDriver }).start();
     }
   });
 
@@ -601,7 +605,7 @@ function LikePop({ liked }: { liked: boolean }) {
     }
     if (!liked || reduced) return;
     scale.setValue(0.6);
-    Animated.spring(scale, { toValue: 1, tension: 260, friction: 7, useNativeDriver: true }).start();
+    Animated.spring(scale, { toValue: 1, tension: 260, friction: 7, useNativeDriver: nativeDriver }).start();
   }, [liked, reduced, scale]);
 
   return (
@@ -668,7 +672,7 @@ function CoinDisc({ coin, spinning, onPress }: { coin: Coin; spinning: boolean; 
     }
     turn.setValue(0);
     const loop = Animated.loop(
-      Animated.timing(turn, { toValue: 1, duration: 5200, easing: Easing.linear, useNativeDriver: true }),
+      Animated.timing(turn, { toValue: 1, duration: 5200, easing: Easing.linear, useNativeDriver: nativeDriver }),
     );
     loop.start();
     return () => loop.stop();
@@ -691,9 +695,9 @@ function SoundFlash({ muted }: { muted: boolean }) {
   const t = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     Animated.sequence([
-      Animated.timing(t, { toValue: 1, duration: 120, useNativeDriver: true }),
+      Animated.timing(t, { toValue: 1, duration: 120, useNativeDriver: nativeDriver }),
       Animated.delay(450),
-      Animated.timing(t, { toValue: 0, duration: 260, useNativeDriver: true }),
+      Animated.timing(t, { toValue: 0, duration: 260, useNativeDriver: nativeDriver }),
     ]).start();
   }, [t]);
   return (

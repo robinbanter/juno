@@ -104,7 +104,12 @@ export function FeedCard({
         </Pressable>
         <View style={{ flex: 1 }} />
         {follow.self || follow.following === null ? null : (
-          <Tappable onPress={follow.toggle} to={0.94}>
+          <Tappable
+            onPress={follow.toggle}
+            to={0.94}
+            accessibilityRole="button"
+            accessibilityLabel={follow.following ? `Unfollow ${coin.creator.handle}` : `Follow ${coin.creator.handle}`}
+          >
             <View style={[styles.follow, follow.following ? styles.followOn : null]}>
               <Text style={[styles.followText, follow.following ? styles.followTextOn : null]}>
                 {follow.following ? "Following" : "Follow"}

@@ -66,6 +66,32 @@ export function useLike(coin: Pick<Coin, "address" | "likes" | "viewerLiked">) {
  * already follows invites a tap that does nothing visible. Hidden entirely on
  * your own posts.
  */
+/**
+ * One follow read per creator, however many cards show them.
+ *
+ * Each card asked on its own, so a feed with five posts by one creator made
+ * five identical requests on every load. Reads are shared for thirty seconds
+ * and a toggle replaces the shared answer with the new one.
+ */
+const followReads = new Map<string, { at: number; value: Promise<boolean> }>();
+
+function readFollow(target: string, viewer: string): Promise<boolean> {
+  const key = `${viewer}>${target}`;
+  const hit = followReads.get(key);
+  if (hit && Date.now() - hit.at < 30_000) return hit.value;
+  const value = juno.followStats(target, viewer).then((stats) => stats.viewerFollows ?? false);
+  followReads.set(key, { at: Date.now(), value });
+  value.catch(() => followReads.delete(key));
+  return value;
+}
+
+/** Every mounted follow control, by creator, so one toggle updates all of them. */
+const followListeners = new Map<string, Set<(on: boolean) => void>>();
+
+function announceFollow(target: string, on: boolean) {
+  followListeners.get(target)?.forEach((listener) => listener(on));
+}
+
 export function useFollow(target: string) {
   const wallet = useWallet();
   const [following, setFollowing] = useState<boolean | null>(null);
@@ -73,15 +99,23 @@ export function useFollow(target: string) {
   const self = wallet.address === target;
 
   useEffect(() => {
+    const listeners = followListeners.get(target) ?? new Set();
+    listeners.add(setFollowing);
+    followListeners.set(target, listeners);
+    return () => {
+      listeners.delete(setFollowing);
+    };
+  }, [target]);
+
+  useEffect(() => {
     let live = true;
     if (!wallet.address || self) {
       setFollowing(wallet.address ? null : false);
       return;
     }
-    juno
-      .followStats(target, wallet.address)
-      .then((stats) => {
-        if (live) setFollowing(stats.viewerFollows ?? false);
+    readFollow(target, wallet.address)
+      .then((follows) => {
+        if (live) setFollowing(follows);
       })
       .catch(() => {
         if (live) setFollowing(false);
@@ -95,13 +129,15 @@ export function useFollow(target: string) {
     if (busy || self) return;
     setBusy(true);
     const next = !following;
-    setFollowing(next);
+    announceFollow(target, next);
     try {
       const address = wallet.address ?? (await wallet.connect());
       const result = await juno.setFollow(address, target, next);
       setFollowing(result.isFollowing);
+      followReads.set(`${address}>${target}`, { at: Date.now(), value: Promise.resolve(result.isFollowing) });
+      announceFollow(target, result.isFollowing);
     } catch {
-      setFollowing(!next);
+      announceFollow(target, !next);
     } finally {
       setBusy(false);
     }
@@ -116,15 +152,24 @@ export function useFollow(target: string) {
  * Resolves to what happened so the caller can say "Link copied" — a share
  * button that silently copies looks like it did nothing.
  */
-export async function shareCoin(coin: Pick<Coin, "address" | "name" | "symbol">): Promise<"shared" | "copied" | "failed"> {
+export async function shareCoin(
+  coin: Pick<Coin, "address" | "name" | "symbol">,
+): Promise<"shared" | "copied" | "cancelled" | "failed"> {
   const url = coinLink(API_URL, coin);
   const message = `${coin.name} — $${coin.symbol} is live on Juno. Every post is a market.`;
   try {
     if (Platform.OS === "web") {
       const nav = globalThis.navigator as Navigator | undefined;
       if (nav?.share) {
-        await nav.share({ title: coin.name, text: message, url });
-        return "shared";
+        try {
+          await nav.share({ title: coin.name, text: message, url });
+          return "shared";
+        } catch (error) {
+          // Closing the share sheet is a choice, not a failure — copying the
+          // link anyway and announcing it would be doing something unasked.
+          if (error instanceof Error && error.name === "AbortError") return "cancelled";
+          throw error;
+        }
       }
       await Clipboard.setStringAsync(url);
       return "copied";

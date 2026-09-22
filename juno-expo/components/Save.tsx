@@ -352,7 +352,7 @@ export function AlertSheet({
           <FieldUnit>{coin.marketCapCurrency === "USD" ? "$" : coin.marketCapCurrency}</FieldUnit>
           <TextInput
             value={value}
-            onChangeText={setValue}
+            onChangeText={(next) => setValue(decimalOnly(next))}
             keyboardType="decimal-pad"
             placeholder="0.00"
             placeholderTextColor={theme.colors.faint}
@@ -494,7 +494,7 @@ export function PlanSheet({
           <FieldUnit>{coin.quote.symbol}</FieldUnit>
           <TextInput
             value={amount}
-            onChangeText={setAmount}
+            onChangeText={(next) => setAmount(decimalOnly(next))}
             keyboardType="decimal-pad"
             placeholder="0.00"
             placeholderTextColor={theme.colors.faint}
@@ -519,7 +519,7 @@ export function PlanSheet({
             <FieldUnit>{coin.quote.symbol}</FieldUnit>
             <TextInput
               value={target}
-              onChangeText={setTarget}
+              onChangeText={(next) => setTarget(decimalOnly(next))}
               keyboardType="decimal-pad"
               placeholder="No goal"
               placeholderTextColor={theme.colors.faint}
@@ -629,3 +629,17 @@ const FieldAside = styled.Text`
 const Grow = styled.View`
   flex: 1;
 `;
+
+/**
+ * Digits and one decimal point, nothing else.
+ *
+ * `keyboardType="decimal-pad"` only chooses a keyboard on a phone. On web and
+ * with a hardware keyboard it constrains nothing, so a price field took
+ * "abc" and sat there with a disabled button and no reason. A comma is read
+ * as the decimal point, which is what a European keyboard types.
+ */
+function decimalOnly(text: string): string {
+  const cleaned = text.replace(",", ".").replace(/[^0-9.]/g, "");
+  const [whole, ...rest] = cleaned.split(".");
+  return rest.length ? `${whole}.${rest.join("")}` : whole;
+}

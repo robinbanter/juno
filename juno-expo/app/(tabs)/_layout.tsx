@@ -6,8 +6,7 @@ import styled from "styled-components/native";
 
 import { CreateSheet } from "../../components/CreateSheet";
 import { usePressScale } from "../../components/Press";
-import { motion, useReducedMotion } from "../../lib/motion";
-import { feedChanged } from "../../lib/refresh";
+import { motion, useReducedMotion, nativeDriver } from "../../lib/motion";
 import { theme } from "../../theme";
 
 /**
@@ -116,13 +115,6 @@ export default function TabsLayout() {
       visible={creating}
       onClose={() => setCreating(false)}
       onLaunch={(format) => router.push(`/(tabs)/post?format=${format}` as never)}
-      onPosted={() => {
-        feedChanged();
-        // `navigate`, not `push`: the sheet is reachable from every tab, and
-        // pushing would stack a second copy of the feed on top of the first
-        // whenever someone posted while already looking at it.
-        router.navigate("/(tabs)/social" as never);
-      }}
     />
     </Shell>
   );
@@ -181,7 +173,7 @@ function PostSlot({ open, night = false, onPress }: { open: boolean; night?: boo
       toValue: open ? 1 : 0,
       duration: reduced ? 0 : motion.swap,
       easing: motion.easeDrawer,
-      useNativeDriver: true,
+      useNativeDriver: nativeDriver,
     }).start();
   }, [open, reduced, turn]);
 
@@ -194,7 +186,7 @@ function PostSlot({ open, night = false, onPress }: { open: boolean; night?: boo
       onPressOut={onPressOut}
       accessibilityRole="button"
       accessibilityState={{ expanded: open }}
-      accessibilityLabel={open ? "Close" : "Create — post, coin or reel"}
+      accessibilityLabel={open ? "Close" : "Create — a photo or a reel"}
     >
       <Animated.View style={{ transform: [{ scale }] }}>
         <PostDisc $night={night}>

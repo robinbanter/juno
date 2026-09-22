@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AccessibilityInfo, Easing } from "react-native";
+import { AccessibilityInfo, Easing, Platform } from "react-native";
 
 /**
  * Juno's motion constants, in one place so the app moves as one thing.
@@ -26,6 +26,15 @@ import { AccessibilityInfo, Easing } from "react-native";
  * rows arrive. Motion in this app conveys state — a press, a sheet, a glyph
  * turning — and nothing else.
  */
+/**
+ * Whether animations can run on the native thread.
+ *
+ * On web there is no native animated module; asking for it logs a warning on
+ * every animation and falls back to JS anyway. Saying so up front keeps the
+ * console clean and changes nothing about how the web build moves.
+ */
+export const nativeDriver = Platform.OS !== "web";
+
 export const motion = {
   /**
    * Strong ease-out: `cubic-bezier(0.23, 1, 0.32, 1)`.

@@ -1,5 +1,8 @@
+import { Image as ExpoImage } from "expo-image";
+import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useState } from "react";
+import { useVideoPlayer, VideoView } from "expo-video";
+import { useEffect, useState } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -15,6 +18,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { CurvePreview } from "../../components/CurvePreview";
 import { Button, Card, Pill } from "../../components/kit";
 import { juno, WSOL_MINT } from "../../lib/api";
+import { feedChanged } from "../../lib/refresh";
 import { useWallet } from "../../lib/wallet";
 import { theme } from "../../theme";
 
@@ -76,6 +80,10 @@ export default function PostScreen() {
   const { format } = useLocalSearchParams<{ format?: string }>();
   const kind: "post" | "reel" = format === "reel" ? "reel" : "post";
 
+  const [media, setMedia] = useState<ImagePicker.ImagePickerAsset | null>(null);
+  const [caption, setCaption] = useState("");
+  /** A launch that confirmed on-chain but could not be listed yet — kept so listing can be retried. */
+  const [unlisted, setUnlisted] = useState<Parameters<typeof juno.recordLaunch>[0] | null>(null);
   const [name, setName] = useState("");
   const [symbol, setSymbol] = useState("");
   const [preset, setPreset] = useState<string>("content");
@@ -83,14 +91,111 @@ export default function PostScreen() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  // A different format wants a different file: a photo for a post, a video
+  // for a reel. Switching formats clears a pick of the wrong kind.
+  useEffect(() => {
+    if (media && (media.type === "video") !== (kind === "reel")) setMedia(null);
+  }, [kind, media]);
+
   const symbolOk = /^[A-Z0-9]{2,10}$/.test(symbol.trim().toUpperCase());
-  const canLaunch = name.trim().length > 0 && symbolOk && !busy;
+  const captionOk = caption.trim().length <= MAX_CAPTION;
+  /*
+   * Media is required. Every post in the feed is a picture and every reel is
+   * a video; a launch without one produced a coin that drew as a placeholder
+   * in the feed and — for a reel — never appeared in Reels at all.
+   */
+  const canLaunch = !!media && name.trim().length > 0 && symbolOk && captionOk && !busy;
+  const missing = !media
+    ? kind === "reel"
+      ? "Add a video to launch"
+      : "Add a photo to launch"
+    : !name.trim()
+      ? "Name it to launch"
+      : !symbolOk
+        ? "Add a 2–10 character ticker"
+        : !captionOk
+          ? "Caption is too long"
+          : null;
+
+  async function pick() {
+    setError(null);
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: kind === "reel" ? ["videos"] : ["images"],
+        quality: 0.9,
+        videoMaxDuration: 90,
+      });
+      if (result.canceled || !result.assets[0]) return;
+      const asset = result.assets[0];
+      if (asset.fileSize && asset.fileSize > MAX_BYTES) {
+        setError("That file is over 25MB. Pick a smaller one.");
+        return;
+      }
+      setMedia(asset);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not open your library");
+    }
+  }
+
+  /** Index a confirmed launch. Throws with a reason the screen can show. */
+  async function list(record: Parameters<typeof juno.recordLaunch>[0]) {
+    setStatus("Listing it on Juno…");
+    try {
+      await juno.recordLaunch(record);
+      setUnlisted(null);
+      setStatus(null);
+      feedChanged();
+      router.push(`/coin/${record.baseMint}`);
+    } catch (caught) {
+      setUnlisted(record);
+      setStatus(null);
+      throw new Error(
+        `Your coin is live on-chain, but Juno could not list it yet: ${
+          caught instanceof Error ? caught.message : "unknown error"
+        }. Tap "Retry listing" — nothing needs signing again.`,
+      );
+    }
+  }
+
+  async function retryListing() {
+    if (!unlisted) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await list(unlisted);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Listing failed");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function launch() {
+    if (!media) return;
     setBusy(true);
     setError(null);
     try {
       const address = wallet.address ?? (await wallet.connect());
+
+      setStatus(kind === "reel" ? "Uploading your video…" : "Uploading your photo…");
+      const uploaded = await juno.upload(
+        media.file ?? {
+          uri: media.uri,
+          name: media.fileName ?? (media.type === "video" ? "reel.mp4" : "post.jpg"),
+          type: media.mimeType ?? (media.type === "video" ? "video/mp4" : "image/jpeg"),
+        },
+      );
+
+      setStatus("Pinning the token metadata…");
+      const metadata = await juno.pinMetadata({
+        name: name.trim(),
+        symbol: symbol.trim().toUpperCase(),
+        description: caption.trim() || undefined,
+        curvePreset: preset,
+        // Wallets and explorers want a still; a reel's is its poster.
+        imageUrl: uploaded.posterUrl ?? uploaded.url,
+        mimeType: uploaded.posterUrl ? "image/jpeg" : uploaded.mimeType,
+      });
 
       setStatus("Building the launch…");
       const built = await juno.buildLaunch({
@@ -98,6 +203,7 @@ export default function PostScreen() {
         name: name.trim(),
         symbol: symbol.trim().toUpperCase(),
         preset,
+        uri: metadata.uri,
       });
 
       // In order, and each must confirm before the next is valid: the pool
@@ -126,27 +232,30 @@ export default function PostScreen() {
         }
       }
 
-      setStatus("Recording the launch…");
-      await juno
-        .recordLaunch({
-          baseMint: built.baseMint,
-          poolAddress: built.pool,
-          configAddress: built.config,
-          quoteMint: WSOL_MINT,
-          creatorWallet: address,
-          name: name.trim(),
-          symbol: symbol.trim().toUpperCase(),
-          format: kind,
-          curvePreset: preset,
-          createSignature: poolSignature,
-        })
-        .catch(() => {
-          // The pool exists on-chain either way. A failed index write means it
-          // is missing from the app's list, not that the launch failed.
-        });
-
-      setStatus(null);
-      router.push(`/coin/${built.baseMint}`);
+      /*
+       * The pool exists on-chain from here on. Listing it used to fail
+       * silently, which left a creator with a live market that appeared
+       * nowhere in the app and no idea why. Now a failure says so and keeps
+       * everything needed to retry without signing again.
+       */
+      await list({
+        baseMint: built.baseMint,
+        poolAddress: built.pool,
+        configAddress: built.config,
+        quoteMint: WSOL_MINT,
+        creatorWallet: address,
+        name: name.trim(),
+        symbol: symbol.trim().toUpperCase(),
+        format: kind,
+        curvePreset: preset,
+        createSignature: poolSignature,
+        description: caption.trim() || null,
+        mediaUrl: uploaded.uri,
+        posterUrl: uploaded.posterUri ?? uploaded.uri,
+        mediaMime: uploaded.mimeType,
+        mediaWidth: uploaded.width,
+        mediaHeight: uploaded.height,
+      });
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Launch failed");
       setStatus(null);
@@ -163,13 +272,15 @@ export default function PostScreen() {
       >
         <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
           <Text style={styles.title}>
-            {kind === "reel" ? "Launch a reel" : "Launch a coin"}
+            {kind === "reel" ? "Post a reel" : "Post a photo"}
           </Text>
           <Text style={styles.lede}>
             {kind === "reel"
               ? "A vertical video with a real Meteora bonding curve behind it. It lands in the swipe feed."
               : "Publishing opens a real Meteora bonding curve on Solana. The post is the market."}
           </Text>
+
+          <MediaPicker kind={kind} media={media} onPick={pick} disabled={busy} />
 
           <Card style={styles.form}>
             <Field label="Name">
@@ -192,6 +303,21 @@ export default function PostScreen() {
                 autoCapitalize="characters"
                 style={styles.input}
                 maxLength={10}
+              />
+            </Field>
+
+            <Field
+              label="Caption"
+              hint={!captionOk ? `${caption.trim().length - MAX_CAPTION} over the limit` : undefined}
+            >
+              <TextInput
+                value={caption}
+                onChangeText={setCaption}
+                placeholder={kind === "reel" ? "Street level, 2am." : "Say what this is"}
+                placeholderTextColor={theme.colors.faint}
+                multiline
+                style={[styles.input, styles.caption]}
+                maxLength={MAX_CAPTION + 20}
               />
             </Field>
           </Card>
@@ -232,13 +358,20 @@ export default function PostScreen() {
             </Card>
           )}
 
-          <Button
-            label={status ?? "Launch coin"}
-            tall
-            onPress={launch}
-            loading={busy}
-            disabled={!canLaunch}
-          />
+          {unlisted ? (
+            <Button label={status ?? "Retry listing"} tall onPress={retryListing} loading={busy} />
+          ) : (
+            <Button
+              label={status ?? (kind === "reel" ? "Launch reel" : "Launch post")}
+              tall
+              onPress={launch}
+              loading={busy}
+              disabled={!canLaunch}
+            />
+          )}
+          {/* Why the button is off, instead of a dead button and a guess. */}
+          {!busy && !unlisted && missing ? <Text style={styles.missing}>{missing}</Text> : null}
+          {busy && status ? <Text style={styles.missing}>{status}</Text> : null}
           <Text style={styles.footnote}>
             Two signatures: one to create the curve config, one to open the pool.
             They cannot be combined — a sixteen-segment curve does not fit in a
@@ -247,6 +380,76 @@ export default function PostScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
+  );
+}
+
+const MAX_CAPTION = 280;
+/** Matches the upload route's own limit, so a doomed upload is refused before it starts. */
+const MAX_BYTES = 25 * 1024 * 1024;
+
+/**
+ * The photo or video, picked from the library and previewed at its own shape.
+ *
+ * A reel previews playing and muted, the way it will sit in the feed, so the
+ * creator sees what everyone else will before they sign for it.
+ */
+function MediaPicker({
+  kind,
+  media,
+  onPick,
+  disabled,
+}: {
+  kind: "post" | "reel";
+  media: ImagePicker.ImagePickerAsset | null;
+  onPick: () => void;
+  disabled: boolean;
+}) {
+  if (!media) {
+    return (
+      <Pressable onPress={onPick} disabled={disabled} accessibilityRole="button">
+        <View style={[styles.drop, { aspectRatio: kind === "reel" ? 4 / 5 : 1 }]}>
+          <View style={styles.dropDisc}>
+            <Text style={styles.dropPlus}>+</Text>
+          </View>
+          <Text style={styles.dropTitle}>{kind === "reel" ? "Add a video" : "Add a photo"}</Text>
+          <Text style={styles.dropBlurb}>
+            {kind === "reel" ? "Vertical works best. Up to 25MB." : "Square works best. Up to 25MB."}
+          </Text>
+        </View>
+      </Pressable>
+    );
+  }
+
+  const ratio =
+    media.width && media.height ? Math.max(0.56, Math.min(1.25, media.width / media.height)) : 1;
+
+  return (
+    <View style={[styles.preview, { aspectRatio: ratio }]}>
+      {media.type === "video" ? (
+        <VideoPreview uri={media.uri} />
+      ) : (
+        <ExpoImage source={{ uri: media.uri }} style={StyleSheet.absoluteFill} contentFit="cover" />
+      )}
+      <Pressable onPress={onPick} disabled={disabled} style={styles.change} accessibilityRole="button">
+        <Text style={styles.changeText}>Change</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+function VideoPreview({ uri }: { uri: string }) {
+  const player = useVideoPlayer(uri, (instance) => {
+    instance.loop = true;
+    instance.muted = true;
+    instance.play();
+  });
+  return (
+    <VideoView
+      player={player}
+      style={StyleSheet.absoluteFill}
+      contentFit="cover"
+      nativeControls={false}
+    />
   );
 }
 
@@ -296,5 +499,45 @@ const styles = StyleSheet.create({
   presetBlurb: { fontSize: theme.type.label.size, fontWeight: "500", color: theme.colors.muted, lineHeight: 19 },
   errorCard: { backgroundColor: "rgba(217,45,32,0.08)" },
   errorText: { fontSize: theme.type.body.size, color: theme.colors.neg, lineHeight: 21 },
+  caption: { height: 88, paddingTop: 12, textAlignVertical: "top" },
+  missing: { fontSize: theme.type.label.size, fontWeight: "600", color: theme.colors.muted, textAlign: "center" },
+  drop: {
+    width: "100%",
+    borderRadius: theme.radius.lg,
+    borderWidth: 2,
+    borderStyle: "dashed",
+    borderColor: theme.colors.lineStrong,
+    backgroundColor: theme.colors.surface,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  dropDisc: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: theme.colors.lime,
+  },
+  dropPlus: { fontSize: 30, fontWeight: "600", color: theme.colors.onLime, marginTop: -3 },
+  dropTitle: { fontSize: theme.type.body.size, fontWeight: "800", color: theme.colors.text },
+  dropBlurb: { fontSize: theme.type.label.size, color: theme.colors.muted },
+  preview: {
+    width: "100%",
+    borderRadius: theme.radius.lg,
+    overflow: "hidden",
+    backgroundColor: theme.colors.ink,
+  },
+  change: {
+    position: "absolute",
+    right: 12,
+    bottom: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: "rgba(0,0,0,0.6)",
+  },
+  changeText: { fontSize: 13, fontWeight: "700", color: "#FFFFFF" },
   footnote: { fontSize: theme.type.micro.size, fontWeight: "500", color: theme.colors.faint, lineHeight: 16, marginTop: 8 },
 });

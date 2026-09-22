@@ -35,7 +35,7 @@ import {
   Stat,
   Title,
 } from "../../components/kit";
-import { juno, type NavReference, type Plan } from "../../lib/api";
+import { juno, WSOL_MINT, type NavReference, type Plan } from "../../lib/api";
 import { money, since, tokens, useApi } from "../../lib/useApi";
 import { useWallet } from "../../lib/wallet";
 import { theme } from "../../theme";
@@ -101,15 +101,20 @@ export default function CoinScreen() {
   // because a list fetched on mount is stale by the time anyone looks at it.
   const comments = useApi(() => juno.comments(mint), [mint]);
 
-  // What this wallet holds of this coin, so the sell sheet can show a real
-  // balance instead of a dash. Read from the portfolio rather than a second
-  // chain call — it is the same figure, already fetched.
-  const portfolio = useApi(
-    async () => (wallet.address ? juno.portfolio(wallet.address) : null),
-    [wallet.address],
+  /*
+   * What this wallet holds of this coin, for the sell side.
+   *
+   * It was read out of the whole-portfolio walk, which reads every pool's
+   * history and is routinely cut short on the public RPC — so right after a
+   * buy the sell tab said "Balance: —" and every percentage was disabled. One
+   * token-balance read is exact and fast, and it is re-read after each trade.
+   */
+  const [tradeRevision, setTradeRevision] = useState(0);
+  const held = useApi(
+    async () => (wallet.address ? juno.balance(wallet.address, mint) : null),
+    [wallet.address, mint, tradeRevision],
   );
-  const holding =
-    portfolio.data?.positions.find((position) => position.baseMint === mint)?.balance ?? null;
+  const holding = held.data?.balance ?? null;
 
   /* What a buy would spend from. Read separately because it is the quote side,
      which the portfolio does not cover: it accounts for coins held, not for the
@@ -117,7 +122,13 @@ export default function CoinScreen() {
   const quoteMint = coin?.quote.mint ?? null;
   const spendable = useApi(
     async () => (wallet.address && quoteMint ? juno.balance(wallet.address, quoteMint) : null),
-    [wallet.address, quoteMint],
+    [wallet.address, quoteMint, tradeRevision],
+  );
+  // SOL for the network fee, when the market is priced in something else.
+  const feeSol = useApi(
+    async () =>
+      wallet.address && quoteMint && quoteMint !== WSOL_MINT ? juno.balance(wallet.address, WSOL_MINT) : null,
+    [wallet.address, quoteMint, tradeRevision],
   );
 
   /*
@@ -189,6 +200,13 @@ export default function CoinScreen() {
           <Skeleton h={26} w="80%" style={{ marginTop: 14 }} />
           <Skeleton h={64} round={16} style={{ marginTop: 18 }} />
         </Loading>
+      ) : detail.errorStatus === 404 || detail.errorStatus === 400 ? (
+        // Not a failure to retry: there is no such coin on this cluster.
+        <Placeholder
+          title="No such coin"
+          detail="Nothing on Juno has this address. It may be on another network, or the link is wrong."
+          action={<Button label="Back to the feed" onPress={() => router.replace("/(tabs)/social" as never)} />}
+        />
       ) : detail.error || !coin ? (
         <Placeholder
           title="Could not load this coin"
@@ -211,6 +229,46 @@ export default function CoinScreen() {
               />
             }
           >
+            {/* The post itself, first, when there is one. A market that is
+                a photo or a reel was shown as a price chart with the picture
+                nowhere on the page — the thing people are buying into, missing
+                from the screen where they buy it. Trackers have no media and
+                open on their chart. */}
+            {art && !coin.nav && coin.reference == null ? (
+              <Padded>
+                <Tappable
+                  onPress={() =>
+                    coin.media.kind === "video"
+                      ? router.push(`/(tabs)/reels?start=${coin.address}` as never)
+                      : undefined
+                  }
+                  to={coin.media.kind === "video" ? 0.98 : 1}
+                  accessibilityRole={coin.media.kind === "video" ? "button" : "image"}
+                  accessibilityLabel={coin.media.kind === "video" ? `Play ${coin.name}` : coin.name}
+                >
+                  <Hero
+                    source={{ uri: art }}
+                    resizeMode="cover"
+                    style={{
+                      aspectRatio:
+                        coin.media.width && coin.media.height
+                          ? Math.max(0.8, Math.min(1.25, coin.media.width / coin.media.height))
+                          : 1,
+                    }}
+                  />
+                  {coin.media.kind === "video" ? (
+                    <PlayOver pointerEvents="none">
+                      <PlayDisc>
+                        <Svg width={26} height={26} viewBox="0 0 24 24">
+                          <Path d="M7 4.5v15l12.5-7.5z" fill="#FFFFFF" />
+                        </Svg>
+                      </PlayDisc>
+                    </PlayOver>
+                  ) : null}
+                </Tappable>
+              </Padded>
+            ) : null}
+
             <PriceLine
               ticks={ticks}
               livePrice={coin.priceUsd}
@@ -234,9 +292,17 @@ export default function CoinScreen() {
                 </Tappable>
                 <NavGrow />
                 <Caption numberOfLines={1}>
-                  {coin.holders === null
-                    ? "— holders"
-                    : `${coin.holders} ${coin.holders === 1 ? "holder" : "holders"}`}
+                  {/* The largest-accounts read is one the public RPC refuses
+                      outright, so this said "— holders" on nearly every coin.
+                      When it does, the decoded trades answer instead: wallets
+                      whose fills still net positive, counted from a complete
+                      read only — a partial one would undercount. */}
+                  {(() => {
+                    const crowd = detail.data?.crowd;
+                    const n =
+                      coin.holders ?? (crowd && !crowd.partial ? crowd.holdersStill : null);
+                    return n === null ? "— holders" : `${n} ${n === 1 ? "holder" : "holders"}`;
+                  })()}
                 </Caption>
                 <Tappable onPress={() => void share(coin.address, coin.name)} to={0.86}>
                   <IconTap hitSlop={8} accessibilityRole="button" accessibilityLabel="Share">
@@ -411,6 +477,7 @@ export default function CoinScreen() {
               side={sheet}
               holding={holding}
               quoteBalance={spendable.data?.balance ?? null}
+              feeBalance={quoteMint === WSOL_MINT ? null : (feeSol.data?.balance ?? null)}
               initialAmount={sheet === "buy" && contributing ? String(contributing.amount) : ""}
               onFilled={(spent) => void recordFill(spent)}
               onCommented={() => comments.refresh()}
@@ -421,6 +488,7 @@ export default function CoinScreen() {
               onDone={() => {
                 setSheet(null);
                 setContributing(null);
+                setTradeRevision((n) => n + 1);
                 detail.refresh();
               }}
             />
@@ -886,9 +954,9 @@ function PostGlyph() {
  */
 function price(value: number, currency: string): string {
   if (!Number.isFinite(value)) return "—";
-  if (value >= 0.01) return money(value, currency, { compact: false });
-  const figure = value.toPrecision(3);
-  return currency === "USD" ? `$${figure}` : `${figure} ${currency}`;
+  // `money` already writes sub-cent prices the way traders do — 0.0₆242 —
+  // where `toPrecision` printed "$2.42e-7" in the largest type on the screen.
+  return money(value, currency, { compact: false });
 }
 
 const Page = styled(SafeAreaView)`
@@ -923,6 +991,35 @@ const Loading = styled.View`
 const Padded = styled.View`
   padding-horizontal: ${(p) => p.theme.space(4)}px;
   padding-top: ${(p) => p.theme.space(5)}px;
+`;
+
+const Hero = styled.Image`
+  width: 100%;
+  border-radius: ${(p) => p.theme.radius.lg}px;
+  background-color: ${(p) => p.theme.colors.surfaceAlt};
+  margin-bottom: ${(p) => p.theme.space(3)}px;
+`;
+
+const PlayOver = styled.View`
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: ${(p) => p.theme.space(3)}px;
+  align-items: center;
+  justify-content: center;
+`;
+
+const PlayDisc = styled.View`
+  width: 64px;
+  height: 64px;
+  border-radius: 32px;
+  padding-left: 4px;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(0, 0, 0, 0.45);
+  border-width: 1.5px;
+  border-color: rgba(255, 255, 255, 0.7);
 `;
 
 const Thumb = styled.Image`

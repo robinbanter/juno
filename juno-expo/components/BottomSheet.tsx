@@ -13,7 +13,7 @@ import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import * as Haptics from "expo-haptics";
 import styled from "styled-components/native";
 
-import { motion, useReducedMotion } from "../lib/motion";
+import { motion, useReducedMotion, nativeDriver } from "../lib/motion";
 import { theme } from "../theme";
 
 /**
@@ -122,7 +122,7 @@ export function BottomSheet({
         // Match the system's own curve and duration so the two move as one.
         duration: event.duration || motion.swap,
         easing: motion.easeOut,
-        useNativeDriver: true,
+        useNativeDriver: nativeDriver,
       }).start();
     });
     const hide = Keyboard.addListener(willHide, (event) => {
@@ -130,7 +130,7 @@ export function BottomSheet({
         toValue: 0,
         duration: event.duration || motion.swap,
         easing: motion.easeOut,
-        useNativeDriver: true,
+        useNativeDriver: nativeDriver,
       }).start();
     });
 
@@ -143,7 +143,7 @@ export function BottomSheet({
   const settle = useCallback(() => {
     Animated.spring(y, {
       toValue: 0,
-      useNativeDriver: true,
+      useNativeDriver: nativeDriver,
       ...motion.sheetSettle,
     }).start();
   }, [y]);
@@ -155,7 +155,7 @@ export function BottomSheet({
       toValue: height.current,
       duration: motion.exit,
       easing: motion.easeOut,
-      useNativeDriver: true,
+      useNativeDriver: nativeDriver,
     }).start(({ finished }) => {
       if (finished) setMounted(false);
     });
@@ -241,13 +241,13 @@ export function BottomSheet({
         toValue: 0,
         duration: motion.quick,
         easing: motion.easeOut,
-        useNativeDriver: true,
+        useNativeDriver: nativeDriver,
       }).start();
       return;
     }
     Animated.spring(y, {
       toValue: 0,
-      useNativeDriver: true,
+      useNativeDriver: nativeDriver,
       ...motion.sheetOpen,
     }).start();
   }, [mounted, visible, reduced, y]);

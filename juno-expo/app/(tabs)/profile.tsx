@@ -1,12 +1,13 @@
 import { useRouter } from "expo-router";
 import { useMemo, useState } from "react";
-import { RefreshControl, ScrollView } from "react-native";
+import { Platform, RefreshControl, ScrollView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import styled from "styled-components/native";
 
 import { AreaChart, RANGES, withinRange, type Range } from "../../components/AreaChart";
 import { CoinArt, Identicon } from "../../components/art";
 import { Tappable } from "../../components/Press";
+import { WalletCard } from "../../components/WalletCard";
 import {
   Body,
   Button,
@@ -145,7 +146,11 @@ export default function ProfileScreen() {
           title="No wallet yet"
           detail="Create one to trade and to launch your own coins. No sign-up."
           action={
-            <Button label="Create wallet" onPress={() => wallet.connect().then(portfolio.refresh)} />
+            // Not `.then(portfolio.refresh)`: that refresh was captured before
+            // the wallet existed, re-ran the read with no address, and its
+            // null landed last — "Holdings could not be read" on a wallet
+            // created a second ago. The address change re-reads on its own.
+            <Button label="Create wallet" onPress={() => void wallet.connect()} />
           }
         />
       </Page>
@@ -173,6 +178,8 @@ export default function ProfileScreen() {
           <Heading>{short}</Heading>
           <Caption>{wallet.mode === "local" ? "Device key · devnet" : "Embedded wallet"}</Caption>
         </Identity>
+
+        <WalletCard address={wallet.address} />
 
         {/*
           One statement, not two cards.
@@ -342,8 +349,9 @@ export default function ProfileScreen() {
         ) : (
           <Card>
             <Body muted>
-              This wallet lives in the device keychain and signs on-device. It is a
-              devnet key and is not recoverable — Juno never sees it.
+              {Platform.OS === "web"
+                ? "This wallet lives in this browser's storage and signs here. It is a devnet key and is not recoverable — clearing site data deletes it, and Juno never sees it."
+                : "This wallet lives in the device keychain and signs on-device. It is a devnet key and is not recoverable — Juno never sees it."}
             </Body>
           </Card>
         )}

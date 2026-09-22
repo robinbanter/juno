@@ -1,7 +1,7 @@
 import { useCallback, useRef } from "react";
 import { Animated, Pressable, type PressableProps, type StyleProp, type ViewStyle } from "react-native";
 
-import { motion } from "../lib/motion";
+import { motion, nativeDriver } from "../lib/motion";
 
 /**
  * The scale-down that tells a finger the interface heard it.
@@ -26,7 +26,7 @@ export function usePressScale(to = 0.97) {
       toValue: to,
       duration: motion.press,
       easing: motion.easeOut,
-      useNativeDriver: true,
+      useNativeDriver: nativeDriver,
     }).start();
   }, [scale, to]);
 
@@ -35,7 +35,7 @@ export function usePressScale(to = 0.97) {
       toValue: 1,
       tension: 200,
       friction: 12,
-      useNativeDriver: true,
+      useNativeDriver: nativeDriver,
     }).start();
   }, [scale]);
 

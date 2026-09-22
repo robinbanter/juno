@@ -65,6 +65,12 @@ export default function PostScreen() {
         <Padded>
           <Skeleton h={120} round={22} />
         </Padded>
+      ) : detail.errorStatus === 404 ? (
+        <Placeholder
+          title="No such post"
+          detail="It may have been removed, or the link is wrong."
+          action={<Button label="Back to the feed" onPress={() => router.replace("/(tabs)/social" as never)} />}
+        />
       ) : detail.error || !post ? (
         <Placeholder
           title="Could not load this post"

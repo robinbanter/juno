@@ -1,5 +1,5 @@
 import { TradeSheet } from "./TradeSheet";
-import { juno, type Coin } from "../lib/api";
+import { juno, WSOL_MINT, type Coin } from "../lib/api";
 import { useApi } from "../lib/useApi";
 import { useWallet } from "../lib/wallet";
 
@@ -28,6 +28,12 @@ export function QuickTrade({
     async () => (wallet.address ? juno.balance(wallet.address, coin.quote.mint) : null),
     [wallet.address, coin.quote.mint],
   );
+  // SOL for the fee, when the market is not itself priced in SOL.
+  const sol = useApi(
+    async () =>
+      wallet.address && coin.quote.mint !== WSOL_MINT ? juno.balance(wallet.address, WSOL_MINT) : null,
+    [wallet.address, coin.quote.mint],
+  );
   const held = useApi(
     async () => (wallet.address ? juno.balance(wallet.address, coin.address) : null),
     [wallet.address, coin.address],
@@ -39,6 +45,7 @@ export function QuickTrade({
       side={side}
       quoteBalance={spendable.data?.balance ?? null}
       holding={held.data?.balance ?? null}
+      feeBalance={coin.quote.mint === WSOL_MINT ? null : (sol.data?.balance ?? null)}
       onClose={onClose}
       onDone={onDone}
     />

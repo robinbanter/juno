@@ -79,6 +79,7 @@ export function TradeSheet({
   initialAmount = "",
   onFilled,
   onCommented,
+  feeBalance = null,
 }: {
   coin: Coin;
   side: "buy" | "sell";
@@ -106,6 +107,8 @@ export function TradeSheet({
   onFilled?: (quoteAmount: number) => void;
   /** An announcement was posted alongside the fill. */
   onCommented?: () => void;
+  /** SOL held, for the network fee. Null when unknown — then it is not checked. */
+  feeBalance?: number | null;
 }) {
   const wallet = useWallet();
   const [side, setSide] = useState<"buy" | "sell">(initialSide);
@@ -151,6 +154,39 @@ export function TradeSheet({
     return quoteBalance;
   }, [side, holding, quoteBalance]);
 
+  /*
+   * Why this trade cannot go through, decided before anything is signed.
+   *
+   * The server builds a transaction for any amount, and the chain refuses one
+   * the wallet cannot pay for — which reached the person as a raw simulation
+   * log. These are the refusals worth saying in words, with where to fix
+   * them. Unknown balances are not checked: a read that failed is not "empty".
+   */
+  const FEE_RESERVE = 0.01;
+  const blocker = useMemo((): { text: string; url?: string } | null => {
+    if (!valid) return null;
+    if (balance !== null && value > balance) {
+      if (side === "sell") return { text: `You hold ${tokens(balance)} ${coin.symbol}.` };
+      return coin.quote.symbol === "USDC"
+        ? {
+            text: `This market is priced in USDC and you have ${tokens(balance)}. Get devnet USDC from Circle's faucet.`,
+            url: "https://faucet.circle.com",
+          }
+        : { text: `You have ${tokens(balance)} SOL. Get devnet SOL from your profile.` };
+    }
+    const sol = coin.quote.symbol === "SOL" && side === "buy" ? balance : feeBalance;
+    const spending = coin.quote.symbol === "SOL" && side === "buy" ? value : 0;
+    if (sol !== null && sol !== undefined && sol - spending < FEE_RESERVE) {
+      return {
+        text:
+          spending > 0
+            ? `Leave about ${FEE_RESERVE} SOL for the network fee.`
+            : "You need a little SOL for the network fee. Get devnet SOL from your profile.",
+      };
+    }
+    return null;
+  }, [valid, balance, value, side, coin.symbol, coin.quote.symbol, feeBalance]);
+
   const usdEquivalent = useMemo(() => {
     if (!valid) return null;
     const live = quote?.quoteUsdRate ?? rate;
@@ -158,9 +194,14 @@ export function TradeSheet({
     return coin.priceUsd > 0 ? money(value * coin.priceUsd, coin.marketCapCurrency, { compact: false }) : null;
   }, [valid, value, side, quote?.quoteUsdRate, rate, coin.priceUsd, coin.marketCapCurrency]);
 
+  // An amount the wallet cannot cover is refused in words above; quoting it
+  // would spend a round trip on a transaction nobody can sign.
+  const overBalance = valid && balance !== null && value > balance;
+
   useEffect(() => {
-    if (!valid || !wallet.address) {
+    if (!valid || !wallet.address || overBalance) {
       setQuote(null);
+      setQuoting(false);
       return;
     }
     let cancelled = false;
@@ -193,7 +234,7 @@ export function TradeSheet({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [amount, valid, value, side, coin.address, wallet.address]);
+  }, [amount, valid, value, side, coin.address, wallet.address, overBalance]);
 
   useEffect(() => {
     let cancelled = false;
@@ -387,7 +428,10 @@ export function TradeSheet({
           <Done>
             <DoneTitle>Done</DoneTitle>
             <Label muted style={{ textAlign: "center" }}>
-              {side === "buy" ? "Bought" : "Sold"} {receiving ?? ""} — confirmed on Solana.
+              {side === "buy"
+                ? `Bought ${receiving ?? ""}`
+                : `Sold ${tokens(value)} ${coin.symbol} for ${receiving ?? ""}`}{" "}
+              — confirmed on Solana.
             </Label>
             {noteError ? <ErrorText>{noteError}</ErrorText> : null}
             <LinkTap onPress={() => Linking.openURL(juno.explorer("tx", signature!))}>
@@ -480,7 +524,9 @@ export function TradeSheet({
               </Row>
               <Mono_>
                 {quote
-                  ? `${tokens(quote.quote.fee)} ${coin.quote.symbol}`
+                  ? // `money` keeps small fees legible (0.0₄48 SOL) where four
+                    // fixed decimals rounded a real fee on a small buy to 0.0000.
+                    money(quote.quote.fee, coin.quote.symbol, { compact: false })
                   : quoting
                     ? "…"
                     : "—"}
@@ -521,16 +567,43 @@ export function TradeSheet({
               />
             </Note>
 
-            <Button
-              label={stage === "confirming" ? "Confirming…" : side === "buy" ? "Buy" : "Sell"}
-              variant={side === "buy" ? "lime" : "sell"}
-              tall
-              onPress={confirm}
-              loading={stage === "confirming" || wallet.signing}
-              disabled={!quote || quoting}
-              style={{ alignSelf: "stretch" }}
-            />
+            {/* No wallet means no quote — the button used to sit disabled
+                with nothing saying why. Creating one is the next step. */}
+            {!wallet.address ? (
+              <Button
+                label="Create a wallet to trade"
+                tall
+                onPress={() => void wallet.connect()}
+                style={{ alignSelf: "stretch" }}
+              />
+            ) : (
+              <Button
+                label={
+                  stage === "confirming"
+                    ? "Confirming…"
+                    : blocker
+                      ? `Not enough ${side === "sell" ? coin.symbol : blocker.text.includes("fee") ? "SOL" : coin.quote.symbol}`
+                      : side === "buy"
+                        ? "Buy"
+                        : "Sell"
+                }
+                variant={side === "buy" ? "lime" : "sell"}
+                tall
+                onPress={confirm}
+                loading={stage === "confirming" || wallet.signing}
+                disabled={!quote || quoting || !!blocker}
+                style={{ alignSelf: "stretch" }}
+              />
+            )}
 
+            {blocker ? (
+              <HintText>
+                {blocker.text}
+                {blocker.url ? (
+                  <HintLink onPress={() => void Linking.openURL(blocker.url!)}>{"  "}Open faucet</HintLink>
+                ) : null}
+              </HintText>
+            ) : null}
             {error ? <ErrorText>{error}</ErrorText> : null}
 
             <Pad>
@@ -574,6 +647,18 @@ function Info() {
   );
 }
 
+const HintText = styled.Text`
+  font-size: ${(p) => p.theme.type.label.size}px;
+  line-height: 19px;
+  color: ${(p) => p.theme.colors.muted};
+  text-align: center;
+`;
+
+const HintLink = styled.Text`
+  font-weight: 800;
+  color: ${(p) => p.theme.colors.focus};
+`;
+
 const Scrim = styled.Pressable`
   position: absolute;
   top: 0;
@@ -588,6 +673,10 @@ const Sheet = styled.View`
   left: 0;
   right: 0;
   bottom: 0;
+  /* A Modal renders over the whole window on web, not inside the app's
+     phone-width frame — so the sheet holds the same width itself. */
+  max-width: 480px;
+  margin-horizontal: auto;
   background-color: ${(p) => p.theme.colors.surface};
   border-top-left-radius: ${(p) => p.theme.radius.xl}px;
   border-top-right-radius: ${(p) => p.theme.radius.xl}px;

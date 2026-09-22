@@ -159,6 +159,21 @@ export async function buildSwap(request: SwapBuildRequest): Promise<SwapBuildRes
     side: request.side,
     amountIn: request.amountIn,
     slippageBps: request.slippageBps ?? 100,
+  }).catch((error: unknown) => {
+    /*
+     * The SDK refuses a trade the curve cannot fill — most often a sell into
+     * a pool nobody has bought, where there is no quote to pay out. That is
+     * a fact about the market, not a server fault, and it reached people as
+     * "Something went wrong on our side".
+     */
+    if (error instanceof Error && /insufficient liquidity/i.test(error.message)) {
+      throw new CallerError(
+        request.side === "sell"
+          ? "There is not enough in this pool to buy that back. Try a smaller amount."
+          : "This curve cannot fill that size. Try a smaller amount.",
+      );
+    }
+    throw error;
   });
 
   const transaction = await buildSwapTransaction({

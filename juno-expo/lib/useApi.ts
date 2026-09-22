@@ -17,6 +17,11 @@ import { ApiError } from "./api";
 export type AsyncState<T> = {
   data: T | null;
   error: string | null;
+  /**
+   * The HTTP status behind `error`, when there was one. A 404 is "this does
+   * not exist" and wants a way out, not a Try again that can never work.
+   */
+  errorStatus: number | null;
   loading: boolean;
   refreshing: boolean;
   refresh: () => void;
@@ -28,6 +33,7 @@ export function useApi<T>(
 ): AsyncState<T> {
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [errorStatus, setErrorStatus] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -41,6 +47,7 @@ export function useApi<T>(
       if (isRefresh) setRefreshing(true);
       else setLoading(true);
       setError(null);
+      setErrorStatus(null);
 
       try {
         const result = await load();
@@ -48,6 +55,7 @@ export function useApi<T>(
         setData(result);
       } catch (caught) {
         if (generation.current !== mine) return;
+        setErrorStatus(caught instanceof ApiError && caught.status > 0 ? caught.status : null);
         setError(
           caught instanceof ApiError
             ? caught.message
@@ -75,7 +83,7 @@ export function useApi<T>(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
 
-  return { data, error, loading, refreshing, refresh: () => run(true) };
+  return { data, error, errorStatus, loading, refreshing, refresh: () => run(true) };
 }
 
 /*

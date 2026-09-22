@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { Animated, Easing, StyleSheet, View } from "react-native";
 
 import { HeartGlyph } from "./icons";
-import { useReducedMotion } from "../lib/motion";
+import { useReducedMotion, nativeDriver } from "../lib/motion";
 
 /**
  * The double-tap heart, where the finger landed.
@@ -34,7 +34,7 @@ export function HeartBurst({ x, y, onDone }: { x: number; y: number; onDone: () 
       toValue: 1,
       duration: reduced ? 500 : 900,
       easing: Easing.linear,
-      useNativeDriver: true,
+      useNativeDriver: nativeDriver,
     }).start(onDone);
   }, [onDone, reduced, t]);
 

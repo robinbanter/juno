@@ -1,6 +1,8 @@
 
 import { junoJson, junoOptions } from "@/lib/juno/api";
 import { pinFile } from "@/lib/juno/pinata";
+import { videoPoster } from "@/lib/juno/poster";
+import sharp from "sharp";
 
 export const runtime = "nodejs";
 /** The Expo client is a different origin; the preflight has to answer. */
@@ -43,7 +45,40 @@ export async function POST(request: Request) {
 
   try {
     const pinned = await pinFile(file);
-    return junoJson({ ...pinned, mimeType: file.type }, { status: 201 });
+    const bytes = Buffer.from(await file.arrayBuffer());
+
+    /*
+     * Dimensions for both kinds, and a poster for video.
+     *
+     * Neither is optional decoration. A reel without a poster draws as an
+     * empty box in every list, and media without dimensions is laid out at a
+     * guessed ratio. A failure here fails the upload with a reason rather than
+     * handing back a video the rest of the app cannot show.
+     */
+    if (file.type.startsWith("video/")) {
+      const poster = await videoPoster(bytes);
+      const pinnedPoster = await pinFile(
+        new File([new Uint8Array(poster.jpeg)], "poster.jpg", { type: "image/jpeg" }),
+        `${file.name || "reel"}-poster`,
+      );
+      return junoJson(
+        {
+          ...pinned,
+          mimeType: file.type,
+          posterUri: pinnedPoster.uri,
+          posterUrl: pinnedPoster.url,
+          width: poster.width,
+          height: poster.height,
+        },
+        { status: 201 },
+      );
+    }
+
+    const meta = await sharp(bytes).metadata();
+    return junoJson(
+      { ...pinned, mimeType: file.type, width: meta.width ?? null, height: meta.height ?? null },
+      { status: 201 },
+    );
   } catch (error) {
     return junoJson(
       { error: error instanceof Error ? error.message : "Upload failed" },

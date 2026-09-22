@@ -28,7 +28,13 @@
       "expo-video",
       "expo-font",
       "expo-secure-store",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Juno uses your photos and videos so you can launch them as a post or a reel."
+        }
+      ]
     ],
     "scheme": "juno",
     "backgroundColor": "#D3E3CB"

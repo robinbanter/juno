@@ -594,7 +594,13 @@ export function Segmented<T extends string>({
   return (
     <SegRow>
       {items.map((item) => (
-        <Seg key={item.id} $on={item.id === value} onPress={() => onChange(item.id)}>
+        <Seg
+          key={item.id}
+          $on={item.id === value}
+          onPress={() => onChange(item.id)}
+          accessibilityRole="tab"
+          accessibilityState={{ selected: item.id === value }}
+        >
           <SegLabel $on={item.id === value}>{item.label}</SegLabel>
         </Seg>
       ))}

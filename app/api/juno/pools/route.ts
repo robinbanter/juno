@@ -116,6 +116,13 @@ export async function POST(request: Request) {
     navUnitsPerToken: await parityRatio(navFeedId, poolAddress, quoteMint),
     mediaUrl: str("mediaUrl") || null,
     posterUrl: str("posterUrl") || null,
+    /*
+     * Stored, where before it was dropped: `mediaKind` reads this column and
+     * nothing else, so every video launched through this route was recorded
+     * as an image and could never appear in the reel feed. Only the two kinds
+     * the app renders are accepted.
+     */
+    mediaMime: /^(image|video)\/[\w.+-]+$/.test(str("mediaMime")) ? str("mediaMime") : null,
     mediaWidth: num("mediaWidth"),
     mediaHeight: num("mediaHeight"),
     createSignature,

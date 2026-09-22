@@ -118,7 +118,9 @@ export function useLaunch() {
               curvePreset: request.preset,
               navFeedId: request.navFeedId ?? null,
               mediaUrl: request.mediaUrl ?? null,
-              posterUrl: request.mediaUrl ?? null,
+              // A video is not its own poster; an image is.
+              posterUrl: request.mimeType?.startsWith("video") ? null : (request.mediaUrl ?? null),
+              mediaMime: request.mimeType ?? null,
               mediaWidth: request.mediaWidth ?? null,
               mediaHeight: request.mediaHeight ?? null,
               createSignature: signatures[signatures.length - 1],

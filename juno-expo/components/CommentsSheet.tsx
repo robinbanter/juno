@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, FlatList, TextInput } from "react-native";
-import Svg, { Path } from "react-native-svg";
 import styled from "styled-components/native";
 
 import { BottomSheet } from "./BottomSheet";
@@ -76,7 +75,6 @@ export function CommentsSheet({
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
-  const [liked, setLiked] = useState<Set<string>>(new Set());
 
   const load = useCallback(async () => {
     setError(null);
@@ -180,18 +178,7 @@ export function CommentsSheet({
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{ paddingBottom: 12 }}
             renderItem={({ item }) => (
-              <CommentRow
-                comment={item}
-                liked={liked.has(item.id)}
-                onLike={() =>
-                  setLiked((current) => {
-                    const next = new Set(current);
-                    if (next.has(item.id)) next.delete(item.id);
-                    else next.add(item.id);
-                    return next;
-                  })
-                }
-              />
+              <CommentRow comment={item} />
             )}
           />
         )}
@@ -227,15 +214,13 @@ export function CommentsSheet({
   );
 }
 
-function CommentRow({
-  comment,
-  liked,
-  onLike,
-}: {
-  comment: Row;
-  liked: boolean;
-  onLike: () => void;
-}) {
+/**
+ * One comment. No heart: a comment's like was held in the sheet's local
+ * state and forgotten the moment it closed — a control that looked like it
+ * recorded something and recorded nothing. The count that matters is on the
+ * post, where likes are stored.
+ */
+function CommentRow({ comment }: { comment: Row }) {
   return (
     <Entry>
       <Identicon seed={comment.wallet} size={34} />
@@ -255,28 +240,10 @@ function CommentRow({
         <Text_>{comment.body}</Text_>
       </Body_>
 
-      <Tappable onPress={onLike} to={0.86}>
-        <Heart hitSlop={10} accessibilityRole="button" accessibilityLabel={liked ? "Unlike" : "Like"}>
-          <HeartGlyph filled={liked} />
-        </Heart>
-      </Tappable>
     </Entry>
   );
 }
 
-function HeartGlyph({ filled }: { filled: boolean }) {
-  return (
-    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
-      <Path
-        d="M12 20.2S3.8 15.4 3.8 9.6A4.6 4.6 0 0 1 12 6.9a4.6 4.6 0 0 1 8.2 2.7c0 5.8-8.2 10.6-8.2 10.6Z"
-        fill={filled ? theme.colors.neg : "none"}
-        stroke={filled ? theme.colors.neg : theme.colors.faint}
-        strokeWidth={1.9}
-        strokeLinejoin="round"
-      />
-    </Svg>
-  );
-}
 
 const Head = styled.View`
   align-items: center;
@@ -351,10 +318,6 @@ const Side = styled.Text<{ $buy: boolean }>`
   text-transform: uppercase;
   letter-spacing: 0.4px;
   color: ${(p) => (p.$buy ? p.theme.colors.pos : p.theme.colors.neg)};
-`;
-
-const Heart = styled.View`
-  padding-top: 4px;
 `;
 
 const Composer = styled.View`
