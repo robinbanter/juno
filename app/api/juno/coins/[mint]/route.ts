@@ -60,7 +60,16 @@ export async function GET(
      * extra is fetched, so this is free in RPC terms and the page does not get
      * slower for having it.
      */
-    const crowd = await (async () => {
+    /*
+     * One history walk, two consumers.
+     *
+     * The crowd figures and the holder book are both rebuilt from this pool's
+     * decoded fills. `listSwapHistory` is cached, so a second call would be
+     * cheap rather than free — but reading it once here also means the two
+     * cannot disagree about what the history contained, which they could if
+     * one of them landed either side of a cache expiry.
+     */
+    const decoded = await (async () => {
       // The *same* rate `hydratePool` used, so this is the cached snapshot
       // rather than a second read under a different key — which is what made
       // this come back `partial` with every figure zeroed on a pool whose
@@ -69,18 +78,34 @@ export async function GET(
       const snapshot = await fetchPoolSnapshot(row.poolAddress, rate);
       if (!snapshot) return null;
       const history = await listSwapHistory(row.poolAddress, vaultsOf(snapshot));
-      // `snapshot.price`, not `coin.priceUsd`. A decoded swap's price is quote
-      // per base, so comparing it against a USD price multiplied the first
-      // buyer's return by whatever SOL costs — it read 113x on an entry that
-      // is up about 13%.
-      return crowdFromSwaps(history.swaps, history.partial, snapshot.price, rate);
+      return { history, snapshot, rate };
     })().catch(() => null);
+
+    // `snapshot.price`, not `coin.priceUsd`. A decoded swap's price is quote
+    // per base, so comparing it against a USD price multiplied the first
+    // buyer's return by whatever SOL costs — it read 113x on an entry that
+    // is up about 13%.
+    const crowd = decoded
+      ? crowdFromSwaps(
+          decoded.history.swaps,
+          decoded.history.partial,
+          decoded.snapshot.price,
+          decoded.rate,
+        )
+      : null;
 
     const [activity, holders] = await Promise.all([
       poolActivityRead(row, 20).catch(() => ({ items: [], partial: true })),
-      listPoolHolders(row.baseMint)
-        .then((items) => ({ items: items ?? [], unreadable: items === null }))
-        .catch(() => ({ items: [], unreadable: true })),
+      // Fills are handed in so the holder book can be rebuilt from them when
+      // the endpoint refuses `getTokenLargestAccounts`, which on devnet is the
+      // usual outcome rather than the exception.
+      listPoolHolders(row.baseMint, decoded?.history.swaps ?? null)
+        .then((book) => ({
+          items: book?.holders ?? [],
+          unreadable: book === null,
+          source: book?.source ?? null,
+        }))
+        .catch(() => ({ items: [], unreadable: true, source: null })),
     ]);
 
     return junoJson({
@@ -94,6 +119,8 @@ export async function GET(
       activityPartial: activity.partial,
       /** Null when the history could not be read at all — not "nobody traded". */
       crowd,
+      /** How the holder list was derived: token accounts, or decoded fills. */
+      holdersSource: holders.source,
       holders: holders.items,
       /** True when the holder read was refused outright — not "nobody holds it". */
       holdersUnreadable: holders.unreadable,

@@ -5,7 +5,7 @@ import { ExternalLink } from "lucide-react";
 import { money, shortAddress } from "@/lib/juno/format";
 import { identicon } from "@/lib/juno/identicon";
 
-import { hydratePool, poolActivityRead } from "@/lib/juno/chain";
+import { hydratePool, poolActivityRead, poolSwapsRead } from "@/lib/juno/chain";
 import { cluster, explorer, meteoraPoolUrl } from "@/lib/juno/cluster";
 import { GraduatedNotice } from "@/components/juno/coin/GraduatedNotice";
 import { QUOTE_TOKENS } from "@/lib/juno/dbc";
@@ -69,7 +69,17 @@ export default async function CoinPage({
   const meteoraLink = meteoraPoolUrl(coin.pool);
 
   const [holders, comments] = await Promise.all([
-    listPoolHolders(row.baseMint),
+    /*
+     * Holders, with the fills as a fallback.
+     *
+     * `poolActivityRead` has walked this pool's history by now and it is
+     * cached, so handing the swaps in costs nothing and gives the holder book
+     * something to rebuild itself from when the endpoint refuses
+     * `getTokenLargestAccounts` — which on devnet it nearly always does.
+     */
+    poolSwapsRead(row)
+      .then((swaps) => listPoolHolders(row.baseMint, swaps))
+      .catch(() => null),
     listComments(row.baseMint, cluster()).catch(
       (): Awaited<ReturnType<typeof listComments>> => [],
     ),

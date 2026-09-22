@@ -5,7 +5,8 @@ import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { money, percent, shortAddress, since, tokenAmount, usd } from "@/lib/juno/format";
 import { CURVE_PRESETS } from "@/lib/juno/curves";
-import type { Coin, Comment, Holder } from "@/lib/juno/types";
+import type { Coin, Comment } from "@/lib/juno/types";
+import type { HolderBook } from "@/lib/juno/activity";
 import { Avatar } from "../ui/Avatar";
 import { Tabs } from "../ui/Tabs";
 import { CommentComposer } from "./CommentComposer";
@@ -22,8 +23,8 @@ export function CoinTabs({
   coin: Coin;
   /** Streamed in on the server — see the coin page's Suspense boundaries. */
   activity: React.ReactNode;
-  /** Null when the holder read was refused — see `listPoolHolders`. */
-  holders: Holder[] | null;
+  /** Null when neither the token accounts nor the fills could be read. */
+  holders: HolderBook | null;
   comments: Comment[];
 }) {
   const [tab, setTab] = useState<TabId>("activity");
@@ -47,7 +48,7 @@ export function CoinTabs({
 
       <div className="pt-2">
         {tab === "activity" && activity}
-        {tab === "holders" && <HoldersList items={holders} />}
+        {tab === "holders" && <HoldersList book={holders} />}
         {tab === "comments" && (
           <>
             <CommentComposer
@@ -63,10 +64,10 @@ export function CoinTabs({
   );
 }
 
-function HoldersList({ items }: { items: Holder[] | null }) {
+function HoldersList({ book }: { book: HolderBook | null }) {
   // "No holders yet" about a pool that has traded is the kind of thing a
   // visitor checks once and stops trusting the page over.
-  if (items === null) {
+  if (book === null) {
     return (
       <Empty>
         Could not read this pool&rsquo;s holders just now — the public RPC
@@ -74,9 +75,21 @@ function HoldersList({ items }: { items: Holder[] | null }) {
       </Empty>
     );
   }
+  const items = book.holders;
   if (items.length === 0) return <Empty>No holders yet.</Empty>;
 
   return (
+    <>
+      {/* Where this list came from, because the two sources measure different
+          things and a holder who never traded here is invisible to one of
+          them. Saying so is cheaper than being quietly wrong. */}
+      {book.source === "fills" && (
+        <p className="pb-2 text-[12px] text-j-faint">
+          Rebuilt from trades against this pool — the endpoint would not serve
+          the token accounts. Anyone who received tokens by transfer is not
+          counted.
+        </p>
+      )}
     <ul className="divide-y divide-j-line">
       {items.map((holder) => (
         <li key={holder.wallet} className="flex items-center gap-3 py-3 text-[14px]">
@@ -94,6 +107,7 @@ function HoldersList({ items }: { items: Holder[] | null }) {
         </li>
       ))}
     </ul>
+    </>
   );
 }
 

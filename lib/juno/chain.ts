@@ -25,6 +25,7 @@ import {
   totalVolume as sumVolume,
   volumeWithin,
   DAY_MS,
+  type PoolSwap,
 } from "./swaps";
 import type { JunoPoolRow } from "./registry";
 import type {
@@ -389,6 +390,25 @@ export async function poolActivityRead(
       .map((swap) => activityFromSwap(swap, rate)),
     partial: history.partial,
   };
+}
+
+/**
+ * This pool's decoded fills, raw.
+ *
+ * `poolActivityRead` returns them shaped for a feed row, which loses the
+ * signer's net position — the thing a holder book is built from. Both read the
+ * same cached history, so asking for either after the other costs a cache
+ * lookup rather than a walk.
+ *
+ * Null when the pool could not be read at all, which is different from a pool
+ * with no trades and has to stay different all the way to the UI.
+ */
+export async function poolSwapsRead(row: JunoPoolRow): Promise<PoolSwap[] | null> {
+  const quoteUsd = await quoteTokenUsdPrice(row.quoteMint).catch(() => null);
+  const snapshot = await fetchPoolSnapshot(row.poolAddress, quoteUsd ?? 1);
+  if (!snapshot) return null;
+  const history = await listSwapHistory(row.poolAddress, vaultsOf(snapshot));
+  return history.swaps;
 }
 
 /** The merged feed moves only when someone trades. */

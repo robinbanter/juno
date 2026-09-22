@@ -244,9 +244,19 @@ export type Activity = {
 export type Holder = {
   rank: number;
   actor: Pick<Creator, "handle" | "avatarUrl">;
+  /**
+   * The holder's address.
+   *
+   * A real wallet when this came from decoded fills. When it came from
+   * `getTokenLargestAccounts` it is the *token account*, whose owner costs a
+   * read each to resolve — `isTokenAccount` says which, so the UI never calls
+   * one the other.
+   */
   wallet: string;
+  /** True when `wallet` is a token account rather than its owner. */
+  isTokenAccount?: boolean;
   balance: number;
-  /** Share of circulating supply, 0..1. */
+  /** Share of what the list accounts for, 0..1. */
   share: number;
 };
 
