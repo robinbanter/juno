@@ -1100,6 +1100,16 @@ export const junoPools = pgTable(
 
     /** The launch signature — the receipt a judge clicks. */
     createSignature: varchar("create_signature", { length: 96 }).notNull(),
+    /**
+     * Whether the coin appears in public lists — the feed, reels, Trade.
+     *
+     * A launch is permanent on-chain and cannot be undone, but a rehearsal
+     * or a test launch should not be the first thing a visitor scrolls past.
+     * Unlisting hides it from browsing and nothing else: its page still
+     * opens, holders still see it in their portfolio, the indexer still
+     * reads it. Nothing is deleted.
+     */
+    listed: boolean("listed").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [

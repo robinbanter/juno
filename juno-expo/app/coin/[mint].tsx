@@ -1,13 +1,14 @@
 import * as Clipboard from "expo-clipboard";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { Linking, RefreshControl, ScrollView, Share } from "react-native";
+import { Linking, RefreshControl, ScrollView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Svg, { Path, Rect } from "react-native-svg";
 import styled from "styled-components/native";
 
 import { CoinGlyph, Identicon } from "../../components/art";
 import { CommentsSheet } from "../../components/CommentsSheet";
+import { Handle } from "../../components/Handle";
 import { PriceLine } from "../../components/PriceLine";
 import { Tappable } from "../../components/Press";
 import {
@@ -37,6 +38,7 @@ import {
 } from "../../components/kit";
 import { juno, WSOL_MINT, type NavReference, type Plan } from "../../lib/api";
 import { money, since, tokens, useApi } from "../../lib/useApi";
+import { shareCoin } from "../../lib/social";
 import { useWallet } from "../../lib/wallet";
 import { theme } from "../../theme";
 
@@ -286,7 +288,7 @@ export default function CoinScreen() {
                   <Row gap={8} align="center">
                     {art ? <Thumb source={{ uri: art }} /> : <CoinGlyph size={30} seed={coin.address} />}
                     <Label style={{ fontWeight: "700" }} numberOfLines={1}>
-                      {coin.creator.handle}
+                      <Handle wallet={coin.creator.wallet} />
                     </Label>
                   </Row>
                 </Tappable>
@@ -304,7 +306,15 @@ export default function CoinScreen() {
                     return n === null ? "— holders" : `${n} ${n === 1 ? "holder" : "holders"}`;
                   })()}
                 </Caption>
-                <Tappable onPress={() => void share(coin.address, coin.name)} to={0.86}>
+                <Tappable
+                  onPress={async () => {
+                    const outcome = await shareCoin(coin);
+                    // "Copied" on the chip below is the one confirmation this
+                    // screen already has; a copied link reuses it.
+                    if (outcome === "copied") setCopied(true);
+                  }}
+                  to={0.86}
+                >
                   <IconTap hitSlop={8} accessibilityRole="button" accessibilityLabel="Share">
                     <ShareGlyph />
                   </IconTap>
@@ -575,11 +585,6 @@ export default function CoinScreen() {
   }
 }
 
-async function share(mint: string, name: string) {
-  await Share.share({ message: `${name} on Juno — ${juno.explorer("token", mint)}` }).catch(
-    () => undefined,
-  );
-}
 
 /* ------------------------------------------------------------------ */
 /* Tabs                                                                */
@@ -619,7 +624,7 @@ function ActivityTab({
             <Row gap={8} align="center">
               <Identicon seed={row.wallet} size={26} />
               <Label numberOfLines={1} style={{ maxWidth: 96 }}>
-                {row.actor.handle}
+                <Handle wallet={row.wallet} />
               </Label>
             </Row>
           </Tappable>
@@ -670,7 +675,7 @@ function HoldersTab({
             <Row gap={8} align="center">
               <Identicon seed={row.wallet} size={26} />
               <Label numberOfLines={1} style={{ maxWidth: 96 }}>
-                {row.actor.handle}
+                <Handle wallet={row.wallet} />
               </Label>
             </Row>
           </Tappable>

@@ -8,6 +8,7 @@ import { AreaChart, RANGES, withinRange, type Range } from "../../components/Are
 import { CoinArt, Identicon } from "../../components/art";
 import { Tappable } from "../../components/Press";
 import { WalletCard } from "../../components/WalletCard";
+import { Handle } from "../../components/Handle";
 import {
   Body,
   Button,
@@ -157,7 +158,6 @@ export default function ProfileScreen() {
     );
   }
 
-  const short = `${wallet.address.slice(0, 4)}…${wallet.address.slice(-4)}`;
 
   return (
     <Page edges={["top"]}>
@@ -175,7 +175,9 @@ export default function ProfileScreen() {
         {/* Identity, as in the profile reference: avatar, handle, address. */}
         <Identity>
           <Identicon seed={wallet.address} size={72} />
-          <Heading>{short}</Heading>
+          <Heading>
+            <Handle wallet={wallet.address} />
+          </Heading>
           <Caption>{wallet.mode === "local" ? "Device key · devnet" : "Embedded wallet"}</Caption>
         </Identity>
 

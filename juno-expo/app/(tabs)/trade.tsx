@@ -22,11 +22,12 @@ import {
   Title,
 } from "../../components/kit";
 import { CoinArt, Identicon } from "../../components/art";
+import { Handle } from "../../components/Handle";
 import { Tappable } from "../../components/Press";
 import { QuickTrade } from "../../components/QuickTrade";
 import { juno, type Coin, type TesseraCompany, type Trader } from "../../lib/api";
 import { useLinkedState } from "../../lib/linked";
-import { bigMoney, count, invalidateMarkets, loadMarkets } from "../../lib/markets";
+import { bigMoney, count, invalidateMarkets, loadMarkets, progressLabel } from "../../lib/markets";
 import { money, useApi } from "../../lib/useApi";
 import { useViewerOnce } from "../../lib/social";
 import { theme } from "../../theme";
@@ -338,9 +339,27 @@ function CompanyCard({
                   <Text style={styles.marketName} numberOfLines={1}>
                     ${market.symbol} <Text style={styles.marketPreset}>{market.curvePreset}</Text>
                   </Text>
+                  {/* The claim the tracker makes, checked: what one token
+                      implies per share against Tessera's mark, and whether
+                      that sits inside the preset's band. This is the whole
+                      point of a pre-IPO curve, and the card never said it. */}
+                  {coin?.nav && coin.nav.impliedUsd !== null && coin.nav.deviation !== null ? (
+                    <Text
+                      style={[
+                        styles.marketMeta,
+                        { color: coin.nav.withinBand ? theme.colors.pos : theme.colors.neg, fontWeight: "700" },
+                      ]}
+                      numberOfLines={2}
+                    >
+                      Implies {money(coin.nav.impliedUsd, "USD", { compact: false })}/share ·{" "}
+                      {coin.nav.deviation >= 0 ? "+" : ""}
+                      {(coin.nav.deviation * 100).toFixed(2)}% vs mark ·{" "}
+                      {coin.nav.withinBand ? "inside" : "outside"} ±{coin.nav.bandBps / 100}% band
+                    </Text>
+                  ) : null}
                   <Text style={styles.marketMeta} numberOfLines={1}>
                     {money(coin?.marketCap ?? market.marketCap, market.currency)} cap ·{" "}
-                    {market.graduated ? "graduated" : `${pct.toFixed(pct < 1 && pct > 0 ? 2 : 0)}% to graduation`}
+                    {market.graduated ? "graduated" : `${progressLabel(pct)} to graduation`}
                   </Text>
                 </View>
                 {market.graduated ? null : (
@@ -446,7 +465,11 @@ function MarketCard({
             <Text style={styles.companySector} numberOfLines={1}>
               {stock
                 ? `${listed?.venue ?? "Listed"} · ${ticker ?? coin.symbol} · Pyth`
-                : `by ${coin.creator.handle} · ${coin.format === "reel" ? "reel" : "post"}`}
+                : (
+                  <>
+                    by <Handle wallet={coin.creator.wallet} /> · {coin.format === "reel" ? "reel" : "post"}
+                  </>
+                )}
             </Text>
           </View>
           <View style={[styles.preBadge, stock ? styles.badgeInk : styles.badgeHeart]}>
@@ -500,7 +523,7 @@ function MarketCard({
                 />
               </View>
               <Text style={styles.marketMeta}>
-                {coin.curve.graduated ? "Graduated" : `${pct.toFixed(pct < 1 && pct > 0 ? 2 : 0)}%`}
+                {coin.curve.graduated ? "Graduated" : progressLabel(pct)}
               </Text>
             </View>
           </View>
@@ -716,7 +739,7 @@ function TraderBoard({
                   <Col gap={2} style={{ flex: 1 }}>
                     <Row gap={6}>
                       <Label style={{ fontWeight: "700" }} numberOfLines={1}>
-                        {trader.wallet.slice(0, 4)}…{trader.wallet.slice(-4)}
+                        <Handle wallet={trader.wallet} />
                       </Label>
                       {trader.isCreator ? <Pill label="Creator" tone="lime" /> : null}
                     </Row>

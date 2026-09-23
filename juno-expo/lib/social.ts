@@ -147,6 +147,20 @@ export function useFollow(target: string) {
 }
 
 /**
+ * Where a shared link should open: the Juno app, not its API.
+ *
+ * Links used to point at the API host, which serves no Juno pages of its own.
+ * `EXPO_PUBLIC_APP_URL` names the app; in a browser the page's own origin is
+ * already the app. The API host is the last resort and redirects to the app.
+ */
+function appUrl(): string {
+  const configured = process.env.EXPO_PUBLIC_APP_URL?.replace(/\/$/, "");
+  if (configured) return configured;
+  if (Platform.OS === "web" && typeof window !== "undefined") return window.location.origin;
+  return API_URL;
+}
+
+/**
  * Share a coin: the system sheet on a phone, the clipboard where there is none.
  *
  * Resolves to what happened so the caller can say "Link copied" — a share
@@ -155,7 +169,7 @@ export function useFollow(target: string) {
 export async function shareCoin(
   coin: Pick<Coin, "address" | "name" | "symbol">,
 ): Promise<"shared" | "copied" | "cancelled" | "failed"> {
-  const url = coinLink(API_URL, coin);
+  const url = coinLink(appUrl(), coin);
   const message = `${coin.name} — $${coin.symbol} is live on Juno. Every post is a market.`;
   try {
     if (Platform.OS === "web") {

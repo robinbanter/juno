@@ -22,7 +22,7 @@ export async function GET(request: Request) {
     const sort = url.searchParams.get("sort");
 
     // `?nav=1`: each tracker's reference price too — see `hydratePool`.
-    const { coins, missing } = await hydratePools(await listPools(limit), 2, {
+    const { coins, missing } = await hydratePools(await listPools(limit, { listedOnly: true }), 2, {
       nav: url.searchParams.get("nav") === "1",
     });
 

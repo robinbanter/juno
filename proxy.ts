@@ -81,8 +81,40 @@ function malformedAddress(pathname: string): boolean {
   return false;
 }
 
+/**
+ * Where a page request goes when this deployment is Juno's API.
+ *
+ * This Next app still carries the product it grew out of — Norr, an 18+
+ * Algorand site — and on the Railway domain that was the home page: anyone
+ * who trimmed a share link or followed one landed on an age gate for a
+ * different product on a different chain. With `JUNO_APP_URL` set, every
+ * page request is sent to the Juno app instead, at the matching screen where
+ * there is one. `/api/*` is untouched — it is what the app calls.
+ */
+function junoAppRedirect(req: NextRequest): NextResponse | null {
+  const app = process.env.JUNO_APP_URL?.replace(/\/$/, "");
+  const { pathname } = req.nextUrl;
+  if (!app || pathname.startsWith("/api/")) return null;
+
+  const coin = /^\/coin\/([^/]+)/.exec(pathname);
+  const creator = /^\/creator\/([^/]+)/.exec(pathname);
+  const target = coin
+    ? `/coin/${coin[1]}`
+    : creator
+      ? `/trader/${creator[1]}`
+      : pathname === "/reels"
+        ? "/reels"
+        : pathname === "/explore"
+          ? "/trade?sort=memes"
+          : "/";
+  return NextResponse.redirect(`${app}${target}`, 307);
+}
+
 export default async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
+
+  const toApp = junoAppRedirect(req);
+  if (toApp) return toApp;
 
   if (malformedAddress(pathname)) {
     return NextResponse.rewrite(new URL("/not-found", req.url), { status: 404 });

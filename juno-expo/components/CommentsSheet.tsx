@@ -3,6 +3,7 @@ import { ActivityIndicator, FlatList, TextInput } from "react-native";
 import styled from "styled-components/native";
 
 import { BottomSheet } from "./BottomSheet";
+import { Handle } from "./Handle";
 import { Identicon } from "./art";
 import { Tappable } from "./Press";
 import { Body, Caption, Label, Row } from "./kit";
@@ -227,7 +228,7 @@ function CommentRow({ comment }: { comment: Row }) {
       <Body_>
         <Row gap={6}>
           <Label style={{ fontWeight: "700" }} numberOfLines={1}>
-            {comment.wallet.slice(0, 4)}…{comment.wallet.slice(-4)}
+            <Handle wallet={comment.wallet} />
           </Label>
           <Caption>{since(comment.createdAt)}</Caption>
           {/* A comment that came with a trade carries which way it went. The

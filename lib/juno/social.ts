@@ -26,7 +26,7 @@ function client(): MongoClient {
   return globalThis.__junoMongo;
 }
 
-async function db(): Promise<Db> {
+export async function db(): Promise<Db> {
   const c = client();
   await c.connect();
   return c.db(process.env.MONGODB_DB || "juno");

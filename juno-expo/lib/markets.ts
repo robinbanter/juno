@@ -107,3 +107,17 @@ async function readMarkets(viewer?: string | null) {
   }
   return { ...sorted, missing };
 }
+
+/**
+ * "How far to graduation", as text.
+ *
+ * A curve a hair past zero printed "0.00%" — a figure that reads as zero and
+ * as broken at once. Under a hundredth of a percent it says so; under one it
+ * keeps two decimals; above that, whole numbers.
+ */
+export function progressLabel(pct: number): string {
+  if (pct <= 0) return "0%";
+  if (pct < 0.01) return "<0.01%";
+  if (pct < 1) return `${pct.toFixed(2)}%`;
+  return `${Math.floor(pct)}%`;
+}

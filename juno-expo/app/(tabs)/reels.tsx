@@ -23,6 +23,7 @@ import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
 import { CoinArt, Identicon } from "../../components/art";
 import { CommentsSheet } from "../../components/CommentsSheet";
 import { HeartBurst } from "../../components/HeartBurst";
+import { Handle } from "../../components/Handle";
 import {
   CheckGlyph,
   HeartGlyph,
@@ -35,7 +36,7 @@ import {
 import { Tappable } from "../../components/Press";
 import { QuickTrade } from "../../components/QuickTrade";
 import { juno, type Coin } from "../../lib/api";
-import { count, invalidateMarkets, loadMarkets } from "../../lib/markets";
+import { count, invalidateMarkets, loadMarkets, progressLabel } from "../../lib/markets";
 import { useReducedMotion, nativeDriver } from "../../lib/motion";
 import { shareCoin, useFollow, useLike, useViewerOnce } from "../../lib/social";
 import { money, useApi } from "../../lib/useApi";
@@ -388,7 +389,7 @@ function Reel({
               <Identicon seed={coin.creator.wallet} size={30} />
             </View>
             <Text style={styles.handle} numberOfLines={1}>
-              {coin.creator.handle}
+              <Handle wallet={coin.creator.wallet} />
             </Text>
           </Pressable>
           <FollowChip wallet={coin.creator.wallet} />
@@ -433,7 +434,7 @@ function Reel({
             <Text style={styles.dockMuted} numberOfLines={1}>
               {coin.curve.graduated
                 ? "Graduated · trading on DAMM v2"
-                : `${pct < 1 && pct > 0 ? pct.toFixed(2) : pct.toFixed(0)}% to graduation`}
+                : `${progressLabel(pct)} to graduation`}
             </Text>
           </View>
         </Pressable>

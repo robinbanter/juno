@@ -1,4 +1,5 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { Handle } from "../../components/Handle";
 import { useState } from "react";
 import { KeyboardAvoidingView, Platform, RefreshControl, ScrollView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -99,7 +100,7 @@ export default function PostScreen() {
               <Row gap={10}>
                 <Identicon seed={post.author.wallet} size={36} />
                 <Col gap={1} style={{ flex: 1 }}>
-                  <Label style={{ fontWeight: "700" }}>{post.author.handle}</Label>
+                  <Label style={{ fontWeight: "700" }}><Handle wallet={post.author.wallet} /></Label>
                   <Caption>{since(post.timestamp)} ago</Caption>
                 </Col>
               </Row>
@@ -180,7 +181,7 @@ function Reply({ reply }: { reply: PostDetail }) {
     <Card>
       <Row gap={10}>
         <Identicon seed={reply.author.wallet} size={26} />
-        <Label style={{ fontWeight: "700" }}>{reply.author.handle}</Label>
+        <Label style={{ fontWeight: "700" }}><Handle wallet={reply.author.wallet} /></Label>
         <Grow />
         <Caption>{since(reply.timestamp)}</Caption>
       </Row>

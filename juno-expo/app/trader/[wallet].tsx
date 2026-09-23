@@ -5,6 +5,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import styled from "styled-components/native";
 
 import { CoinArt, Identicon } from "../../components/art";
+import { Handle } from "../../components/Handle";
 import { Tappable } from "../../components/Press";
 import { QuickTrade } from "../../components/QuickTrade";
 import {
@@ -176,7 +177,7 @@ export default function TraderScreen() {
         <Identity>
           <Identicon seed={target} size={76} />
           <Title>
-            {target.slice(0, 4)}…{target.slice(-4)}
+            <Handle wallet={target} />
           </Title>
           <Row gap={6}>
             {row?.isCreator ? <Pill label="Creator" tone="lime" /> : null}

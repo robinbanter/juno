@@ -4,10 +4,12 @@ import Svg, { Circle, Defs, LinearGradient, Rect, Stop } from "react-native-svg"
 
 import { Identicon } from "./art";
 import { HeartBurst } from "./HeartBurst";
+import { Handle } from "./Handle";
+import { useHandle } from "../lib/names";
 import { HeartGlyph, PlayGlyph, ReelBadgeGlyph, ReplyBubble, ShareGlyph, TriangleGlyph } from "./icons";
 import { Tappable } from "./Press";
 import { juno, type Coin } from "../lib/api";
-import { count } from "../lib/markets";
+import { count, progressLabel } from "../lib/markets";
 import { useFollow, useLike } from "../lib/social";
 import { money, since } from "../lib/useApi";
 import { theme } from "../theme";
@@ -53,6 +55,7 @@ export function FeedCard({
 }) {
   const like = useLike(coin);
   const follow = useFollow(coin.creator.wallet);
+  const handle = useHandle(coin.creator.wallet);
   const [bursts, setBursts] = useState<Array<{ id: number; x: number; y: number }>>([]);
   const lastTap = useRef(0);
   const openTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -95,7 +98,7 @@ export function FeedCard({
           </View>
           <View style={{ flexShrink: 1 }}>
             <Text style={styles.handle} numberOfLines={1}>
-              {coin.creator.handle}
+              {handle}
             </Text>
             <Text style={styles.meta} numberOfLines={1}>
               {since(coin.createdAt)} · {coin.curvePreset} curve
@@ -108,7 +111,7 @@ export function FeedCard({
             onPress={follow.toggle}
             to={0.94}
             accessibilityRole="button"
-            accessibilityLabel={follow.following ? `Unfollow ${coin.creator.handle}` : `Follow ${coin.creator.handle}`}
+            accessibilityLabel={follow.following ? `Unfollow ${handle}` : `Follow ${handle}`}
           >
             <View style={[styles.follow, follow.following ? styles.followOn : null]}>
               <Text style={[styles.followText, follow.following ? styles.followTextOn : null]}>
@@ -204,6 +207,10 @@ export function FeedCard({
 
       {/* Who is in */}
       <View style={styles.buyers}>
+        {/* "No buyers yet" only when the curve itself says so. Buyers are read
+            from the recent feed, so an older coin can have none in the window
+            and still have sold out — the line claimed "no buyers" over a coin
+            that had graduated. Unknown shows nothing. */}
         {buyers && buyers.wallets.length > 0 ? (
           <>
             <View style={styles.stack}>
@@ -214,7 +221,7 @@ export function FeedCard({
               ))}
             </View>
             <Text style={styles.buyersText} numberOfLines={1}>
-              Bought by <Text style={styles.strong}>{buyers.handles[0]}</Text>
+              Bought by <Text style={styles.strong}><Handle wallet={buyers.wallets[0]} /></Text>
               {buyers.wallets.length > 1 ? (
                 <>
                   {" "}and{" "}
@@ -225,9 +232,9 @@ export function FeedCard({
               ) : null}
             </Text>
           </>
-        ) : (
+        ) : buyers && coin.curve.progress === 0 && !coin.curve.graduated ? (
           <Text style={styles.buyersText}>No buyers yet — be the first in.</Text>
-        )}
+        ) : null}
       </View>
 
       {/* What it is */}
@@ -257,7 +264,7 @@ export function FeedCard({
         <Text style={styles.curveText}>
           {coin.curve.graduated
             ? "Graduated"
-            : `${pct > 0 && pct < 1 ? pct.toFixed(2) : pct.toFixed(0)}% to graduation`}
+            : `${progressLabel(pct)} to graduation`}
         </Text>
       </View>
     </View>

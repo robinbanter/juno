@@ -22,8 +22,7 @@ single-page rewrite that lets a deep link like `/trade?sort=stocks` load:
 
 ```bash
 cd juno-expo
-npx expo export --platform web
-cp vercel.web.json dist/vercel.json
+npm run export:web        # export + title/description/share tags + SPA rewrite
 cd dist
 npx vercel link --yes --project juno-app --scope nicolas-projects-f497bb7f
 npx vercel deploy --prod --yes
@@ -82,6 +81,39 @@ NEXT_PUBLIC_SITE_URL=https://<your-domain> npm run juno:seed-posts
 ```
 
 ---
+
+**One Railway variable matters beyond the secrets:** `JUNO_APP_URL`
+(`https://juno-app-chi.vercel.app`). With it set, every non-API page on the
+Railway domain redirects to the app — without it, the domain's home page is
+the legacy Norr site.
+
+**The faucet funds itself from its own key.** `GET /api/juno/faucet` returns
+the address of a devnet key the server generated and sealed in Mongo; send
+devnet SOL to that address and *Get devnet SOL* works for everyone. No private
+key is ever pasted anywhere.
+
+## 1b. iOS and Android releases
+
+`eas.json` has three profiles. `preview` and `production` bake in the Railway
+API and the Vercel app URL.
+
+| Goal | Command | Needs |
+|---|---|---|
+| Android APK anyone can install | `eas build -p android --profile preview` | An Expo account (`eas login`) |
+| Android on Play internal testing | `eas build -p android --profile production` then `eas submit -p android` | Google Play Console ($25 once), an app created there, a service-account key |
+| iOS on TestFlight | `eas build -p ios --profile production` then `eas submit -p ios` | Apple Developer Program ($99/yr), an App Store Connect app for `fun.juno.app` |
+
+Without EAS, a local Android release APK builds from this machine:
+
+```bash
+cd juno-expo
+npx expo prebuild --platform android
+cd android && ./gradlew assembleRelease   # android/app/build/outputs/apk/release/
+```
+
+It is signed with the debug key — installable by anyone, not uploadable to
+Play. A Play upload needs a release keystore, which `eas credentials` creates
+and stores.
 
 ## 2. The mobile app (Expo)
 

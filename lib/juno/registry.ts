@@ -56,12 +56,25 @@ export async function recordLaunch(row: LaunchRecord): Promise<JunoPoolRow> {
   return existing;
 }
 
-/** Newest first, scoped to the current cluster. */
-export async function listPools(limit = 60): Promise<JunoPoolRow[]> {
+/**
+ * Newest first, scoped to the current cluster.
+ *
+ * `listedOnly` is for what visitors browse. Everything that follows a coin a
+ * person already holds or planned — portfolio, plans, the indexer — reads
+ * unlisted coins too, because unlisting hides a coin; it does not unmake it.
+ */
+export async function listPools(
+  limit = 60,
+  options: { listedOnly?: boolean } = {},
+): Promise<JunoPoolRow[]> {
   return getDb()
     .select()
     .from(junoPools)
-    .where(eq(junoPools.cluster, cluster()))
+    .where(
+      options.listedOnly
+        ? and(eq(junoPools.cluster, cluster()), eq(junoPools.listed, true))
+        : eq(junoPools.cluster, cluster()),
+    )
     .orderBy(desc(junoPools.createdAt))
     .limit(limit);
 }

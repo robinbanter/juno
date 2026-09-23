@@ -2,6 +2,8 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import * as SecureStore from "expo-secure-store";
 import { Keypair, Transaction } from "@solana/web3.js";
 import { Platform } from "react-native";
+import bs58 from "bs58";
+import nacl from "tweetnacl";
 
 import { juno } from "./api";
 
@@ -49,6 +51,13 @@ export type WalletState = {
    * whichever backend is signing.
    */
   sign: (base64: string) => Promise<string>;
+  /**
+   * Sign a plain-text message and return the signature, base58.
+   *
+   * Used to prove ownership of this wallet off-chain — claiming a name — where
+   * a transaction would cost a fee to say nothing the chain needs to know.
+   */
+  signMessage: (text: string) => Promise<string>;
   /** Create or restore a wallet. Called when the user first needs one. */
   connect: () => Promise<string>;
   disconnect: () => Promise<void>;
@@ -154,6 +163,15 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     [keypair],
   );
 
+  const signMessage = useCallback(
+    async (text: string) => {
+      const signer = keypair ?? (await loadLocalKeypair());
+      if (!signer) throw new Error("No wallet to sign with");
+      return bs58.encode(nacl.sign.detached(new TextEncoder().encode(text), signer.secretKey));
+    },
+    [keypair],
+  );
+
   const value = useMemo<WalletState>(
     () => ({
       address: keypair?.publicKey.toBase58() ?? null,
@@ -161,10 +179,11 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       ready,
       signing,
       sign,
+      signMessage,
       connect,
       disconnect,
     }),
-    [keypair, ready, signing, sign, connect, disconnect],
+    [keypair, ready, signing, sign, signMessage, connect, disconnect],
   );
 
   return <WalletContext.Provider value={value}>{children}</WalletContext.Provider>;
