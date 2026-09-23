@@ -17,6 +17,7 @@ import { useFeedRevision } from "../../lib/refresh";
 import { shareCoin, useViewerOnce } from "../../lib/social";
 import { useApi } from "../../lib/useApi";
 import { useWallet } from "../../lib/wallet";
+import { useTabBarHeight } from "../../lib/tabbar";
 import { theme } from "../../theme";
 
 /**
@@ -44,6 +45,7 @@ export default function SocialScreen() {
   const router = useRouter();
   const wallet = useWallet();
   const revision = useFeedRevision();
+  const tabBar = useTabBarHeight();
   const [scope, setScope] = useState<Scope>("everyone");
 
   const once = useViewerOnce();
@@ -298,7 +300,7 @@ export default function SocialScreen() {
           setExtraComments((all) => ({ ...all, [talking.address]: (all[talking.address] ?? 0) + 1 }));
         }}
         /* Clear of the tab bar, which the navigator paints over this sheet. */
-        bottomInset={76}
+        bottomInset={tabBar.height - 10}
       />
     </SafeAreaView>
   );

@@ -7,6 +7,7 @@ import styled from "styled-components/native";
 import { CreateSheet } from "../../components/CreateSheet";
 import { usePressScale } from "../../components/Press";
 import { motion, useReducedMotion, nativeDriver } from "../../lib/motion";
+import { useTabBarHeight } from "../../lib/tabbar";
 import { theme } from "../../theme";
 
 /**
@@ -45,6 +46,7 @@ export default function TabsLayout() {
    * goes to night and its glyphs to white.
    */
   const night = pathname.startsWith("/reels");
+  const bar = useTabBarHeight();
 
   const slot =
     (label: string, Icon: (p: { color: string }) => React.ReactElement, href: string) =>
@@ -71,9 +73,9 @@ export default function TabsLayout() {
           backgroundColor: night ? theme.colors.night : theme.colors.surface,
           borderTopWidth: night ? StyleSheet.hairlineWidth : 0,
           borderTopColor: theme.colors.nightLine,
-          height: Platform.OS === "ios" ? 86 : 70,
+          height: bar.height,
           paddingTop: 10,
-          paddingBottom: Platform.OS === "ios" ? 26 : 10,
+          paddingBottom: bar.paddingBottom,
           paddingHorizontal: 8,
           borderTopLeftRadius: theme.radius.xl,
           borderTopRightRadius: theme.radius.xl,
@@ -217,8 +219,11 @@ const SlotBox = styled.Pressable<{ $on: boolean }>`
   background-color: ${(p) => (p.$on ? p.theme.colors.lime : "transparent")};
 `;
 
+/* The same flex as every other slot. It was a fixed 62pt while the four
+   around it shared the rest, and the navigator does not centre a fixed-width
+   button in its cell — so the + sat left of the bar's centre. */
 const PostBox = styled.Pressable`
-  width: 62px;
+  flex: 1;
   align-items: center;
   justify-content: center;
 `;

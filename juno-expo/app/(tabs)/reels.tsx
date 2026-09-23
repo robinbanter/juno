@@ -40,6 +40,7 @@ import { count, invalidateMarkets, loadMarkets, progressLabel } from "../../lib/
 import { useReducedMotion, nativeDriver } from "../../lib/motion";
 import { shareCoin, useFollow, useLike, useViewerOnce } from "../../lib/social";
 import { money, useApi } from "../../lib/useApi";
+import { useTabBarHeight } from "../../lib/tabbar";
 import { theme } from "../../theme";
 
 /**
@@ -63,7 +64,6 @@ import { theme } from "../../theme";
  * rest are their poster frame until they come close.
  */
 
-const TAB_H = Platform.OS === "ios" ? 86 : 70;
 /** Double tap window. Long enough for a relaxed thumb, short enough that a single tap still feels immediate. */
 const DOUBLE_MS = 260;
 
@@ -118,6 +118,7 @@ export default function ReelsScreen() {
   }).current;
 
   const insets = useSafeAreaInsets();
+  const TAB_H = useTabBarHeight().height;
   const sheetOpen = trade !== null || talking !== null;
 
   return (
@@ -304,6 +305,7 @@ function Reel({
     }, DOUBLE_MS);
   };
 
+  const TAB_H = useTabBarHeight().height;
   const bottom = TAB_H + 12;
   const comments = (coin.commentCount ?? 0) + extraComments;
   const pct = coin.curve.progress * 100;
