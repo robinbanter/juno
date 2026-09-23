@@ -32,6 +32,10 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# …except the templates, which hold placeholders only. The README tells a new
+# clone to copy them; ignored, they did not exist in a clone to copy.
+!.env.local.example
+!juno-expo/.env.example
 
 # vercel
 .vercel

@@ -25,19 +25,22 @@ explorer or by running something in this repo.
 
 | | |
 |---|---|
-| **DBC pools created by this code** | 4 on devnet, links below |
+| **DBC pools created by this code** | 16 on devnet (14 listed) — posts, reels, pre-IPO and stock trackers; links below for the originals |
 | **Real swaps through the app's own path** | links below; the curve moved |
 | **A full lifecycle** | launch → trade → curve to 100% → **migrated to DAMM v2** |
 | **Creator fees claimed** | 0.009653 SOL, on-chain |
-| **Mobile app** | Expo, five tabs, real data on every screen |
+| **The app** | Expo, five tabs, real data on every screen. Web build live at https://juno-app-chi.vercel.app; Android release APK and iOS Simulator build both run against the live API |
+| **Launching from the app** | pick a photo or video → pinned to IPFS (a video gets a poster frame) → two signed transactions → listed. `Seahorse Valley` and `Deeper Still` were launched this way |
+| **Social layer** | likes, comments, follows and names are persisted; a name is claimed by the wallet signing a message |
+| **A new visitor can act** | Profile → *Get devnet SOL* pays 0.2 SOL from a faucet key the server generated and sealed itself |
 | **Transactions built server-side, signed on the device** | the key never leaves the phone; `4YM9pnRu…QLsq` is a devnet buy landed from server-built bytes |
 | **Pyth NAV band** | read from `PriceUpdateV2` accounts **on-chain**, no API key |
 | **Swap history, 24h volume, price chart** | decoded from pool vault deltas — no indexer |
 | **Portfolio with cost basis and P&L** | average-cost, derived from this wallet's own decoded trades |
 | **Token metadata** | pinned to IPFS, URI written to the mint |
 | **Curve configs** | 4 presets, 16 liquidity-weighted segments each |
-| **Persistence** | Neon Postgres (`juno_pools`, `juno_posts`) |
-| **Tests** | 172 unit + live integration tests, incl. every preset validated by Meteora's own `validateConfigParameters` and every Pyth feed id resolved on-chain |
+| **Persistence** | Neon Postgres (pools, posts, swaps, follows, plans, watchlist) with migrations that build a fresh database; MongoDB (comments, likes, names, the faucet key) |
+| **Tests** | 234 unit tests (curves, swap decoding, portfolio maths, signed name claims, market sorting) + live integration tests, incl. every preset validated by Meteora's own `validateConfigParameters` and every Pyth feed id resolved on-chain |
 
 ### Two things this project had written off, and was wrong about
 
@@ -70,9 +73,8 @@ as buys.
 |---|---|
 | **Mainnet pool** | Devnet only, by decision. Nothing in the code prevents it: switch the cluster and fund a key. |
 | **Privy embedded wallet** | Integrated, but it needs a mobile client registered for this bundle id in Privy's dashboard — account configuration that cannot be done from the repo. The app signs with a device key in the iOS keychain instead. That is real Ed25519 signing against devnet, not a simulation, and the profile screen says it is not recoverable rather than implying a custody story it does not have. |
-| **iOS Simulator run** | Xcode is installed on the dev machine but `xcode-select` points at the command-line tools. One sudo command fixes it — see `DEPLOY.md`. Verified on Expo web meanwhile. |
-| **Likes and follows** | Not persisted. Comments and creator posts are. |
-| **Holders count on a throttled RPC** | `getTokenLargestAccounts` is refused outright by the public endpoint under load, so it degrades to unknown rather than to zero. |
+| **Holders count on a throttled RPC** | `getTokenLargestAccounts` is refused outright by the public endpoint under load. The coin screen then counts wallets whose decoded fills still net positive, from a complete read only; otherwise it says unknown rather than zero. |
+| **TestFlight / Play builds** | `eas.json` is ready; submitting needs an Apple Developer account and a Play Console account. |
 
 ### A note on the public RPC
 

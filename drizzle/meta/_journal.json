@@ -57,6 +57,13 @@
       "when": 1789946771457,
       "tag": "0007_fresh_banshee",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790160505383,
+      "tag": "0008_juno_social_and_listing",
+      "breakpoints": true
     }
   ]
 }

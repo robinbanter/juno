@@ -37,6 +37,9 @@ const SANE: Record<string, [number, number]> = {
   "Equity.US.GOOGL/USD": [10, 10_000],
   "Equity.US.AMZN/USD": [10, 10_000],
   "Equity.US.META/USD": [10, 10_000],
+  // SpaceX, the one pre-IPO name on the Solana push oracle. Wide on purpose:
+  // the check is that the id reads a real price, not what the price is.
+  "Equity.US.SPCX/USD": [1, 100_000],
 };
 
 describe("pyth: every shipped feed id resolves to a real on-chain account", () => {
