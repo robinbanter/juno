@@ -872,6 +872,17 @@ export const juno = {
       `/api/juno/tx/balance?wallet=${wallet}&mint=${mint}`,
     ),
 
+  /** The unsigned transaction that pays a coin's creator their trading fees. */
+  buildClaim: (input: { mint: string; owner: string }) =>
+    api.post<{
+      unsigned: UnsignedTransaction;
+      window: BlockhashWindow;
+      amount: number;
+      quoteSymbol: string;
+      quoteUsdRate: number | null;
+      pool: string;
+    }>("/api/juno/tx/claim", input),
+
   submit: (input: { transaction: string; window?: BlockhashWindow; poolAddress?: string }) =>
     // Submitting waits for confirmation, which is slower than a read.
     api.post<{ signature: string }>("/api/juno/tx/submit", input, 90_000),

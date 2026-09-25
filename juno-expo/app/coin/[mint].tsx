@@ -1,7 +1,7 @@
 import * as Clipboard from "expo-clipboard";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { Linking, RefreshControl, ScrollView } from "react-native";
+import { Linking, Platform, RefreshControl, ScrollView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Svg, { Path, Rect } from "react-native-svg";
 import styled from "styled-components/native";
@@ -371,6 +371,21 @@ export default function CoinScreen() {
                   <Caption numberOfLines={1}>Creator rewards</Caption>
                 </Cell>
               </Band>
+
+              {/* The creator's own payday, on their own coin. */}
+              {wallet.address && wallet.address === coin.creator.wallet ? (
+                <ClaimFees
+                  mint={coin.address}
+                  owner={wallet.address}
+                  rewards={coin.creatorRewards}
+                  currency={coin.marketCapCurrency}
+                  sign={wallet.sign}
+                  onClaimed={() => {
+                    setTradeRevision((n) => n + 1);
+                    detail.refresh();
+                  }}
+                />
+              ) : null}
 
               {/* Raised against threshold, with both ends labelled. A bar with
                   no numbers on it is a mood. */}
@@ -763,6 +778,86 @@ function DetailsTab({
         </LinkTap>
       ) : null}
     </Col>
+  );
+}
+
+/**
+ * Claim the trading fees this coin has paid its creator.
+ *
+ * Built on the server, signed on the phone, submitted like a trade, and the
+ * receipt — signature and the second it landed — stays on screen.
+ */
+function ClaimFees({
+  mint,
+  owner,
+  rewards,
+  currency,
+  sign,
+  onClaimed,
+}: {
+  mint: string;
+  owner: string;
+  rewards: number;
+  currency: string;
+  sign: (base64: string) => Promise<string>;
+  onClaimed: () => void;
+}) {
+  const [state, setState] = useState<"idle" | "busy" | "done">("idle");
+  const [error, setError] = useState<string | null>(null);
+  const [receipt, setReceipt] = useState<{ signature: string; at: Date; amount: string } | null>(null);
+
+  async function claim() {
+    setState("busy");
+    setError(null);
+    try {
+      const built = await juno.buildClaim({ mint, owner });
+      const signed = await sign(built.unsigned.transaction);
+      const { signature } = await juno.submit({
+        transaction: signed,
+        window: built.window,
+        poolAddress: built.pool,
+      });
+      setReceipt({
+        signature,
+        at: new Date(),
+        amount: money(built.amount, built.quoteSymbol, { compact: false }),
+      });
+      setState("done");
+      onClaimed();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "The claim failed");
+      setState("idle");
+    }
+  }
+
+  if (receipt) {
+    return (
+      <ClaimBox>
+        <Label style={{ fontWeight: "700" }}>Claimed {receipt.amount} in creator fees</Label>
+        <Tappable onPress={() => void Linking.openURL(juno.explorer("tx", receipt.signature))} to={0.97}>
+          <ClaimReceipt>
+            tx {receipt.signature.slice(0, 8)}…{receipt.signature.slice(-8)} ·{" "}
+            {receipt.at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+          </ClaimReceipt>
+        </Tappable>
+      </ClaimBox>
+    );
+  }
+  if (!(rewards > 0)) return null;
+  return (
+    <ClaimBox>
+      <Button
+        label={
+          state === "busy"
+            ? "Claiming…"
+            : `Claim ${money(rewards, currency, { compact: false })} in creator fees`
+        }
+        onPress={() => void claim()}
+        loading={state === "busy"}
+        style={{ alignSelf: "stretch" }}
+      />
+      {error ? <Caption style={{ color: theme.colors.neg, marginTop: 6 }}>{error}</Caption> : null}
+    </ClaimBox>
   );
 }
 
@@ -1189,6 +1284,20 @@ const Rows = styled.View`
   margin-top: ${(p) => p.theme.space(4)}px;
   border-radius: ${(p) => p.theme.radius.md}px;
   overflow: hidden;
+`;
+
+const ClaimBox = styled.View`
+  margin-top: 14px;
+  padding: 12px;
+  border-radius: 16px;
+  background-color: ${(p) => p.theme.colors.surface};
+`;
+
+const ClaimReceipt = styled.Text`
+  margin-top: 4px;
+  font-size: 12px;
+  font-family: ${Platform.OS === "ios" ? "Menlo" : "monospace"};
+  color: ${(p) => p.theme.colors.muted};
 `;
 
 const DetailBox = styled.View<{ $shaded: boolean }>`

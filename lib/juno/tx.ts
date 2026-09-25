@@ -10,6 +10,8 @@ import {
   invalidatePoolSnapshot,
   planLaunch,
   quoteTrade,
+  fetchCreatorFees,
+  buildClaimCreatorFeesTransaction,
   quoteExactOutBuy,
   buildExactOutBuyTransaction,
   type ExactOutQuote,
@@ -282,6 +284,57 @@ async function buildExactOutBuy(request: SwapBuildRequest): Promise<SwapBuildRes
     quoteSymbol: quoteMint?.symbol ?? "SOL",
     quoteUsdRate,
   };
+}
+
+/* ------------------------------------------------------------------ */
+/* Creator fees                                                        */
+/* ------------------------------------------------------------------ */
+
+export type ClaimBuildResult = {
+  unsigned: UnsignedTransaction;
+  window: BlockhashWindow;
+  /** What the claim will pay, in the quote token, as the program holds it now. */
+  amount: number;
+  quoteSymbol: string;
+  quoteUsdRate: number | null;
+};
+
+/**
+ * Pay a creator the trading fees their post has earned.
+ *
+ * The whole promise of a post being a market is that its creator is paid by
+ * it. The fees accrue in the pool on every trade; this is the transaction
+ * that moves them to the creator's wallet, signed on the phone like a trade.
+ * The program enforces who may claim, so the server only builds.
+ */
+export function buildClaim(request: {
+  poolAddress: string;
+  owner: string;
+}): Promise<ClaimBuildResult> {
+  return retryWhenBusy(async () => {
+    const owner = new PublicKey(request.owner);
+    const snapshot = await fetchPoolSnapshot(request.poolAddress);
+    if (!snapshot) throw new CallerError("Pool not found on this cluster");
+
+    const fees = await fetchCreatorFees(request.poolAddress);
+    if (!fees || !(fees.quoteAmount > 0)) {
+      throw new CallerError("There are no creator fees to claim on this coin yet.");
+    }
+
+    const transaction = await buildClaimCreatorFeesTransaction({
+      creator: owner,
+      pool: request.poolAddress,
+    });
+    const prepared = await prepare(transaction, owner);
+    const quoteMint = snapshot.config.quoteMint.toBase58();
+    return {
+      unsigned: serialise(prepared.transaction, "Claiming creator fees"),
+      window: prepared.window,
+      amount: fees.quoteAmount,
+      quoteSymbol: QUOTE_TOKENS.find((token) => token.mint === quoteMint)?.symbol ?? "SOL",
+      quoteUsdRate: await quoteTokenUsdPrice(quoteMint).catch(() => null),
+    };
+  });
 }
 
 /* ------------------------------------------------------------------ */
