@@ -114,6 +114,34 @@ End on the Juno feed or the logo.
 
 ---
 
+## Recorded footage
+
+Recorded 25 Sep on the iOS simulator (iPhone 17 Pro, 9:41 status bar) from a
+fresh install, against the live API. Local, not committed, in `.juno/video/`:
+
+| Clip | What happens | Tight length |
+|---|---|---|
+| `01-wallet` | Home screen → Juno opens → onboarding → *Create wallet* → faucet 0.2 SOL → claim `@stocklana` | 16s |
+| `02-feed-buy` | Feed ("Bought by demo_lena and 4 others") → like → Buy $2 of Deep Zoom → *Done, confirmed on Solana* | 17s |
+| `03-reels` | Reels play → swipe → like → Buy dock | 47s (trim the playback) |
+| `04-post-launch` | + → *Post a photo* → waterfall → "The Falls" / FALLS → curve shapes → Launch → first buy (8% impact = the anti-sniper opening fee) | 30s |
+| `04b-falls-chart` | Memes → The Falls by stocklana, chart rising after the buy | 6s |
+| `05-preipo` | Feed with The Falls on top → Pre-IPO → OpenAI "outside ±2% band" warning → Tessera reference card → depth chart | 20s |
+| `06-stocks` | Stocks with real logos, live Pyth prices → TSLA "3.0% below, outside its band" | 10s |
+| `07-depth-exactout` | Deep Zoom: activity by named wallets → depth chart → token chip → exactly 1,000,000 ZOOM → Done | 27s |
+| `08-mainnet-proof` | JUNOC on Jupiter (mainnet): chart, sniper buys and sells, our buy marked as the developer's → Solscan | 11s |
+
+Each clip exists four ways:
+
+- `raw/NN-*.mp4`: the untouched simulator recording, 1206×2622.
+- `raw/NN-*.framed.mov`: inside the iPhone body, **ProRes 4444 with
+  alpha**, for placing over any background in HyperFrames.
+- `raw/NN-*.preview.mp4`: the framed phone on the Juno green, 1080×1920.
+- `tight/NN-*.mp4`: the preview with every pause over 1.5s cut.
+
+`juno-demo-roughcut.mp4` is the tight clips in order (3:02). To rebuild any of
+it: `scripts/demo/frame-video.sh`, then `scripts/demo/tighten.py`.
+
 ## Editing
 
 - Cut every wait longer than a second. Speed up the launch's signing to 2x.
