@@ -308,6 +308,28 @@ export async function hydratePool(
   const complete = history !== null && !history.partial;
   const volume24h = complete ? volumeWithin(swaps, DAY_MS) : null;
   const allVolume = complete ? sumVolume(swaps) : null;
+
+  /*
+   * What each trade did to the curve's price, with the trading fee taken out.
+   *
+   * A fill's price is read from the vaults, and on a buy the quote vault also
+   * keeps the fee. On a fresh pool that fee is the 9% anti-sniper opening, so
+   * the first buy looked 9% above the curve and the price after it read as a
+   * fall: "-6.23%" and a red chart on a coin whose price had just risen. The
+   * fee in force at each block is exact — it is this pool's own schedule —
+   * so it is removed here. Volume and activity keep what was actually paid.
+   */
+  const activationPoint = Number(
+    (snapshot.pool as { poolState: { activationPoint: BN } }).poolState.activationPoint.toString(),
+  );
+  const curveSwaps = swaps.map((swap) => {
+    const at = Math.floor(Date.parse(swap.timestamp) / 1000);
+    const bps =
+      feeSchedule({ config: snapshot.config, activationPoint, nowSeconds: at })?.currentBps ?? 0;
+    const kept = 1 - bps / 10_000;
+    if (!(kept > 0)) return swap;
+    return { ...swap, price: swap.side === "buy" ? swap.price * kept : swap.price / kept };
+  });
   const opening = {
     price: curveShape({
       config: snapshot.config,
@@ -317,7 +339,7 @@ export async function hydratePool(
     at: row.createdAt.getTime(),
   };
   const priceChange = complete
-    ? changeWithin(swaps, DAY_MS, snapshot.price, Date.now(), opening)
+    ? changeWithin(curveSwaps, DAY_MS, snapshot.price, Date.now(), opening)
     : null;
 
 
@@ -344,7 +366,7 @@ export async function hydratePool(
     volume24h: volume24h === null ? null : volume24h * rate,
     totalVolume: allVolume === null ? null : allVolume * rate,
     priceHistory: history
-      ? priceSeries(swaps).map((point) => ({
+      ? priceSeries(curveSwaps).map((point) => ({
           ...point,
           price: point.price * rate,
           volume: point.volume * rate,
@@ -364,12 +386,7 @@ export async function hydratePool(
     curvePreset: preset,
     graduatedPool: snapshot.curve.graduated ? row.poolAddress : undefined,
     fee: options.detailed
-      ? feeSchedule({
-          config: snapshot.config,
-          activationPoint: Number(
-            (snapshot.pool as { poolState: { activationPoint: BN } }).poolState.activationPoint.toString(),
-          ),
-        })
+      ? feeSchedule({ config: snapshot.config, activationPoint })
       : undefined,
     supply: options.detailed
       ? tokenomics(snapshot.config, snapshot.baseDecimals)

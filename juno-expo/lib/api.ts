@@ -1,4 +1,5 @@
 import Constants from "expo-constants";
+import { File as DeviceFile } from "expo-file-system";
 
 /**
  * The Juno API client.
@@ -770,7 +771,24 @@ export const juno = {
    */
   upload: async (file: Blob | { uri: string; name: string; type: string }) => {
     const form = new FormData();
-    form.append("file", file as Blob);
+    if (file instanceof Blob) {
+      form.append("file", file);
+    } else {
+      /*
+       * Expo's fetch, which SDK 57 installs as the global on native, does not
+       * take React Native's `{ uri, name, type }` file part — it throws
+       * "Unsupported FormDataPart implementation" before any request is made,
+       * which is how posting from the phone failed as "check your connection"
+       * while every other call worked. It takes anything with `bytes()`, so
+       * the picked file is read through expo-file-system and named here.
+       */
+      const onDisk = new DeviceFile(file.uri);
+      form.append("file", {
+        name: file.name,
+        type: file.type,
+        bytes: () => onDisk.bytes(),
+      } as unknown as Blob);
+    }
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 120_000);
     try {
