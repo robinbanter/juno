@@ -190,7 +190,7 @@ HyperFrames from `.juno/video/final/hf/index.html` (written by
 - **Subtitles.** Burned in from the ElevenLabs word timings, one phrase at a
   time, with each word lit in lime as it's spoken.
 - **Music.** ElevenLabs Music, one energetic instrumental
-  (`scripts/demo/music_eleven.py`), levelled to about −24 LUFS under the
+  (`scripts/demo/music_eleven.py`), levelled to about −36 LUFS, some 12 dB under the
   voice. `scripts/demo/remix.py` rebuilds the soundtrack from the
   composition's audio timings and swaps it into the rendered film, so a music
   change needs no re-render.
