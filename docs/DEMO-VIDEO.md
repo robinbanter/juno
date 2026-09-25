@@ -142,6 +142,27 @@ Each clip exists four ways:
 `juno-demo-roughcut.mp4` is the tight clips in order (2:27). The four reels are free-licence Pexels clips (IDs 18138660, 4759044, 8713108, 20151149) launched as real pools; the fractal test reels were unlisted and takes 02, 03 and 07 re-recorded. Take 01 skips the feed and 04, 04b and 05 start later, so no test content appears. Superseded takes are in `raw/old/`. To rebuild any of
 it: `scripts/demo/frame-video.sh`, then `scripts/demo/tighten.py`.
 
+### Full-length flow (second session, 25 Sep evening)
+
+`juno-demo-full.mp4` (5:25) is the long version to cut from, in story order,
+with pauses held to 2.5s rather than cut to the bone. `full/` has each part:
+
+| Part | What happens |
+|---|---|
+| `01-wallet` | Fresh install → Create wallet → faucet → `@stocklana` |
+| `02-feed-buy` | Feed of real reels → like → buy $2 of City After Rain |
+| `03-reels` | Night city → skateboarder → surfer → beach |
+| `04-comments` | City After Rain: 4 likes, 2 comments from other wallets → open → post "What a shot. Just bought in." → count goes to 3 |
+| `05-post-launch-log` | Post a photo (Wild Bloom): **launch log fills in live — IPFS pins, config tx, pool tx, each with the second it landed** → coin page → first buy, receipt with tx hash and time |
+| `06-reel-launch-log` | Same for a reel (Midnight Avenue) |
+| `07-preipo-openai` | Pre-IPO with the OpenAI, Kalshi and SpaceX logos → buy $OPENAIX → band warning → receipt with tx and time → Tessera reference card → depth chart |
+| `08-stocks` | Stocks with company logos and live Pyth prices → TSLA band warning |
+| `09-depth-exactout` | Park Session: depth chart → buy exactly 1,000,000 KICK |
+| `10-mainnet-proof` | JUNOC on Jupiter (mainnet) → Solscan |
+
+The status bar now shows the real time of day, so it agrees with the receipts.
+Framed versions of the new takes are in `raw2/`.
+
 ## Editing
 
 - Cut every wait longer than a second. Speed up the launch's signing to 2x.
