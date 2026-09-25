@@ -64,9 +64,29 @@ export class CallerError extends Error {
 }
 
 /** A public-RPC refusal, as opposed to a fault in this server. */
-function isRpcBusy(error: unknown): boolean {
+export function isRpcBusy(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error ?? "");
   return /429|rate limit|Too Many Requests|503|Connection rate limits/i.test(message);
+}
+
+/**
+ * Run a read-only build again when the RPC refused it.
+ *
+ * The public devnet endpoint limits connections per IP, and a Railway egress
+ * IP is shared with other tenants, so it refuses in bursts that pass in a
+ * second or two. For the builds a person is waiting on — a quote, a launch —
+ * a two-second pause is far better than "try again". Only for work that sends
+ * nothing: a retried build is a new unsigned transaction, never a second send.
+ */
+export async function retryWhenBusy<T>(run: () => Promise<T>, delays = [1_200, 2_500]): Promise<T> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await run();
+    } catch (error) {
+      if (attempt >= delays.length || !isRpcBusy(error)) throw error;
+      await new Promise((resolve) => setTimeout(resolve, delays[attempt]));
+    }
+  }
 }
 
 /** Run a handler, turning a thrown error into a clean 4xx/5xx. */

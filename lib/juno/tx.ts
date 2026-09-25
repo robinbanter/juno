@@ -17,7 +17,7 @@ import {
   type TradeQuote,
 } from "./dbc";
 import { CURVE_PRESETS } from "./curves";
-import { CallerError } from "./api";
+import { CallerError, isRpcBusy, retryWhenBusy } from "./api";
 import { quoteTokenUsdPrice } from "./pyth";
 import { invalidateSwapHistory } from "./swaps";
 import type { CurvePresetId, TradeSide } from "./types";
@@ -166,7 +166,12 @@ export type SwapBuildResult = {
   quoteUsdRate: number | null;
 };
 
-export async function buildSwap(request: SwapBuildRequest): Promise<SwapBuildResult> {
+/** Build a swap, riding out a brief RPC refusal. See `retryWhenBusy`. */
+export function buildSwap(request: SwapBuildRequest): Promise<SwapBuildResult> {
+  return retryWhenBusy(() => buildSwapOnce(request));
+}
+
+async function buildSwapOnce(request: SwapBuildRequest): Promise<SwapBuildResult> {
   if (request.amountOut !== undefined) return buildExactOutBuy(request);
   if (!Number.isFinite(request.amountIn) || request.amountIn <= 0) {
     throw new CallerError("Amount must be greater than zero");
@@ -303,9 +308,12 @@ export type LaunchBuildResult = {
   pool: string;
 };
 
-export async function buildLaunch(
-  request: LaunchBuildRequest,
-): Promise<LaunchBuildResult> {
+/** Build a launch, riding out a brief RPC refusal. See `retryWhenBusy`. */
+export function buildLaunch(request: LaunchBuildRequest): Promise<LaunchBuildResult> {
+  return retryWhenBusy(() => buildLaunchOnce(request));
+}
+
+async function buildLaunchOnce(request: LaunchBuildRequest): Promise<LaunchBuildResult> {
   const preset = CURVE_PRESETS[request.preset];
   if (!preset) {
     throw new CallerError(
@@ -397,11 +405,17 @@ export async function submitSigned(params: {
 
   let signature: string;
   try {
-    signature = await connection.sendRawTransaction(raw, {
-      skipPreflight: false,
-      maxRetries: 3,
-    });
+    // The same signed bytes, so a resend after a refusal can never become a
+    // second trade: the cluster dedupes by signature.
+    signature = await retryWhenBusy(() =>
+      connection.sendRawTransaction(raw, {
+        skipPreflight: false,
+        maxRetries: 3,
+      }),
+    );
   } catch (error) {
+    if (isRpcBusy(error)) throw error; // a 503 "busy", not "the cluster refused this"
+
     // A cluster refusing *this transaction* is not a fault in this server, and
     // reporting it as one ("Something went wrong on our side") is the worst
     // possible answer: it hides the one thing the person can act on. Preflight
@@ -411,13 +425,17 @@ export async function submitSigned(params: {
   }
 
   const window = params.window ?? (await connection.getLatestBlockhash("confirmed"));
-  const result = await connection.confirmTransaction(
-    {
-      signature,
-      blockhash: window.blockhash,
-      lastValidBlockHeight: window.lastValidBlockHeight,
-    },
-    "confirmed",
+  // Asking again is harmless, and a refusal while waiting says nothing about
+  // whether the transaction landed.
+  const result = await retryWhenBusy(() =>
+    connection.confirmTransaction(
+      {
+        signature,
+        blockhash: window.blockhash,
+        lastValidBlockHeight: window.lastValidBlockHeight,
+      },
+      "confirmed",
+    ),
   );
 
   if (result.value.err) {
