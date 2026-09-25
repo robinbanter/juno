@@ -104,6 +104,9 @@ DAMM v2 SDKs · Pyth · Tessera · Postgres (Neon) · MongoDB · Pinata/IPFS.
 
 ## Demo script (90 seconds)
 
+The full shot list, with narration, prep and editing notes, is in
+[DEMO-VIDEO.md](DEMO-VIDEO.md). This is the short version.
+
 1. **0:00 Feed.** Open the app. "Every post here is a market." Scroll, double-tap
    a like, tap **Buy** on a post. The sheet quotes live; point at price impact
    and "the most you can buy before the curve moves 1%".
