@@ -68,7 +68,7 @@ against Pyth (listed names) or Tessera (pre-IPO names Pyth has no feed for).
   - `KALSHIX` thin-name `4msUJ9WNZxKDEPKpmkvUbh18snvzYBgFEracLXwbc3aF`
   - `SPACEXX` ipo-book `FFpJbMH35kLP6tB5LLnXJSZy6BKVtwcaFHTz98tDjTVY`
 - **A7 · DONE** — Depth tooling surfaced in the buy sheet.
-- **A8 · NOT STARTED** — A Pre-IPO screen in the app listing the three T-tokens
+- **A8 · DONE** — Trade → Pre-IPO. Was: A Pre-IPO screen in the app listing the three T-tokens
   with mark, holders, valuation, float and the markets on each. The endpoint
   exists and nothing renders it. *Highest-value remaining Tessera work.*
 - **A9 · DONE** — Depth chart in the coin page's Details tab (`juno-expo/components/DepthChart.tsx`): twelve live `swapQuote` points, curve impact against size on a log axis, three sizes read out.
@@ -113,7 +113,7 @@ against Pyth (listed names) or Tessera (pre-IPO names Pyth has no feed for).
 - **D6 · DONE** — `juno-expo/.env` points `EXPO_PUBLIC_API_URL` at Railway, so
   the phone no longer depends on a laptop's dev server being up and on the
   same network.
-- **D4 · NOT STARTED** — Submission text. Lead with the two things nobody else
+- **D4 · DONE** — `docs/SUBMISSION.md`, with a 90-second demo script. Was: Submission text. Lead with the two things nobody else
   will have: a curve marked against a company that has not listed, and fills
   decoded from vault deltas with no indexer.
 - **D5 · NOT STARTED** — Video walkthrough, in case the live demo is throttled.
@@ -139,17 +139,14 @@ Each tied to the task it blocks.
 
 | Gap | Where | Blocks | Severity |
 |---|---|---|---|
-| No mainnet pool | — | C2, and Meteora's explicit criterion | **Highest.** Needs funding only. |
-| No deployed URL | `vercel.json`, nothing live | D1, and the submission itself | **Highest.** Needs a credential. |
-| Public RPC only | `lib/juno/cluster.ts` `rpcEndpoint()` | B6; causes every 15–30s response | High. Credential absent. |
-| Pool state re-read per request | `lib/juno/dbc.ts` `fetchPoolSnapshot` | B5 | High. Pure code, no credential. |
-| Tessera endpoint has no screen | `/api/juno/tessera` | A8 | High — it is the $6k track's shop window. |
-| Depth points not drawn | `lib/juno/depth.ts` `sampleDepth` | A9 | Medium. |
-| Presets never compared fairly | `lib/juno/curves.ts` | E1, E2 | Medium — it is Meteora's first criterion. |
-| Graduation unverified | `scripts/juno-graduate.ts` | F2 | Medium. |
-| Fee claim unverified | `scripts/juno-claim.ts` | F3 | Medium. |
-| `/coin/*` web route times out | `app/(juno)/coin/[address]` | D1 | Medium — 120s+ under throttle; B5 likely fixes it. |
+| No mainnet pool | `docs/MAINNET.md` | C2, C3, and Meteora's explicit criterion | **Highest.** Code ready and dry-run tested; needs ~0.15 SOL at the mainnet launcher's address. |
+| Public RPC only | `lib/juno/cluster.ts` `rpcEndpoint()` | B6 | High. Needs `NEXT_PUBLIC_SOLANA_RPC` set on Railway to a keyed devnet endpoint. |
+| No video walkthrough | — | D5 | Medium. Script in `docs/SUBMISSION.md`; needs a screen recording. |
 | 9 e2e failures | `tests/e2e/api.test.ts` | — | None for Juno. Algorand custodial tests, `fetch failed`, unrelated. |
+
+Closed on 25 Sep: deployed URL (D1), pool re-reads (B5, batched), Tessera
+screen (A8), depth chart (A9), preset comparison (E1, E2), graduation (F2),
+fee claim (F3), exact-out buys (E3).
 
 **Mocks, stubs, fakes, TODOs: none.** Grep across `lib/juno`, `app/api/juno`,
 `app/(juno)`, `juno-expo` returns only CSS `placeholder:` classes and comments
