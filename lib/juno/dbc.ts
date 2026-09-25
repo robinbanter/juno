@@ -25,6 +25,7 @@ import {
   type VirtualPool,
 } from "@meteora-ag/dynamic-bonding-curve-sdk";
 import {
+  ComputeBudgetProgram,
   Connection,
   Keypair,
   PublicKey,
@@ -752,6 +753,20 @@ export async function sendTransaction(params: {
 }): Promise<string> {
   const connection = getConnection();
   const { transaction, payer, signers = [] } = params;
+
+  /*
+   * A priority fee on mainnet, where a transaction at the base fee can sit
+   * unlanded until its blockhash expires. Devnet does not need one. Added
+   * before anything signs, and only if the builder did not set its own.
+   * 100k micro-lamports over the default 200k units is 0.00002 SOL.
+   */
+  if (
+    isMainnet() &&
+    !transaction.instructions.some((ix) => ix.programId.equals(ComputeBudgetProgram.programId))
+  ) {
+    const microLamports = Number(process.env.JUNO_PRIORITY_MICROLAMPORTS ?? 100_000);
+    transaction.instructions.unshift(ComputeBudgetProgram.setComputeUnitPrice({ microLamports }));
+  }
 
   const { blockhash, lastValidBlockHeight } =
     await connection.getLatestBlockhash(COMMITMENT);

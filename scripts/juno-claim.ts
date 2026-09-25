@@ -24,7 +24,12 @@ async function main() {
   if (!mint) throw new Error("Pass --mint <baseMint>");
 
   const payer = Keypair.fromSecretKey(
-    Uint8Array.from(JSON.parse(readFileSync(".juno/launcher.json", "utf8"))),
+    Uint8Array.from(JSON.parse(readFileSync(
+        process.env.NEXT_PUBLIC_SOLANA_CLUSTER === "mainnet-beta"
+          ? ".juno/mainnet-launcher.json"
+          : ".juno/launcher.json",
+        "utf8",
+      ))),
   );
   const found = await getDbcClient().state.getPoolByBaseMint(new PublicKey(mint));
   if (!found) throw new Error(`No pool for mint ${mint} on ${cluster()}`);

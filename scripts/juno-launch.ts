@@ -21,7 +21,21 @@ import { CURVE_PRESETS } from "../lib/juno/curves";
 import { pinTokenMetadata } from "../lib/juno/pinata";
 import type { CurvePresetId } from "../lib/juno/types";
 
-const KEY_PATH = path.resolve(process.cwd(), ".juno/launcher.json");
+/*
+ * One key per cluster. The devnet launcher is shared with every script and has
+ * been pasted into logs; it must never hold real money. A mainnet run gets its
+ * own key, generated here on first use and never committed (`.juno/` is
+ * ignored), so the address can be funded with exactly what one launch needs.
+ * `--keypair <path>` uses an existing key instead.
+ */
+const KEY_PATH = path.resolve(
+  process.cwd(),
+  process.argv.includes("--keypair")
+    ? process.argv[process.argv.indexOf("--keypair") + 1]
+    : process.env.NEXT_PUBLIC_SOLANA_CLUSTER === "mainnet-beta"
+      ? ".juno/mainnet-launcher.json"
+      : ".juno/launcher.json",
+);
 
 function arg(name: string, fallback?: string): string | undefined {
   const i = process.argv.indexOf(`--${name}`);

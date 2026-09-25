@@ -38,7 +38,12 @@ async function main() {
   const amountIn = Number(arg("amount", "0.1"));
 
   const payer = Keypair.fromSecretKey(
-    Uint8Array.from(JSON.parse(readFileSync(".juno/launcher.json", "utf8"))),
+    Uint8Array.from(JSON.parse(readFileSync(
+        process.env.NEXT_PUBLIC_SOLANA_CLUSTER === "mainnet-beta"
+          ? ".juno/mainnet-launcher.json"
+          : ".juno/launcher.json",
+        "utf8",
+      ))),
   );
 
   const found = await getDbcClient().state.getPoolByBaseMint(new PublicKey(mint));

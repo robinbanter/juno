@@ -15,6 +15,7 @@ import {
   dammV2ConfigFor,
   fetchPoolSnapshot,
   getDbcClient,
+  invalidatePoolSnapshot,
   planMigration,
   sendTransaction,
 } from "../lib/juno/dbc";
@@ -31,7 +32,12 @@ async function main() {
   const preset = (arg("preset", "content") ?? "content") as CurvePresetId;
 
   const payer = Keypair.fromSecretKey(
-    Uint8Array.from(JSON.parse(readFileSync(".juno/launcher.json", "utf8"))),
+    Uint8Array.from(JSON.parse(readFileSync(
+        process.env.NEXT_PUBLIC_SOLANA_CLUSTER === "mainnet-beta"
+          ? ".juno/mainnet-launcher.json"
+          : ".juno/launcher.json",
+        "utf8",
+      ))),
   );
   const found = await getDbcClient().state.getPoolByBaseMint(new PublicKey(mint));
   if (!found) throw new Error(`No pool for mint ${mint} on ${cluster()}`);
@@ -61,6 +67,8 @@ async function main() {
     onSent: (sig) => console.log(`\nsent         ${sig}`),
   });
 
+  // The snapshot cache would otherwise answer with the pre-migration read.
+  invalidatePoolSnapshot(pool);
   const after = await fetchPoolSnapshot(pool);
   console.log(`\n✅ Migrated to DAMM v2`);
   console.log(`tx           ${explorer.tx(signature)}`);
