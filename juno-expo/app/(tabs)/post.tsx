@@ -2,7 +2,7 @@ import { Image as ExpoImage } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useVideoPlayer, VideoView } from "expo-video";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   KeyboardAvoidingView,
   Linking,
@@ -20,6 +20,7 @@ import { CurvePreview } from "../../components/CurvePreview";
 import { Button, Card, Pill } from "../../components/kit";
 import { juno, WSOL_MINT } from "../../lib/api";
 import { feedChanged } from "../../lib/refresh";
+import { useTabBarHeight } from "../../lib/tabbar";
 import { useWallet } from "../../lib/wallet";
 import { theme } from "../../theme";
 
@@ -98,6 +99,13 @@ export default function PostScreen() {
   const [log, setLog] = useState<LogEntry[]>([]);
   const note = (entry: Omit<LogEntry, "at">) =>
     setLog((current) => [...current, { ...entry, at: new Date() }]);
+  // The log grows under the fold, beneath the tab bar; keep its newest row in
+  // view, the way a terminal follows its output.
+  const scroller = useRef<ScrollView>(null);
+  const TAB_H = useTabBarHeight().height;
+  useEffect(() => {
+    if (log.length > 0) setTimeout(() => scroller.current?.scrollToEnd({ animated: true }), 60);
+  }, [log.length]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -132,7 +140,13 @@ export default function PostScreen() {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: kind === "reel" ? ["videos"] : ["images"],
+        // A JPEG, not the library's HEIC original: an iPhone photo is HEIC,
+        // which the server's image reader refused ("heif: security limit
+        // exceeded") and which a browser viewing the post cannot draw. A
+        // quality below 1 already makes iOS re-encode; `Compatible` says so.
         quality: 0.9,
+        preferredAssetRepresentationMode:
+          ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
         videoMaxDuration: 90,
       });
       if (result.canceled || !result.assets[0]) return;
@@ -158,7 +172,7 @@ export default function PostScreen() {
       feedChanged();
       // A beat on the finished log: every receipt is on screen at once, which
       // is the proof, before the coin page replaces it.
-      await new Promise((resolve) => setTimeout(resolve, 2200));
+      await new Promise((resolve) => setTimeout(resolve, 3500));
       setStatus(null);
       // A blank composer for the next one. The tab stays mounted, so coming
       // back to it showed the last post filled in — one tap from launching a
@@ -303,7 +317,11 @@ export default function PostScreen() {
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={{ flex: 1 }}
       >
-        <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          ref={scroller}
+          contentContainerStyle={[styles.body, { paddingBottom: TAB_H + 24 }]}
+          showsVerticalScrollIndicator={false}
+        >
           <Text style={styles.title}>
             {kind === "reel" ? "Post a reel" : "Post a photo"}
           </Text>
