@@ -14,7 +14,7 @@ Built for the Solana **STOCKLANA** hackathon.
 | | |
 |---|---|
 | **Try it** | **https://juno-app-chi.vercel.app** — the Expo app's web build. Open it on a phone, or on a laptop it runs in a phone-width frame. |
-| **Network** | Solana **devnet**. No real money. Profile → *Get devnet SOL* funds a new wallet. |
+| **Network** | The app runs on Solana **devnet**: no real money, and Profile → *Get devnet SOL* funds a new wallet. The four curve presets are also **[live on mainnet](#live-on-mainnet)**. |
 | **API** | https://juno-web-production-bd2e.up.railway.app/api/juno/… |
 | **Landing** | https://juno-landing-beta.vercel.app |
 | **Deep dive** | [JUNO.md](JUNO.md) — on-chain proof, the DBC findings, what is and is not built |
@@ -58,6 +58,32 @@ read fails the app says so — it does not print a zero it never measured.
   the phone signs; the server submits.
 - **A full lifecycle on devnet** — launch → trade → curve to 100% → migrated to
   DAMM v2 → creator fees claimed. Links in [JUNO.md](JUNO.md#on-chain-proof-devnet).
+
+## Live on mainnet
+
+The app runs on devnet so anyone can try it for free. The curves also run on
+**Solana mainnet**: one pool per preset, launched 25 Sep 2026 by
+`scripts/mainnet-proof.sh`, all nine transactions finalized.
+
+| Pool | Curve | Quote | Open it | Launch transactions |
+|---|---|---|---|---|
+| **Juno Content** `JUNOC` | `content` | SOL | [Meteora](https://app.meteora.ag/dbc/DYq4PbgvcyRZ38tYyv5gz7x4mpZbgrFMKqn7bzMw3Nto) · [pool](https://solscan.io/account/DYq4PbgvcyRZ38tYyv5gz7x4mpZbgrFMKqn7bzMw3Nto) · [token](https://solscan.io/token/451FRBa86C3nEAgCkqFv2P4MJUdwgH3efNLdnKYr8sBT) | [config](https://solscan.io/tx/3PY1gxx7Wvhk3dqm8jrakJ7bGQLvmc6hfiyJxT19HuGysmSfLcmUgVSpSwgBTAdTUgNxdj1ZTYSTbaALXnSodMHy) · [pool](https://solscan.io/tx/ugoSAUhHqfdJYxYzaQpj3oGdJyZeRnr9Z44AsRVdD4yYRmZni6RtqNtszdjRyuSAS2GnGrjQ9Hw6Qq3ZftcW4j6) |
+| **Juno Thin Name** `JUNOTN` | `thin-name` | USDC | [Meteora](https://app.meteora.ag/dbc/ETgRZABKT6KTxJHctSQiQ1WbjBrU2DoFmeUrASu7AMMg) · [pool](https://solscan.io/account/ETgRZABKT6KTxJHctSQiQ1WbjBrU2DoFmeUrASu7AMMg) · [token](https://solscan.io/token/G5bhx1QKkD1mxB9yHLQQimczgpwNRVriiJPfXsDH11Jf) | [config](https://solscan.io/tx/56EQ8EknroEJSo4JmoRm8gxXhYr9nAsrMbHXj2iYVoHhGgHWGZrAJ2HtewFahGMx9CBUjRijPoYuqQAfk32fjVCC) · [pool](https://solscan.io/tx/2JTHEvq9MkapzfQPdDheS76Tu9q7qyiAP4Jqpe7ZgohpdoCoSwQbTNtxuQkQ71dBrCUQ2HhvheE9xaeJKLYWgeu8) |
+| **Juno IPO Book** `JUNOIB` | `ipo-book` | USDC | [Meteora](https://app.meteora.ag/dbc/8jEvf8ZRCaD5sxcy8cbwN6zWmLeJhjcDTJxdQ7yuJ1ai) · [pool](https://solscan.io/account/8jEvf8ZRCaD5sxcy8cbwN6zWmLeJhjcDTJxdQ7yuJ1ai) · [token](https://solscan.io/token/HH5xiMDeTBbH2j2ne5Hs9wat2BNmN2JCczpm27LGGUVf) | [config](https://solscan.io/tx/5pdVEXr1cFnrFQJtEgZi2i5HdF3sfEazHjiaZWWQewAmVTSnKC1VVur7cvEH8EBJeF9j1JeV71Tq1ijf7v3mMEbZ) · [pool](https://solscan.io/tx/gu99UTLwroQTmdF8NfH6HQN7tX8QNcLRMz4gGTD6cFhE9RU9UskstBuK5gxXhhEWWQVcnPhj9bSA9AFANaS7c6V) |
+| **Juno Tight NAV** `JUNOTV` | `tight-nav` | USDC | [Meteora](https://app.meteora.ag/dbc/Hvk85BYY5sFxvWgUiaFtGMHb2bcm8MbYypXaVtcFkw3J) · [pool](https://solscan.io/account/Hvk85BYY5sFxvWgUiaFtGMHb2bcm8MbYypXaVtcFkw3J) · [token](https://solscan.io/token/5RG2N4uyA4f9b3ZUiYbFbsQkZsUN1kjLBBJ9MVRkp9jA) | [config](https://solscan.io/tx/4frQyQxZ4rTRKKnxHCyQRZtwpefTp94nnkFRaR4rMwmZX6nwUkUJXLRXnySFvN8TMh9yVUaERGx4CtFwPRzesvkL) · [pool](https://solscan.io/tx/3VYqpMk4HHA6pdnRHg3UpND6pmLAwnKzP3A1GXoR9KFKcDdwMr6EjGfD1aU9TLdNs4i35R3KSk16jTgo798Gwb7X) |
+
+**A real mainnet buy:** 0.01 SOL of JUNOC, [`DWAAoN5U…`](https://solscan.io/tx/DWAAoN5Uj344EyGwNK9AiG4UR48x5sCDqWRLccBxop67Nez11vSBs6DqqmpXgjt2UvCPhozvDz1DT5q42jsLFgV).
+
+**The anti-sniper fee, working as designed.** JUNOC opened in the same second
+that bots fired eleven buys at it (3 landed, 8 failed), with another eleven
+seconds later ([pool history](https://solscan.io/account/DYq4PbgvcyRZ38tYyv5gz7x4mpZbgrFMKqn7bzMw3Nto)).
+The `content` preset opens at a 9% fee that decays to 1% over ten minutes, so
+every one of them paid 9% on the way in, and those fees went to the creator.
+
+Launcher `47uNkySS2FmZ9QoMWyMnzPWK56FChaAxSRbyToSu3Dv8`. Total cost of the
+run: 0.118 SOL, nearly all of it account rent. Rehearsed first on devnet with
+the identical script, and each config transaction simulated on mainnet before
+anything was sent.
 
 ## Layout
 

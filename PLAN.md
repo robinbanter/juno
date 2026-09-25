@@ -87,10 +87,9 @@ against Pyth (listed names) or Tessera (pre-IPO names Pyth has no feed for).
 
 ### Phase C — Mainnet
 
-- **C1 · DONE** — **Ready, needs funding.** `docs/MAINNET.md`. The mainnet key is generated (`.juno/mainnet-launcher.json`, not committed); fund its address with ~0.15 SOL. One launch measured at 0.0266 SOL.
-- **C2 · BLOCKED on C1** — Launch one mainnet pool per preset, quoted in SOL.
-- **C3 · BLOCKED on C1** — One real mainnet buy, so the demo has a mainnet
-  signature a judge can click.
+- **C1 · DONE** — Funded 25 Sep; spent 0.118 of 0.15 SOL. `docs/MAINNET.md`. The mainnet key is generated (`.juno/mainnet-launcher.json`, not committed); fund its address with ~0.15 SOL. One launch measured at 0.0266 SOL.
+- **C2 · DONE** — Four mainnet pools, one per preset (README → Live on mainnet). 25 Sep, 0.118 SOL.
+- **C3 · DONE** — 0.01 SOL mainnet buy of JUNOC, `DWAAoN5U…`. Three sniper bots got there first and paid the 9% opening fee.
 - **C4 · NOT STARTED** — `NEXT_PUBLIC_SOLANA_CLUSTER=mainnet-beta` path tested
   end to end. The registry is cluster-scoped already, so devnet pools stay
   hidden rather than mixing.
@@ -139,7 +138,6 @@ Each tied to the task it blocks.
 
 | Gap | Where | Blocks | Severity |
 |---|---|---|---|
-| No mainnet pool | `docs/MAINNET.md` | C2, C3, and Meteora's explicit criterion | **Highest.** Code ready and dry-run tested; needs ~0.15 SOL at the mainnet launcher's address. |
 | Public RPC only | `lib/juno/cluster.ts` `rpcEndpoint()` | B6 | High. Needs `NEXT_PUBLIC_SOLANA_RPC` set on Railway to a keyed devnet endpoint. |
 | No video walkthrough | — | D5 | Medium. Script in `docs/SUBMISSION.md`; needs a screen recording. |
 | 9 e2e failures | `tests/e2e/api.test.ts` | — | None for Juno. Algorand custodial tests, `fetch failed`, unrelated. |

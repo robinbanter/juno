@@ -63,10 +63,11 @@ What we'd point a judge at:
    so Juno splits it into two transactions. `token.leftover` is required, or
    the builder throws.
 
-**Mainnet.** The DBC program is the same program on both clusters, so every
-devnet pool is a real DBC pool. The mainnet proof pools follow
-[docs/MAINNET.md](MAINNET.md): about 0.027 SOL each, one per preset.
-<!-- Replace with the four mainnet pool addresses once launched. -->
+**Mainnet.** The DBC program is the same on both clusters, so every devnet
+pool is a real DBC pool, and all four presets are also **live on mainnet**
+(links in the [README](../README.md#live-on-mainnet)), with a real buy. JUNOC
+was sniped by bots in its first second. Three buys landed, and each paid the
+`content` preset's 9% opening fee to the creator, which is what that fee is for.
 
 ## Tessera: Best Use of Pre-IPO Stocks
 

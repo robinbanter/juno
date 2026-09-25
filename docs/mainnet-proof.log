@@ -1,0 +1,125 @@
+
+=== content
+cluster   mainnet-beta
+rpc       https://api.mainnet-beta.solana.com
+launcher  47uNkySS2FmZ9QoMWyMnzPWK56FChaAxSRbyToSu3Dv8
+preset    Content — Default for posts. Cheap entry, graduates on modest volume.
+quote     SOL (So11111111111111111111111111111111111111112)
+balance   0.1500 SOL
+metadata  https://gateway.pinata.cloud/ipfs/QmZwGt7LZC6CGgXp5s2kauoLvf4LkcCYFNiihmwTV6VWMp
+
+Building…
+Sending…
+  [1/2] Creating the curve config
+  [2/2] Opening the pool
+
+✅ Pool is live
+
+tx 1      https://solscan.io/tx/3PY1gxx7Wvhk3dqm8jrakJ7bGQLvmc6hfiyJxT19HuGysmSfLcmUgVSpSwgBTAdTUgNxdj1ZTYSTbaALXnSodMHy
+tx 2      https://solscan.io/tx/ugoSAUhHqfdJYxYzaQpj3oGdJyZeRnr9Z44AsRVdD4yYRmZni6RtqNtszdjRyuSAS2GnGrjQ9Hw6Qq3ZftcW4j6
+pool      https://solscan.io/account/DYq4PbgvcyRZ38tYyv5gz7x4mpZbgrFMKqn7bzMw3Nto
+mint      https://solscan.io/token/451FRBa86C3nEAgCkqFv2P4MJUdwgH3efNLdnKYr8sBT
+config    https://solscan.io/account/CNhDzd6mox11pSUVjQeNS7aSurwMjfWwFQeQJHNanHxe
+meteora   https://app.meteora.ag/dbc/DYq4PbgvcyRZ38tYyv5gz7x4mpZbgrFMKqn7bzMw3Nto
+
+app       /coin/451FRBa86C3nEAgCkqFv2P4MJUdwgH3efNLdnKYr8sBT
+metadata  ipfs://QmZwGt7LZC6CGgXp5s2kauoLvf4LkcCYFNiihmwTV6VWMp
+indexed   failed (is the dev server running?)
+
+=== thin-name
+cluster   mainnet-beta
+rpc       https://api.mainnet-beta.solana.com
+launcher  47uNkySS2FmZ9QoMWyMnzPWK56FChaAxSRbyToSu3Dv8
+preset    Thin name — Newly tokenized, low float. Deep at the issue price.
+quote     USDC (EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v)
+balance   0.1234 SOL
+metadata  https://gateway.pinata.cloud/ipfs/QmTSJDJMHfWyYq1RU4SSiC4ZsSfWiRqVRuNrtqkLaVd81b
+
+Building…
+Sending…
+  [1/2] Creating the curve config
+  [2/2] Opening the pool
+
+✅ Pool is live
+
+tx 1      https://solscan.io/tx/56EQ8EknroEJSo4JmoRm8gxXhYr9nAsrMbHXj2iYVoHhGgHWGZrAJ2HtewFahGMx9CBUjRijPoYuqQAfk32fjVCC
+tx 2      https://solscan.io/tx/2JTHEvq9MkapzfQPdDheS76Tu9q7qyiAP4Jqpe7ZgohpdoCoSwQbTNtxuQkQ71dBrCUQ2HhvheE9xaeJKLYWgeu8
+pool      https://solscan.io/account/ETgRZABKT6KTxJHctSQiQ1WbjBrU2DoFmeUrASu7AMMg
+mint      https://solscan.io/token/G5bhx1QKkD1mxB9yHLQQimczgpwNRVriiJPfXsDH11Jf
+config    https://solscan.io/account/B2Eb1eQ6mmKUfC4FreUuSLTZbWjDHtAbkE4d6qRaRBSQ
+meteora   https://app.meteora.ag/dbc/ETgRZABKT6KTxJHctSQiQ1WbjBrU2DoFmeUrASu7AMMg
+
+app       /coin/G5bhx1QKkD1mxB9yHLQQimczgpwNRVriiJPfXsDH11Jf
+metadata  ipfs://QmTSJDJMHfWyYq1RU4SSiC4ZsSfWiRqVRuNrtqkLaVd81b
+indexed   failed (is the dev server running?)
+
+=== ipo-book
+cluster   mainnet-beta
+rpc       https://api.mainnet-beta.solana.com
+launcher  47uNkySS2FmZ9QoMWyMnzPWK56FChaAxSRbyToSu3Dv8
+preset    IPO book — Deep open, real discovery mid-curve, flat near the target cap.
+quote     USDC (EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v)
+balance   0.0968 SOL
+metadata  https://gateway.pinata.cloud/ipfs/QmRVzcUo1vvexgM1PcUpQZFk3JekGBLsCPQZQc8JLrFRs8
+
+Building…
+Sending…
+  [1/2] Creating the curve config
+  [2/2] Opening the pool
+
+✅ Pool is live
+
+tx 1      https://solscan.io/tx/5pdVEXr1cFnrFQJtEgZi2i5HdF3sfEazHjiaZWWQewAmVTSnKC1VVur7cvEH8EBJeF9j1JeV71Tq1ijf7v3mMEbZ
+tx 2      https://solscan.io/tx/gu99UTLwroQTmdF8NfH6HQN7tX8QNcLRMz4gGTD6cFhE9RU9UskstBuK5gxXhhEWWQVcnPhj9bSA9AFANaS7c6V
+pool      https://solscan.io/account/8jEvf8ZRCaD5sxcy8cbwN6zWmLeJhjcDTJxdQ7yuJ1ai
+mint      https://solscan.io/token/HH5xiMDeTBbH2j2ne5Hs9wat2BNmN2JCczpm27LGGUVf
+config    https://solscan.io/account/APa1p4BTsgxwVfgcFh5QG14LJN4t61gfGfyNi56v1Sec
+meteora   https://app.meteora.ag/dbc/8jEvf8ZRCaD5sxcy8cbwN6zWmLeJhjcDTJxdQ7yuJ1ai
+
+app       /coin/HH5xiMDeTBbH2j2ne5Hs9wat2BNmN2JCczpm27LGGUVf
+metadata  ipfs://QmRVzcUo1vvexgM1PcUpQZFk3JekGBLsCPQZQc8JLrFRs8
+indexed   failed (is the dev server running?)
+
+=== tight-nav
+cluster   mainnet-beta
+rpc       https://api.mainnet-beta.solana.com
+launcher  47uNkySS2FmZ9QoMWyMnzPWK56FChaAxSRbyToSu3Dv8
+preset    Tight NAV — Near-flat curve for assets that should track an underlying.
+quote     USDC (EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v)
+balance   0.0702 SOL
+metadata  https://gateway.pinata.cloud/ipfs/QmReQVyPCLVJFqxjTtz1KTQRqzcvTaMX5hcUeNFEBPH1fw
+
+Building…
+Sending…
+  [1/2] Creating the curve config
+  [2/2] Opening the pool
+
+✅ Pool is live
+
+tx 1      https://solscan.io/tx/4frQyQxZ4rTRKKnxHCyQRZtwpefTp94nnkFRaR4rMwmZX6nwUkUJXLRXnySFvN8TMh9yVUaERGx4CtFwPRzesvkL
+tx 2      https://solscan.io/tx/3VYqpMk4HHA6pdnRHg3UpND6pmLAwnKzP3A1GXoR9KFKcDdwMr6EjGfD1aU9TLdNs4i35R3KSk16jTgo798Gwb7X
+pool      https://solscan.io/account/Hvk85BYY5sFxvWgUiaFtGMHb2bcm8MbYypXaVtcFkw3J
+mint      https://solscan.io/token/5RG2N4uyA4f9b3ZUiYbFbsQkZsUN1kjLBBJ9MVRkp9jA
+config    https://solscan.io/account/3NaYGnARyMVtU7Aft2PFvBWi6tu7rE6BykNS2EAWfqvS
+meteora   https://app.meteora.ag/dbc/Hvk85BYY5sFxvWgUiaFtGMHb2bcm8MbYypXaVtcFkw3J
+
+app       /coin/5RG2N4uyA4f9b3ZUiYbFbsQkZsUN1kjLBBJ9MVRkp9jA
+metadata  ipfs://QmReQVyPCLVJFqxjTtz1KTQRqzcvTaMX5hcUeNFEBPH1fw
+indexed   failed (is the dev server running?)
+
+=== buy 0.01 SOL of JUNOC (mint 451FRBa86C3nEAgCkqFv2P4MJUdwgH3efNLdnKYr8sBT, pool DYq4PbgvcyRZ38tYyv5gz7x4mpZbgrFMKqn7bzMw3Nto)
+cluster        mainnet-beta
+pool           DYq4PbgvcyRZ38tYyv5gz7x4mpZbgrFMKqn7bzMw3Nto
+side           buy
+amount in      0.01
+expected out   96053.663419
+minimum out    93172.053516
+fee            0.000710144
+price impact   8.9065%
+
+sent           DWAAoN5Uj344EyGwNK9AiG4UR48x5sCDqWRLccBxop67Nez11vSBs6DqqmpXgjt2UvCPhozvDz1DT5q42jsLFgV
+
+✅ Trade confirmed
+tx             https://solscan.io/tx/DWAAoN5Uj344EyGwNK9AiG4UR48x5sCDqWRLccBxop67Nez11vSBs6DqqmpXgjt2UvCPhozvDz1DT5q42jsLFgV
+curve progress 1.6076% → 1.6102%
+price          9.483604908362287e-8 → 9.489790087347365e-8
