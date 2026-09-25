@@ -18,6 +18,8 @@
  */
 
 import "react-native-get-random-values";
+// Privy encodes and decodes text before Hermes has a TextEncoder for it.
+import "fast-text-encoding";
 import { Buffer } from "buffer";
 
 declare global {

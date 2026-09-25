@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import * as SecureStore from "expo-secure-store";
 import { Keypair, Transaction } from "@solana/web3.js";
 import { Platform } from "react-native";
@@ -6,6 +6,8 @@ import bs58 from "bs58";
 import nacl from "tweetnacl";
 
 import { juno } from "./api";
+import { PrivyRoot, usePrivyBridge } from "./privy";
+import { SignInSheet } from "../components/SignInSheet";
 
 /**
  * The wallet.
@@ -22,11 +24,14 @@ import { juno } from "./api";
  * deeplink needs the real app installed, so neither can sign during the demo
  * this app is built for.
  *
- * **A local devnet key** is the fallback. Privy needs a mobile client
- * registered against this bundle id in its dashboard, which is account
- * configuration nobody can do from inside the code. Rather than leave the app
- * unusable until that exists, this mode generates a keypair, keeps it in the
- * device keychain, and signs with it.
+ * On iOS and Android a new wallet is always a Privy one:
+ * `connect()` opens the email sign-in sheet and resolves with the address once
+ * Privy has made the wallet, so every "sign in first" path (buy, like, comment,
+ * post) goes through the same door.
+ *
+ * **A local devnet key** is the fallback: the web build, which has no Privy,
+ * and a phone that already holds a key from before Privy was added. It
+ * generates a keypair, keeps it in the device keychain, and signs with it.
  *
  * The local mode is **not a simulation**. It produces real Ed25519 signatures,
  * lands real transactions on devnet, and the explorer link resolves. What it is
@@ -110,9 +115,21 @@ async function createLocalKeypair(): Promise<Keypair> {
 }
 
 export function WalletProvider({ children }: { children: React.ReactNode }) {
+  return (
+    <PrivyRoot>
+      <Wallet>{children}</Wallet>
+    </PrivyRoot>
+  );
+}
+
+function Wallet({ children }: { children: React.ReactNode }) {
+  const privy = usePrivyBridge();
   const [keypair, setKeypair] = useState<Keypair | null>(null);
-  const [ready, setReady] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   const [signing, setSigning] = useState(false);
+  const [signingIn, setSigningIn] = useState(false);
+  // The `connect()` call waiting on the sign-in sheet.
+  const pending = useRef<{ resolve: (address: string) => void; reject: (error: Error) => void } | null>(null);
 
   // Restore an existing key on boot so a returning user keeps their balance
   // and their position history.
@@ -121,15 +138,34 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     loadLocalKeypair().then((existing) => {
       if (cancelled) return;
       setKeypair(existing);
-      setReady(true);
+      setLoaded(true);
     });
     return () => {
       cancelled = true;
     };
   }, []);
 
+  const address = privy.address ?? keypair?.publicKey.toBase58() ?? null;
+  const ready = loaded && privy.ready;
+
+  // Privy has made the wallet: hand the address to whoever asked for it.
+  useEffect(() => {
+    if (!privy.address) return;
+    pending.current?.resolve(privy.address);
+    pending.current = null;
+    setSigningIn(false);
+  }, [privy.address]);
+
   const connect = useCallback(async () => {
-    const existing = keypair ?? (await loadLocalKeypair());
+    if (address) return address;
+    if (privy.enabled) {
+      pending.current?.reject(new Error("Sign-in replaced"));
+      return new Promise<string>((resolve, reject) => {
+        pending.current = { resolve, reject };
+        setSigningIn(true);
+      });
+    }
+    const existing = await loadLocalKeypair();
     if (existing) {
       setKeypair(existing);
       return existing.publicKey.toBase58();
@@ -137,21 +173,31 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     const created = await createLocalKeypair();
     setKeypair(created);
     return created.publicKey.toBase58();
-  }, [keypair]);
+  }, [address, privy.enabled]);
+
+  const cancelSignIn = useCallback(() => {
+    setSigningIn(false);
+    pending.current?.reject(new Error("Sign-in cancelled"));
+    pending.current = null;
+  }, []);
 
   const disconnect = useCallback(async () => {
+    if (privy.address) await privy.logout();
     await store.remove(LOCAL_KEY);
     setKeypair(null);
-  }, []);
+  }, [privy]);
 
   const sign = useCallback(
     async (base64: string) => {
-      const signer = keypair ?? (await loadLocalKeypair());
-      if (!signer) throw new Error("No wallet to sign with");
-
       setSigning(true);
       try {
         const transaction = Transaction.from(Buffer.from(base64, "base64"));
+        if (privy.address) {
+          const signed = await privy.signTransaction(transaction);
+          return signed.serialize().toString("base64");
+        }
+        const signer = keypair ?? (await loadLocalKeypair());
+        if (!signer) throw new Error("No wallet to sign with");
         // `partialSign`, not `sign`: a launch transaction already carries the
         // signatures of the accounts it creates, and `sign` would discard them.
         transaction.partialSign(signer);
@@ -160,22 +206,26 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         setSigning(false);
       }
     },
-    [keypair],
+    [keypair, privy],
   );
 
   const signMessage = useCallback(
     async (text: string) => {
+      if (privy.address) {
+        const signature = await privy.signMessage(Buffer.from(text, "utf8").toString("base64"));
+        return bs58.encode(Buffer.from(signature, "base64"));
+      }
       const signer = keypair ?? (await loadLocalKeypair());
       if (!signer) throw new Error("No wallet to sign with");
       return bs58.encode(nacl.sign.detached(new TextEncoder().encode(text), signer.secretKey));
     },
-    [keypair],
+    [keypair, privy],
   );
 
   const value = useMemo<WalletState>(
     () => ({
-      address: keypair?.publicKey.toBase58() ?? null,
-      mode: "local",
+      address,
+      mode: privy.address ? "privy" : "local",
       ready,
       signing,
       sign,
@@ -183,10 +233,15 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       connect,
       disconnect,
     }),
-    [keypair, ready, signing, sign, signMessage, connect, disconnect],
+    [address, privy.address, ready, signing, sign, signMessage, connect, disconnect],
   );
 
-  return <WalletContext.Provider value={value}>{children}</WalletContext.Provider>;
+  return (
+    <WalletContext.Provider value={value}>
+      {children}
+      {privy.enabled ? <SignInSheet visible={signingIn} onClose={cancelSignIn} privy={privy} /> : null}
+    </WalletContext.Provider>
+  );
 }
 
 export function useWallet(): WalletState {

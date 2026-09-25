@@ -8,7 +8,7 @@
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "fun.juno.app"
+      "bundleIdentifier": "app.launch.juno"
     },
     "android": {
       "adaptiveIcon": {
@@ -18,7 +18,7 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "fun.juno.app"
+      "package": "app.launch.juno"
     },
     "web": {
       "favicon": "./assets/favicon.png"

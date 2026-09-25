@@ -35,6 +35,7 @@ import {
 import { juno, type Plan, type WatchItem } from "../../lib/api";
 import { useLinkedState } from "../../lib/linked";
 import { money, tokens, useApi } from "../../lib/useApi";
+import { PRIVY_ENABLED } from "../../lib/privy";
 import { useWallet } from "../../lib/wallet";
 import { theme } from "../../theme";
 
@@ -145,13 +146,20 @@ export default function ProfileScreen() {
       <Page edges={["top"]}>
         <Placeholder
           title="No wallet yet"
-          detail="Create one to trade and to launch your own coins. No sign-up."
+          detail={
+            PRIVY_ENABLED
+              ? "Sign in with your email. Privy creates a Solana wallet for you, with no seed phrase."
+              : "Create one to trade and to launch your own coins. No sign-up."
+          }
           action={
             // Not `.then(portfolio.refresh)`: that refresh was captured before
             // the wallet existed, re-ran the read with no address, and its
             // null landed last — "Holdings could not be read" on a wallet
             // created a second ago. The address change re-reads on its own.
-            <Button label="Create wallet" onPress={() => void wallet.connect()} />
+            <Button
+              label={PRIVY_ENABLED ? "Continue with email" : "Create wallet"}
+              onPress={() => void wallet.connect().catch(() => undefined)}
+            />
           }
         />
       </Page>
@@ -178,7 +186,7 @@ export default function ProfileScreen() {
           <Heading>
             <Handle wallet={wallet.address} />
           </Heading>
-          <Caption>{wallet.mode === "local" ? "Device key · devnet" : "Embedded wallet"}</Caption>
+          <Caption>{wallet.mode === "local" ? "Device key · devnet" : "Privy wallet · devnet"}</Caption>
         </Identity>
 
         <WalletCard address={wallet.address} />
