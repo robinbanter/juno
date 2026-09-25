@@ -123,6 +123,18 @@ locally, submitted and confirmed:
 [`4YM9pnRu…QLsq`](https://solscan.io/tx/4YM9pnRuUx8KXWyU4xNRDQE35RUT6hPM4mpvCaqvAyo4xbH6CEv8ziMEenJnGdPn4aAVN5kb9a1H9n4HnxHqQLsq?cluster=devnet)
 — reproduced by `npm run test:integration`.
 
+**Re-verified 25 Sep, end to end on a fresh pool** — `GRADCHK`, `content`,
+SOL-quoted, caps 0.2 → 2 SOL:
+- Launch: [`3yLs4mQV…`](https://solscan.io/tx/3yLs4mQVR4qCJqBFtQoh6Fc3vBHakYsWN8Kv7NWnCfKzdCTZm3HvQSoB45WzGuqGRpPLSawQZMqFPcnwEL6xk4mW?cluster=devnet),
+  [`3paLvt21…`](https://solscan.io/tx/3paLvt211PXBaBGVUSr9W78kMxkGzawAe4yKKo8SEWL6V6ggC6oytUNyZvfnA2DQMHhJub4ifXvuWp2UqF1Fdeyh?cluster=devnet)
+- One partial fill, 0% → **100%**, price exactly 10x: [`4VRk3KG9…`](https://solscan.io/tx/4VRk3KG9AW7ZwsJAKD9UrV4AQjpdRsK6nriYC6RSohJ33H48655jK1w4qM1wq6NhvRSs6KKgB8XP6oems3NwNGk?cluster=devnet)
+- Creator fees, 0.02658 SOL claimed to zero: [`5ashh4pr…`](https://solscan.io/tx/5ashh4prueGcijHKaXNAwQBbTqy2gigPsLP3UmHUMdummVerxXemaQxnrs992Kn1DvpDGwxntKudSBpKCHQR8bbQ?cluster=devnet)
+- `MigrationDammV2` → DAMM v2 `InitializePool`: [`NsfDn9uf…`](https://solscan.io/tx/NsfDn9ufwHgga6XiNy1tkGW2HG2ooEeTnVSt6tC2aWhYGQRKxchhWa9jzW6T7DSHQJ6tsK74f4Bkk9zhPYnR8jR?cluster=devnet)
+
+**Exact-out buy** (`SwapMode.ExactOut`) — 1,000,000 tokens requested, exactly
+1,000,000 received, cost capped by `maximumAmountIn`:
+[`4Ha3CC7T…`](https://solscan.io/tx/4Ha3CC7TACsTeFHExbXrDksCD6CMJjCFUz4pEj1p9JQ3uUUWuzj6m5Zscq45pa9ZoYiYVhvA5k6nkotiAGhG8AD?cluster=devnet)
+
 Program (identical on mainnet and devnet):
 [`dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN`](https://solscan.io/account/dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN?cluster=devnet)
 

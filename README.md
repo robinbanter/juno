@@ -40,6 +40,14 @@ read fails the app says so — it does not print a zero it never measured.
   `content` (back-loaded), `thin-name` (front-loaded, for a low-float stock),
   `ipo-book` (deep at both ends), `tight-nav` (uniform, tracks a reference).
   Each is validated by Meteora's own `validateConfigParameters` in the test suite.
+- **Measured, not just named.** All four presets quoted on one config, so
+  the weights are the only difference ([table](JUNO.md#the-presets-measured-on-one-config)).
+  The measurement caught a false claim: uniform weights are *not* flat over a
+  wide range, so `tight-nav` now sets its own narrow range and refuses a wide one.
+- **Depth, not just price.** The coin page draws what a buy of each size moves
+  the price, from live `swapQuote` calls; the trade sheet offers the largest
+  size that stays under a 1% move, and can buy an **exact number of tokens**
+  (`SwapMode.ExactOut`).
 - **Pre-IPO names with no oracle.** Pyth has no feed for a company that has not
   listed; Tessera does, and Juno reads its public API and the T-token mints on
   mainnet to mark a curve against it.
