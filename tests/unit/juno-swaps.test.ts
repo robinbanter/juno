@@ -309,4 +309,12 @@ describe("changeWithin", () => {
     const swaps = [swap(30, "buy", 100, 1, 100)];
     expect(changeWithin(swaps, DAY_MS, 0.01, NOW)).toBe(0);
   });
+
+  it("measures a coin younger than the window from its opening price", () => {
+    const young = { price: 0.01, at: NOW - 60 * 60 * 1000 };
+    expect(changeWithin([], DAY_MS, 0.012, NOW, young)).toBeCloseTo(0.2, 12);
+    // An opening older than the window is not a reference for it.
+    const old = { price: 0.01, at: NOW - 2 * DAY_MS };
+    expect(changeWithin([], DAY_MS, 0.012, NOW, old)).toBeNull();
+  });
 });

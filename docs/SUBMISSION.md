@@ -12,7 +12,7 @@ listed and against Pyth for the ones that have.
 |---|---|
 | Live app | https://juno-app-chi.vercel.app (devnet; Profile → *Get devnet SOL*) |
 | Code | this repository: `juno-expo/` is the app, `lib/juno/` and `app/api/juno/` the server |
-| Android build | `juno-v1.0.0-android.apk` (Expo, arm64) |
+| Android build | `juno-v1.0.1-android.apk` (Expo, arm64) |
 | Proof | [JUNO.md → On-chain proof](../JUNO.md#on-chain-proof-devnet) |
 
 ## The problem

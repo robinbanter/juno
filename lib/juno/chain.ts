@@ -308,7 +308,17 @@ export async function hydratePool(
   const complete = history !== null && !history.partial;
   const volume24h = complete ? volumeWithin(swaps, DAY_MS) : null;
   const allVolume = complete ? sumVolume(swaps) : null;
-  const priceChange = complete ? changeWithin(swaps, DAY_MS, snapshot.price) : null;
+  const opening = {
+    price: curveShape({
+      config: snapshot.config,
+      baseDecimals: snapshot.baseDecimals,
+      quoteDecimals: snapshot.quoteDecimals,
+    }).startPrice,
+    at: row.createdAt.getTime(),
+  };
+  const priceChange = complete
+    ? changeWithin(swaps, DAY_MS, snapshot.price, Date.now(), opening)
+    : null;
 
 
 
