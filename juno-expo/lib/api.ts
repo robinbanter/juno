@@ -35,6 +35,8 @@ export const API_URL =
 
 export class ApiError extends Error {
   readonly status: number;
+  /** A request abandoned at its timeout, as opposed to one that never connected. */
+  timedOut = false;
   constructor(message: string, status: number) {
     super(message);
     this.name = "ApiError";
@@ -52,6 +54,31 @@ export class ApiError extends Error {
 async function request<T>(
   path: string,
   init: RequestInit & { timeoutMs?: number } = {},
+): Promise<T> {
+  try {
+    return await attempt<T>(path, init);
+  } catch (error) {
+    /*
+     * One quiet retry for a read that never got an answer.
+     *
+     * A dropped connection — a proxy recycling, a phone changing networks —
+     * surfaces as a fetch that throws before any response, and the coin page a
+     * launch lands on showed "Could not reach Juno" for a server that answered
+     * the retry in under a second. Reads only: a POST may have reached the
+     * server, and repeating a transaction submit is not a retry.
+     */
+    const method = (init.method ?? "GET").toUpperCase();
+    if (method !== "GET" || !(error instanceof ApiError) || error.status !== 0 || error.timedOut) {
+      throw error;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    return attempt<T>(path, init);
+  }
+}
+
+async function attempt<T>(
+  path: string,
+  init: RequestInit & { timeoutMs?: number },
 ): Promise<T> {
   const { timeoutMs = 45_000, ...rest } = init;
   const controller = new AbortController();
@@ -88,7 +115,9 @@ async function request<T>(
   } catch (error) {
     if (error instanceof ApiError) throw error;
     if (error instanceof Error && error.name === "AbortError") {
-      throw new ApiError("The request timed out. Check your connection.", 0);
+      const timedOut = new ApiError("The request timed out. Check your connection.", 0);
+      timedOut.timedOut = true;
+      throw timedOut;
     }
     throw new ApiError(
       `Could not reach Juno at ${API_URL}. Is the server running?`,
