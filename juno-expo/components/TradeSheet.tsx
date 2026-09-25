@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Linking, Modal, Pressable, TextInput } from "react-native";
+import { Linking, Modal, Platform, Pressable, TextInput } from "react-native";
 import Svg, { Circle, Path } from "react-native-svg";
 import styled from "styled-components/native";
 
@@ -129,6 +129,8 @@ export function TradeSheet({
   const [stage, setStage] = useState<Stage>("entry");
   const [error, setError] = useState<string | null>(null);
   const [signature, setSignature] = useState<string | null>(null);
+  /** When the chain confirmed it — shown beside the hash on the receipt. */
+  const [landedAt, setLandedAt] = useState<Date | null>(null);
   const [note, setNote] = useState("");
   const [noteError, setNoteError] = useState<string | null>(null);
   /**
@@ -376,6 +378,7 @@ export function TradeSheet({
         poolAddress: live.pool,
       });
       setSignature(landed);
+      setLandedAt(new Date());
       setStage("done");
       onFilled?.(exactOut ? (live.quote.amountIn ?? value) : value);
 
@@ -491,6 +494,12 @@ export function TradeSheet({
               — confirmed on Solana.
             </Label>
             {noteError ? <ErrorText>{noteError}</ErrorText> : null}
+            <Receipt>
+              tx {signature!.slice(0, 8)}…{signature!.slice(-8)}
+              {landedAt
+                ? ` · ${landedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`
+                : ""}
+            </Receipt>
             <LinkTap onPress={() => Linking.openURL(juno.explorer("tx", signature!))}>
               <LinkText>View the transaction</LinkText>
               <ExternalGlyph />
@@ -739,6 +748,14 @@ const WarnText = styled.Text`
   line-height: 19px;
   font-weight: 600;
   color: ${(p) => p.theme.colors.neg};
+  text-align: center;
+`;
+
+const Receipt = styled.Text`
+  margin-top: 6px;
+  font-size: 12px;
+  font-family: ${Platform.OS === "ios" ? "Menlo" : "monospace"};
+  color: ${(p) => p.theme.colors.muted};
   text-align: center;
 `;
 

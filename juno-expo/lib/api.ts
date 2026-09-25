@@ -244,12 +244,13 @@ export type TesseraCompany = {
     address: string;
     name: string;
     symbol: string;
-    priceUsd: number;
-    marketCap: number;
-    currency: string;
+    /** Null when the curve could not be read just now; the market still exists. */
+    priceUsd: number | null;
+    marketCap: number | null;
+    currency: string | null;
     curvePreset: string;
-    progress: number;
-    graduated: boolean;
+    progress: number | null;
+    graduated: boolean | null;
     deviation: number | null;
     withinBand: boolean | null;
   }>;

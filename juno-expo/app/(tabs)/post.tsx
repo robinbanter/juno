@@ -5,6 +5,7 @@ import { useVideoPlayer, VideoView } from "expo-video";
 import { useEffect, useState } from "react";
 import {
   KeyboardAvoidingView,
+  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -88,6 +89,15 @@ export default function PostScreen() {
   const [symbol, setSymbol] = useState("");
   const [preset, setPreset] = useState<string>("content");
   const [status, setStatus] = useState<string | null>(null);
+  /**
+   * What has actually happened, as it happens: each step with its receipt —
+   * an IPFS address or a transaction signature — and the time it landed.
+   * Shown while the launch runs, so the chain's answers are on screen rather
+   * than a spinner that says "trust me".
+   */
+  const [log, setLog] = useState<LogEntry[]>([]);
+  const note = (entry: Omit<LogEntry, "at">) =>
+    setLog((current) => [...current, { ...entry, at: new Date() }]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -143,8 +153,13 @@ export default function PostScreen() {
     try {
       await juno.recordLaunch(record);
       setUnlisted(null);
-      setStatus(null);
+      note({ label: "Listed on Juno", receipt: record.baseMint });
+      setStatus("Live");
       feedChanged();
+      // A beat on the finished log: every receipt is on screen at once, which
+      // is the proof, before the coin page replaces it.
+      await new Promise((resolve) => setTimeout(resolve, 2200));
+      setStatus(null);
       // A blank composer for the next one. The tab stays mounted, so coming
       // back to it showed the last post filled in — one tap from launching a
       // duplicate coin.
@@ -182,6 +197,7 @@ export default function PostScreen() {
     if (!media) return;
     setBusy(true);
     setError(null);
+    setLog([]);
     try {
       const address = wallet.address ?? (await wallet.connect());
 
@@ -194,6 +210,8 @@ export default function PostScreen() {
         },
       );
 
+      note({ label: kind === "reel" ? "Video pinned to IPFS" : "Photo pinned to IPFS", receipt: uploaded.uri });
+
       setStatus("Pinning the token metadata…");
       const metadata = await juno.pinMetadata({
         name: name.trim(),
@@ -204,6 +222,8 @@ export default function PostScreen() {
         imageUrl: uploaded.posterUrl ?? uploaded.url,
         mimeType: uploaded.posterUrl ? "image/jpeg" : uploaded.mimeType,
       });
+
+      note({ label: "Token metadata pinned", receipt: metadata.uri });
 
       setStatus("Building the launch…");
       const built = await juno.buildLaunch({
@@ -228,6 +248,11 @@ export default function PostScreen() {
           // The last step opens the pool, and its signature is the receipt a
           // judge clicks.
           poolSignature = signature;
+          note({
+            label: index === 0 ? "Curve config created" : "Pool opened on Meteora",
+            receipt: signature,
+            tx: true,
+          });
         } catch (stepError) {
           if (index > 0) {
             throw new Error(
@@ -366,6 +391,8 @@ export default function PostScreen() {
             </Card>
           )}
 
+          {log.length > 0 ? <LaunchLog entries={log} /> : null}
+
           {unlisted ? (
             <Button label={status ?? "Retry listing"} tall onPress={retryListing} loading={busy} />
           ) : (
@@ -479,6 +506,44 @@ function Field({
   );
 }
 
+const MONO = Platform.select({ ios: "Menlo", default: "monospace" });
+
+type LogEntry = { label: string; receipt: string; tx?: boolean; at: Date };
+
+function shorten(value: string): string {
+  const bare = value.replace(/^ipfs:\/\//, "");
+  return bare.length > 14 ? `${bare.slice(0, 6)}…${bare.slice(-6)}` : bare;
+}
+
+/** The launch, step by step, with each receipt and the second it landed. */
+function LaunchLog({ entries }: { entries: LogEntry[] }) {
+  return (
+    <View style={styles.log}>
+      {entries.map((entry, index) => (
+        <Pressable
+          key={`${entry.label}-${index}`}
+          disabled={!entry.tx}
+          onPress={() => void Linking.openURL(juno.explorer("tx", entry.receipt))}
+          style={styles.logRow}
+          accessibilityRole={entry.tx ? "link" : undefined}
+        >
+          <Text style={styles.logTick}>✓</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.logLabel}>{entry.label}</Text>
+            <Text style={styles.logReceipt} numberOfLines={1}>
+              {entry.tx ? "tx " : entry.receipt.startsWith("ipfs://") ? "ipfs " : ""}
+              {shorten(entry.receipt)}
+            </Text>
+          </View>
+          <Text style={styles.logTime}>
+            {entry.at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+          </Text>
+        </Pressable>
+      ))}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: theme.colors.bg },
   body: { paddingHorizontal: 16, paddingBottom: 140, gap: 12 },
@@ -508,6 +573,17 @@ const styles = StyleSheet.create({
   errorCard: { backgroundColor: "rgba(217,45,32,0.08)" },
   errorText: { fontSize: theme.type.body.size, color: theme.colors.neg, lineHeight: 21 },
   caption: { height: 88, paddingTop: 12, textAlignVertical: "top" },
+  log: {
+    backgroundColor: theme.colors.ink,
+    borderRadius: 16,
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+  },
+  logRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 8 },
+  logTick: { color: theme.colors.lime, fontSize: 14, fontWeight: "900" },
+  logLabel: { color: theme.colors.onInk, fontSize: 14, fontWeight: "700" },
+  logReceipt: { color: "#9FB09A", fontSize: 12, fontFamily: MONO, marginTop: 2 },
+  logTime: { color: "#9FB09A", fontSize: 12, fontFamily: MONO },
   missing: { fontSize: theme.type.label.size, fontWeight: "600", color: theme.colors.muted, textAlign: "center" },
   drop: {
     width: "100%",
