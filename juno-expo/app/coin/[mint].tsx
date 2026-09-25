@@ -8,6 +8,7 @@ import styled from "styled-components/native";
 
 import { CoinGlyph, Identicon } from "../../components/art";
 import { CommentsSheet } from "../../components/CommentsSheet";
+import { DepthChart } from "../../components/DepthChart";
 import { Handle } from "../../components/Handle";
 import { PriceLine } from "../../components/PriceLine";
 import { Tappable } from "../../components/Press";
@@ -38,6 +39,7 @@ import {
 } from "../../components/kit";
 import { juno, WSOL_MINT, type NavReference, type Plan } from "../../lib/api";
 import { money, since, tokens, useApi } from "../../lib/useApi";
+import { bigMoney } from "../../lib/markets";
 import { shareCoin } from "../../lib/social";
 import { useWallet } from "../../lib/wallet";
 import { theme } from "../../theme";
@@ -721,6 +723,8 @@ function DetailsTab({
 
       {coin.nav ? <NavBand nav={coin.nav} /> : null}
 
+      {coin.curve.graduated ? null : <DepthChart mint={coin.address} />}
+
       <Rows>
         <DetailRow
           label="Created"
@@ -885,7 +889,7 @@ function NavBand({ nav }: { nav: NavReference }) {
           <Row>
             <Stat value={String(nav.tessera.holders)} label="T-token holders" />
             <Stat
-              value={money(nav.tessera.markValuation, "USD")}
+              value={bigMoney(nav.tessera.markValuation)}
               label="Implied valuation"
             />
             <Stat value={nav.tessera.sector} label="Sector" />
