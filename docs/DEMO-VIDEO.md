@@ -122,13 +122,13 @@ fresh install, against the live API. Local, not committed, in `.juno/video/`:
 | Clip | What happens | Tight length |
 |---|---|---|
 | `01-wallet` | Home screen → Juno opens → onboarding → *Create wallet* → faucet 0.2 SOL → claim `@stocklana` | 16s |
-| `02-feed-buy` | Feed ("Bought by demo_lena and 4 others") → like → Buy $2 of Deep Zoom → *Done, confirmed on Solana* | 17s |
-| `03-reels` | Reels play → swipe → like → Buy dock | 47s (trim the playback) |
+| `02-feed-buy` | Feed of real reels → "City After Rain $NEON, bought by demo_kai and 1 other" → like → Buy $2 → *Done, confirmed on Solana* | 13s |
+| `03-reels` | Night city → skateboarder → surfer (like, Buy dock) → beach at dusk | 27s |
 | `04-post-launch` | + → *Post a photo* → waterfall → "The Falls" / FALLS → curve shapes → Launch → first buy (8% impact = the anti-sniper opening fee) | 30s |
 | `04b-falls-chart` | Memes → The Falls by stocklana, chart rising after the buy | 6s |
 | `05-preipo` | Feed with The Falls on top → Pre-IPO → OpenAI "outside ±2% band" warning → Tessera reference card → depth chart | 20s |
 | `06-stocks` | Stocks with real logos, live Pyth prices → TSLA "3.0% below, outside its band" | 10s |
-| `07-depth-exactout` | Deep Zoom: activity by named wallets → depth chart → token chip → exactly 1,000,000 ZOOM → Done | 27s |
+| `07-depth-exactout` | Park Session ($KICK): chart, activity by named wallets → depth chart → token chip → exactly 1,000,000 KICK → Done | 25s |
 | `08-mainnet-proof` | JUNOC on Jupiter (mainnet): chart, sniper buys and sells, our buy marked as the developer's → Solscan | 11s |
 
 Each clip exists four ways:
@@ -139,7 +139,7 @@ Each clip exists four ways:
 - `raw/NN-*.preview.mp4`: the framed phone on the Juno green, 1080×1920.
 - `tight/NN-*.mp4`: the preview with every pause over 1.5s cut.
 
-`juno-demo-roughcut.mp4` is the tight clips in order (3:02). To rebuild any of
+`juno-demo-roughcut.mp4` is the tight clips in order (2:27). The four reels are free-licence Pexels clips (IDs 18138660, 4759044, 8713108, 20151149) launched as real pools; the fractal test reels were unlisted and takes 02, 03 and 07 re-recorded. Take 01 skips the feed and 04, 04b and 05 start later, so no test content appears. Superseded takes are in `raw/old/`. To rebuild any of
 it: `scripts/demo/frame-video.sh`, then `scripts/demo/tighten.py`.
 
 ## Editing
