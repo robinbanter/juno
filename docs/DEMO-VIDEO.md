@@ -172,6 +172,39 @@ Added in the third session (inserted in order, nothing re-recorded):
 The full flow is now 6:47. The status bar now shows the real time of day, so it agrees with the receipts.
 Framed versions of the new takes are in `raw2/`.
 
+## The final film
+
+`.juno/video/final/juno-demo-film.mp4`, 4:44, 1920×1080, rendered with
+HyperFrames from `.juno/video/final/hf/index.html` (written by
+`scripts/demo/build_hf.py`). Text is Plus Jakarta Sans, the landing page's font.
+Voiceover: Kokoro TTS, male voice `am_michael` (`scripts/demo/vo.py`). Music:
+MusicGen small, two passes looped under the voice at about −28 LUFS
+(`scripts/demo/music.py`). The iOS footage is fast-forwarded per chapter
+(1.3× to 2.5×) to fit its narration; nothing is cut.
+
+| Starts | Section |
+|---|---|
+| 0:00 | “Gone Public” cat film (its own sound) |
+| 0:20 | Landing page, scrolled in a browser window |
+| 0:31 | Problem card |
+| 0:45 | 01 A wallet in seconds |
+| 0:57 | 02 Every post has a price |
+| 1:11 | 03 Reels are markets too |
+| 1:34 | 04 Real likes, real comments |
+| 1:44 | 05 Posting is launching (live receipts) |
+| 2:09 | 06 Reels launch the same way |
+| 2:37 | 07 Creators get paid |
+| 2:49 | 08 Pre-IPO, on a curve (Tessera) |
+| 3:09 | 09 Listed stocks, priced by Pyth |
+| 3:25 | 10 Depth, and exact-out (Meteora) |
+| 3:42 | 11 Graduation to DAMM v2 |
+| 3:51 | 12 Live on mainnet |
+| 4:14 | How it's built |
+| 4:35 | End card |
+
+To change a line of narration: edit `scripts/demo/vo.py`, run it for that key,
+re-run `build_hf.py`, then `npx hyperframes render` in `hf/`.
+
 ## Editing
 
 - Cut every wait longer than a second. Speed up the launch's signing to 2x.
