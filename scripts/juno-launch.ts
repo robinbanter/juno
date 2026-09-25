@@ -85,7 +85,10 @@ async function main() {
   let balance = await connection.getBalance(payer.publicKey);
   console.log(`balance   ${(balance / LAMPORTS_PER_SOL).toFixed(4)} SOL`);
 
-  if (balance < 0.1 * LAMPORTS_PER_SOL) {
+  // A launch costs ~0.027 SOL. Devnet tops up at 0.1 because the faucet is
+  // free; mainnet only needs enough for the one launch in hand.
+  const minimum = cluster() === "devnet" ? 0.1 : 0.035;
+  if (balance < minimum * LAMPORTS_PER_SOL) {
     if (cluster() !== "devnet") {
       throw new Error(
         `Launcher needs SOL. Fund ${payer.publicKey.toBase58()} and re-run.`,

@@ -46,9 +46,14 @@ async function main() {
       ))),
   );
 
-  const found = await getDbcClient().state.getPoolByBaseMint(new PublicKey(mint));
-  if (!found) throw new Error(`No pool for mint ${mint} on ${cluster()}`);
-  const poolAddress = found.publicKey.toBase58();
+  // `--pool` skips the lookup, which scans the DBC program with
+  // getProgramAccounts — a call the public mainnet RPC often refuses.
+  let poolAddress = arg("pool");
+  if (!poolAddress) {
+    const found = await getDbcClient().state.getPoolByBaseMint(new PublicKey(mint));
+    if (!found) throw new Error(`No pool for mint ${mint} on ${cluster()}`);
+    poolAddress = found.publicKey.toBase58();
+  }
 
   const snapshot = await fetchPoolSnapshot(poolAddress);
   if (!snapshot) throw new Error("Pool not readable");
