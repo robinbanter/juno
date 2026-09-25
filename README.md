@@ -31,6 +31,10 @@ Built for the Solana **STOCKLANA** hackathon.
    signatures later it is a live pool with your post on it.
 5. **Profile** — fund the wallet, choose a name, see holdings, cost basis and P&L.
 
+The demo reels are free-licence clips from [Pexels](https://www.pexels.com),
+launched as real devnet pools by clearly named `demo_` wallets; the trades on
+them are real devnet transactions.
+
 Every number is read from the chain, Postgres, Mongo, Pyth or Tessera. When a
 read fails the app says so — it does not print a zero it never measured.
 
