@@ -121,7 +121,7 @@ End on the Juno feed or the logo.
   Pre-IPO (Tessera) · Stocks (Pyth) · Depth + exact-out (Meteora DBC) ·
   Graduation*.
 - If mainnet pools exist by then, add one more beat before the close: the
-  Meteora link to `app.meteora.ag/dbc/<pool>`, with "and on mainnet".
+  JUNOC page on Jupiter (`jup.ag/tokens/451FRBa86C3nEAgCkqFv2P4MJUdwgH3efNLdnKYr8sBT`), with "and on mainnet".
 - Export 1080×1920 (vertical) for the phone take, or 1920×1080 with the phone
   framed in the middle for a laptop take. Upload to YouTube as unlisted and put
   the link in the submission.

@@ -9,7 +9,7 @@ import { CURVE_PRESET_LIST, CURVE_PRESETS } from "@/lib/juno/curves";
 import { QUOTE_TOKENS } from "@/lib/juno/dbc";
 import { usd } from "@/lib/juno/format";
 import type { CoinFormat, CurvePresetId } from "@/lib/juno/types";
-import { cluster, explorer, meteoraPoolUrl } from "@/lib/juno/cluster";
+import { cluster, explorer, marketUrl } from "@/lib/juno/cluster";
 import { presetShape } from "@/lib/juno/curve-shape";
 import { Button } from "@/components/juno/ui/Button";
 import { CurveChart } from "@/components/juno/coin/CurveChart";
@@ -430,15 +430,15 @@ function LaunchResult({
         </Button>
       </div>
 
-      {/* Meteora's app is mainnet-only; on devnet there is no page to open. */}
-      {meteoraPoolUrl(result.pool) && (
+      {/* Mainnet only: nothing indexes devnet tokens. */}
+      {marketUrl(result.baseMint) && (
         <a
-          href={meteoraPoolUrl(result.pool)!}
+          href={marketUrl(result.baseMint)!}
           target="_blank"
           rel="noreferrer noopener"
           className="text-center text-[12px] text-j-muted underline hover:text-j-ink"
         >
-          View the curve on Meteora
+          View the token on Jupiter
         </a>
       )}
     </div>

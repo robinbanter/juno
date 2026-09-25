@@ -8,7 +8,7 @@
  */
 import { PublicKey } from "@solana/web3.js";
 
-import { cluster, explorer, meteoraPoolUrl } from "../lib/juno/cluster";
+import { cluster, explorer, marketUrl } from "../lib/juno/cluster";
 import { fetchPoolSnapshot, getDbcClient, quoteTrade } from "../lib/juno/dbc";
 
 function arg(name: string): string | undefined {
@@ -51,7 +51,7 @@ async function main() {
   console.log(`  price impact     ${(buy.priceImpact * 100).toFixed(4)}%`);
 
   console.log(`\nexplorer           ${explorer.account(pool!)}`);
-  console.log(`meteora            ${meteoraPoolUrl(pool!)}`);
+  if (mint) console.log(`jupiter            ${marketUrl(mint)}`);
 }
 
 main().catch((e) => { console.error(`\n❌ ${e.message}`); process.exit(1); });

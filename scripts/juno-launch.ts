@@ -15,7 +15,7 @@ import { Keypair, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
 
-import { cluster, explorer, meteoraPoolUrl, rpcEndpoint } from "../lib/juno/cluster";
+import { cluster, explorer, marketUrl, rpcEndpoint } from "../lib/juno/cluster";
 import { getConnection, planLaunch, sendLaunch, USDC, WSOL } from "../lib/juno/dbc";
 import { CURVE_PRESETS } from "../lib/juno/curves";
 import { pinTokenMetadata } from "../lib/juno/pinata";
@@ -166,7 +166,7 @@ async function main() {
   console.log(`pool      ${explorer.account(plan.pool.toBase58())}`);
   console.log(`mint      ${explorer.token(plan.baseMint.toBase58())}`);
   console.log(`config    ${explorer.account(plan.config.toBase58())}`);
-  console.log(`meteora   ${meteoraPoolUrl(plan.pool.toBase58())}`);
+  console.log(`jupiter   ${marketUrl(plan.baseMint.toBase58())}`);
   console.log(`\napp       /coin/${plan.baseMint.toBase58()}`);
   if (uri) console.log(`metadata  ${uri}`);
 

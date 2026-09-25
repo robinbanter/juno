@@ -64,7 +64,10 @@ export const explorer = {
  * construct. The caller omits the link entirely; the Solscan links beside it
  * are cluster-aware and still prove the accounts exist.
  */
-export function meteoraPoolUrl(poolAddress: string): string | null {
+export function marketUrl(mint: string): string | null {
   if (cluster() !== "mainnet-beta") return null;
-  return `https://app.meteora.ag/dbc/${poolAddress}`;
+  // Jupiter, not Meteora: Meteora's app has no page for a DBC pool — the
+  // `/dbc/<pool>` link this used to build lands on its error page — while
+  // Jupiter indexes every DBC token with its chart, trades and holders.
+  return `https://jup.ag/tokens/${mint}`;
 }

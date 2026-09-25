@@ -4,7 +4,7 @@ The app runs on devnet, where anyone can try it for free with the built-in
 faucet. Meteora's DBC program is the same program on both clusters
 (`dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN`), so every devnet pool is a
 real DBC pool. This runbook adds what devnet cannot give: pool addresses on
-mainnet that a judge can open on Solscan and on Meteora's own site.
+mainnet that a judge can open on Solscan and on Jupiter.
 
 Nothing here runs by itself. Every command spends real SOL only when you add
 `--yes`, and only from a key made for this purpose.
@@ -54,7 +54,7 @@ $L --preset tight-nav --quote usdc --name "Juno Tight NAV" --symbol JUNOTV --ini
 ```
 
 Each run prints the pool, the mint, both transactions and a link to
-`app.meteora.ag/dbc/<pool>`. Caps are in the quote token: 50 → 1,250 SOL for
+the token on Jupiter (`jup.ag/tokens/<mint>`). Caps are in the quote token: 50 → 1,250 SOL for
 `content`, $10k → $250k for the others. No first buy is made, so the caps cost
 nothing. They only set where the curve starts and where it graduates.
 

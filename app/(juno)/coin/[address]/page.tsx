@@ -6,7 +6,7 @@ import { money, shortAddress } from "@/lib/juno/format";
 import { identicon } from "@/lib/juno/identicon";
 
 import { hydratePool, poolActivityRead, poolSwapsRead } from "@/lib/juno/chain";
-import { cluster, explorer, meteoraPoolUrl } from "@/lib/juno/cluster";
+import { cluster, explorer, marketUrl } from "@/lib/juno/cluster";
 import { GraduatedNotice } from "@/components/juno/coin/GraduatedNotice";
 import { QUOTE_TOKENS } from "@/lib/juno/dbc";
 import { listPoolHolders } from "@/lib/juno/activity";
@@ -66,7 +66,7 @@ export default async function CoinPage({
   const coin = await withRetry(() => hydratePool(row, { detailed: true, history: false }));
   if (!coin) notFound();
 
-  const meteoraLink = meteoraPoolUrl(coin.pool);
+  const marketLink = marketUrl(coin.address);
 
   const [holders, comments] = await Promise.all([
     /*
@@ -122,8 +122,8 @@ export default async function CoinPage({
             <Proof href={explorer.token(coin.address)}>Mint</Proof>
             <Proof href={explorer.account(coin.config)}>Config</Proof>
             <Proof href={explorer.tx(row.createSignature)}>Launch tx</Proof>
-            {/* Only on a cluster Meteora's app actually serves. */}
-            {meteoraLink && <Proof href={meteoraLink}>Meteora</Proof>}
+            {/* Mainnet only: nothing indexes devnet tokens. */}
+            {marketLink && <Proof href={marketLink}>Jupiter</Proof>}
           </div>
 
           <CoinTabs
