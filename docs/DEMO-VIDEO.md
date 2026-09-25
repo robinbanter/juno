@@ -189,8 +189,11 @@ HyperFrames from `.juno/video/final/hf/index.html` (written by
   environment variable and is never saved.
 - **Subtitles.** Burned in from the ElevenLabs word timings, one phrase at a
   time, with each word lit in lime as it's spoken.
-- **Music.** MusicGen small, looped under the voice at about −28 LUFS
-  (`scripts/demo/music.py`).
+- **Music.** ElevenLabs Music, one energetic instrumental
+  (`scripts/demo/music_eleven.py`), levelled to about −24 LUFS under the
+  voice. `scripts/demo/remix.py` rebuilds the soundtrack from the
+  composition's audio timings and swaps it into the rendered film, so a music
+  change needs no re-render.
 - **Footage.** `scripts/demo/clips.py` crops the screen out of each iOS take
   and fast-forwards it to fit its line (1.8× to 3×). Nothing is cut.
 

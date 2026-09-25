@@ -2,7 +2,7 @@
   "expo": {
     "name": "Juno",
     "slug": "juno",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -18,7 +18,8 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "app.launch.juno"
+      "package": "app.launch.juno",
+      "versionCode": 110
     },
     "web": {
       "favicon": "./assets/favicon.png"
