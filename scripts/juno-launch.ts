@@ -188,6 +188,8 @@ async function main() {
       navFeedId: arg("nav", "") ?? "",
       mediaUrl: arg("media", "") ?? "",
       posterUrl: arg("poster", arg("media", "")) ?? "",
+      // The app decides video or photo from this, never from the URL.
+      mediaMime: arg("mime", "") || null,
       mediaWidth: Number(arg("width", "0")) || null,
       mediaHeight: Number(arg("height", "0")) || null,
       createSignature: signatures[signatures.length - 1],

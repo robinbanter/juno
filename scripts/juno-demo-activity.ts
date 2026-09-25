@@ -48,6 +48,10 @@ const COINS = {
   SPACEXX: "FFpJbMH35kLP6tB5LLnXJSZy6BKVtwcaFHTz98tDjTVY",
   TRANSIT: "2SjKAv6yU9qv8uSuCeCuhEF8NHyCZ3z9ZwBgthywEJk9",
   NVDAXI: "6driivZmcZ4pgfCNkVERbbNcQiyzEpKvaJJ19AXQYj69",
+  TIDE: "CUNZ2vu88iDdkzUCpEkcpNRC4hnfxnoUdkYtv6rEeauk",
+  SURF: "Dfb6DfFkNbdMRvtU1wW5VL5nxbnyXexnixnb7apNbdvN",
+  KICK: "9rNGGTrSUgmsbq8fKjMeDJ9i8ao7gTGAfSg2zSgHeyzr",
+  NEON: "8ZDVdpXo9hLQ8FbwH98tids9P52JRPQ5DcJtY4fFEdkh",
 } as const;
 
 type Step = {
@@ -58,7 +62,30 @@ type Step = {
   note?: string;
 };
 
-const PLAN: Record<string, Step[]> = {
+/*
+ * Round two, 25 Sep: trades on the four reels launched from Pexels footage
+ * after the synthetic test reels were unlisted. `--round 2` runs it.
+ */
+const PLAN_2: Record<string, Step[]> = {
+  demo_ana: [
+    { coin: "KICK", side: "buy", amount: 0.02, note: "That landing though." },
+    { coin: "NEON", side: "buy", amount: 0.015 },
+  ],
+  demo_kai: [
+    { coin: "TIDE", side: "buy", amount: 0.02 },
+    { coin: "NEON", side: "buy", amount: 0.01 },
+  ],
+  demo_rio: [
+    { coin: "SURF", side: "buy", amount: 0.015, note: "Early on this one." },
+    { coin: "TIDE", side: "buy", amount: 0.01 },
+  ],
+  demo_lena: [
+    { coin: "KICK", side: "buy", amount: 0.01 },
+    { coin: "SURF", side: "buy", amount: 0.02 },
+  ],
+};
+
+const PLAN_1: Record<string, Step[]> = {
   demo_ana: [
     { coin: "ZOOM", side: "buy", amount: 0.02, note: "Early on this one." },
     { coin: "OPENAIX", side: "buy", amount: 0.03 },
@@ -146,6 +173,8 @@ async function main() {
   );
   const bought = new Map<string, number>();
 
+  const round = process.argv.includes("--round") ? process.argv[process.argv.indexOf("--round") + 1] : "1";
+  const PLAN = round === "2" ? PLAN_2 : PLAN_1;
   for (const [name, steps] of Object.entries(PLAN)) {
     const key = keyFor(name);
     const wallet = key.publicKey.toBase58();
@@ -175,7 +204,7 @@ async function main() {
       .catch((error: Error) => console.log(`  name: ${error.message}`));
 
     for (const [index, step] of steps.entries()) {
-      const id = `${name}:${index}`;
+      const id = round === "1" ? `${name}:${index}` : `r${round}:${name}:${index}`;
       const mint = COINS[step.coin];
       if (done[id]) {
         console.log(`  ${step.side} ${step.coin} already done`);
