@@ -3,7 +3,14 @@ import "server-only";
 import { PublicKey } from "@solana/web3.js";
 import type BN from "bn.js";
 
-import { getConnection, getDbcClient, bnToUi, fetchPoolSnapshot, vaultsOf } from "./dbc";
+import {
+  getConnection,
+  getDbcClient,
+  bnToUi,
+  fetchPoolSnapshot,
+  prefetchPools,
+  vaultsOf,
+} from "./dbc";
 import {
   fetchPythPrice,
   marketState as marketStateOf,
@@ -526,6 +533,11 @@ export async function hydratePools(
   width = 2,
   options: { nav?: boolean } = {},
 ): Promise<{ coins: Coin[]; missing: number }> {
+  // Two round trips for the whole list instead of up to two per row; the
+  // per-row reads below then hit a warm cache. Best effort — a refusal here
+  // leaves each row to read for itself, exactly as before.
+  await prefetchPools(rows.map((row) => row.poolAddress)).catch(() => undefined);
+
   const out: Array<Coin | null> = new Array(rows.length).fill(null);
   let cursor = 0;
 

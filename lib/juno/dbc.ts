@@ -258,8 +258,63 @@ export function vaultsOf(snapshot: PoolSnapshot): {
   };
 }
 
+/**
+ * Pool accounts read in bulk, for list views.
+ *
+ * A grid of sixteen coins was sixteen `getPool` calls and — on a cold process,
+ * since every launch has its own config — sixteen `getPoolConfig` calls, two at
+ * a time against an endpoint that throttles bursts. That was the 7–12s in the
+ * feed. `getMultipleAccounts` answers up to 99 accounts in one round trip, so
+ * the whole grid is now two calls: pools, then any configs not yet held.
+ *
+ * It only warms caches. `readPoolSnapshot` still does the work, and still
+ * falls back to its own read when this one was refused.
+ */
+const poolAccountCache = new Map<string, { at: number; value: VirtualPool }>();
+
+export async function prefetchPools(addresses: string[]): Promise<void> {
+  const now = Date.now();
+  const wanted = [...new Set(addresses)].filter((address) => {
+    const hit = poolAccountCache.get(address);
+    return !hit || now - hit.at >= SNAPSHOT_TTL_MS;
+  });
+  if (wanted.length === 0) return;
+
+  const program = getDbcClient().state.program;
+  const pools = await withRetry(
+    () => program.account.virtualPool.fetchMultiple(wanted.map((a) => new PublicKey(a))),
+    { attempts: 3, baseDelayMs: 300, maxDelayMs: 2_000 },
+  ).catch(() => null);
+  if (!pools) return;
+
+  const at = Date.now();
+  // Hits only. A miss may be a transfer-hook pool, which `getPool` finds on a
+  // second read this batch does not make, so it is left to that path.
+  wanted.forEach((address, i) => {
+    if (pools[i]) poolAccountCache.set(address, { at, value: pools[i] as VirtualPool });
+  });
+
+  const configs = [
+    ...new Set(
+      pools
+        .filter((pool): pool is NonNullable<typeof pool> => pool !== null)
+        .map((pool) => poolState(pool as VirtualPool).config.toBase58()),
+    ),
+  ].filter((key) => !configCache.has(key));
+  if (configs.length === 0) return;
+
+  const fetched = await withRetry(
+    () => program.account.poolConfig.fetchMultiple(configs.map((k) => new PublicKey(k))),
+    { attempts: 3, baseDelayMs: 300, maxDelayMs: 2_000 },
+  ).catch(() => null);
+  fetched?.forEach((config, i) => {
+    if (config) configCache.set(configs[i], config as unknown as PoolConfig);
+  });
+}
+
 /** Drop a pool's cached snapshot — call after a trade so the next read is live. */
 export function invalidatePoolSnapshot(poolAddress: string | PublicKey): void {
+  poolAccountCache.delete(poolAddress.toString());
   const prefix = `${poolAddress.toString()}:`;
   for (const key of snapshotCache.keys()) {
     if (key.startsWith(prefix)) snapshotCache.delete(key);
@@ -277,7 +332,11 @@ async function readPoolSnapshot(
   // used to propagate out of the route as a 500 and take the whole coin page
   // down — "Could not load this coin" for a pool that was perfectly fine and
   // simply busy. Everything downstream of this call already degrades.
-  const pool = await withRetry(() => client.state.getPool(address), {
+  const warm = poolAccountCache.get(address.toBase58());
+  const pool =
+    warm && Date.now() - warm.at < SNAPSHOT_TTL_MS
+      ? warm.value
+      : await withRetry(() => client.state.getPool(address), {
     attempts: 4,
     baseDelayMs: 300,
     maxDelayMs: 2_500,
