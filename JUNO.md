@@ -152,6 +152,42 @@ All four decay fees from an anti-snipe opening to an equity-like spread via
 configs), avoid the deprecated `RateLimiter` fee mode, and permanently lock
 migrated liquidity so a graduated pool keeps a floor.
 
+### The presets, measured on one config
+
+Taglines are claims; this is the check. All four presets built at the **same**
+caps and quote token, so the weights are the only difference. Numbers are the
+dollars it takes to move price 1% at points along the curve, read off the
+config the program would store (`npx tsx scripts/juno-compare-presets.ts`,
+pure maths, no chain). The raw curve sums are calibrated against each config's
+own `migrationQuoteThreshold`, so a wrong scale cannot hide.
+
+FDV $1,000 → $25,000, USDC quote, 1B supply:
+
+| preset | raised to graduate | 1% at open | 1% at 25% | 1% at 50% | 1% at 75% | 1% at close | to 2× open | deepest/thinnest |
+|---|---|---|---|---|---|---|---|---|
+| `content` | $6,951 | $1.17 | $26.85 | $49.06 | $80.33 | $89.79 | $126.75 | 76.7× |
+| `thin-name` | $2,206 | **$12.25** | $10.35 | $7.63 | $5.19 | $3.11 | **$793.24** | 3.9× |
+| `ipo-book` | $4,125 | $9.25 | **$4.91** | $17.55 | $33.30 | $46.02 | $589.37 | 9.4× |
+| `tight-nav` | $4,125 | $5.14 | $10.29 | $15.43 | $20.57 | $25.59 | $427.16 | 5.0× |
+
+What it shows:
+
+- **The shapes do what they claim.** `thin-name` is 10× deeper than `content`
+  at the issue price and takes 6× more to double it. `ipo-book` is deep at the
+  open, thinnest early in discovery, and deep again near the target cap.
+  `content` is nearly free to enter and steepest to finish.
+- **Same caps, different graduation.** At identical caps `content` needs 3×
+  what `thin-name` does to graduate. Comparing live pools by "SOL per 1%
+  move" without this mixes shape with threshold. That is why the earlier
+  tracker figures (9.86 / 17.54 / 20.29 SOL per 1%) could not be ranked.
+- **`tight-nav` was not flat, and now is.** Uniform liquidity in root-price
+  space makes 1% depth grow with √price, so over a 25× range it varies
+  √25 = 5×. No weighting fixes that: weights place liquidity inside the
+  range, and only the caps set its width. At $100k → $120k the same preset
+  varies **1.1×** ($2,963 to $3,229 per 1%). So `tight-nav` now defaults to a
+  1.5× range and refuses anything wider than 3× (`maxCapMultiple`), where
+  before it launched at the same 25× as a meme.
+
 ### Two findings worth reading
 
 **`createConfigAndPool` cannot carry a sixteen-segment curve.** The bundled

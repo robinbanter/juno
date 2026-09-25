@@ -71,6 +71,17 @@ export type CurvePreset = {
    * migration quote threshold — but it is what makes the launch equity-like.
    */
   navBandBps?: number;
+  /**
+   * Migration cap over initial cap, when the issuer does not choose one.
+   *
+   * The weights decide where liquidity sits inside the price range; the caps
+   * decide how wide that range is. No weighting makes a 25x run flat, so a
+   * preset that promises flatness has to own its range too — see
+   * `scripts/juno-compare-presets.ts` for the measured difference.
+   */
+  defaultCapMultiple: number;
+  /** The widest range this preset still behaves as described in. */
+  maxCapMultiple?: number;
 };
 
 /**
@@ -112,6 +123,7 @@ export const CURVE_PRESETS: Record<CurvePresetId, CurvePreset> = {
     feeDecaySeconds: 600,
     migrationFeeOption: MigrationFeeOption.FixedBps100,
     percentageSupplyOnMigration: 20,
+    defaultCapMultiple: 25,
   },
 
   /**
@@ -130,6 +142,7 @@ export const CURVE_PRESETS: Record<CurvePresetId, CurvePreset> = {
     feeDecaySeconds: 900,
     migrationFeeOption: MigrationFeeOption.FixedBps30,
     percentageSupplyOnMigration: 35,
+    defaultCapMultiple: 25,
     navBandBps: 500,
   },
 
@@ -149,6 +162,7 @@ export const CURVE_PRESETS: Record<CurvePresetId, CurvePreset> = {
     feeDecaySeconds: 900,
     migrationFeeOption: MigrationFeeOption.FixedBps30,
     percentageSupplyOnMigration: 30,
+    defaultCapMultiple: 25,
     navBandBps: 400,
   },
 
@@ -168,6 +182,10 @@ export const CURVE_PRESETS: Record<CurvePresetId, CurvePreset> = {
     feeDecaySeconds: 300,
     migrationFeeOption: MigrationFeeOption.FixedBps25,
     percentageSupplyOnMigration: 50,
+    defaultCapMultiple: 1.5,
+    // At 1.5x, a 1% move costs within 1.22x the same anywhere on the curve
+    // (sqrt 1.5). At 25x it varied 5x and the "near-flat" claim was false.
+    maxCapMultiple: 3,
     navBandBps: 200,
   },
 };

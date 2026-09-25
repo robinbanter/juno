@@ -66,10 +66,12 @@ const PACKET_LIMIT = 1232;
  * token's live price when the launch is built.
  */
 const DEFAULT_INITIAL_MARKET_CAP_USD = 1_000;
-const DEFAULT_MIGRATION_MARKET_CAP_USD = 25_000;
 
 /** The default market caps restated in this quote token's units. */
-async function defaultCapsIn(quoteMint: string): Promise<{ initial: number; migration: number }> {
+async function defaultCapsIn(
+  quoteMint: string,
+  multiple: number,
+): Promise<{ initial: number; migration: number }> {
   const usd = await quoteTokenUsdPrice(quoteMint).catch(() => null);
   if (usd === null || !(usd > 0)) {
     throw new CallerError(
@@ -78,7 +80,7 @@ async function defaultCapsIn(quoteMint: string): Promise<{ initial: number; migr
   }
   return {
     initial: DEFAULT_INITIAL_MARKET_CAP_USD / usd,
-    migration: DEFAULT_MIGRATION_MARKET_CAP_USD / usd,
+    migration: (DEFAULT_INITIAL_MARKET_CAP_USD * multiple) / usd,
   };
 }
 
@@ -259,8 +261,16 @@ export async function buildLaunch(
   // that. Only the defaults are dollars, converted here.
   const caps =
     request.initialMarketCap === undefined || request.migrationMarketCap === undefined
-      ? await defaultCapsIn(quote.mint)
+      ? await defaultCapsIn(quote.mint, preset.defaultCapMultiple)
       : null;
+
+  const initialMarketCap = request.initialMarketCap ?? caps!.initial;
+  const migrationMarketCap = request.migrationMarketCap ?? caps!.migration;
+  if (preset.maxCapMultiple && migrationMarketCap / initialMarketCap > preset.maxCapMultiple) {
+    throw new CallerError(
+      `${preset.label} is only near-flat over a narrow range: its migration cap can be at most ${preset.maxCapMultiple}x its initial cap.`,
+    );
+  }
 
   const plan = await planLaunch({
     payer: creator,
@@ -270,8 +280,8 @@ export async function buildLaunch(
     symbol: request.symbol,
     uri: request.uri,
     preset: request.preset,
-    initialMarketCap: request.initialMarketCap ?? caps!.initial,
-    migrationMarketCap: request.migrationMarketCap ?? caps!.migration,
+    initialMarketCap,
+    migrationMarketCap,
   } satisfies LaunchRequest);
 
   // One blockhash for both steps. They are signed together on the device and

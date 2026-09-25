@@ -119,4 +119,20 @@ describe("curve presets", () => {
       expect(params.fee.baseFeeParams.baseFeeMode).not.toBe(2);
     }
   });
+
+  it("gives a flat preset a range narrow enough to be flat", () => {
+    // Weights place liquidity inside the price range; only the caps narrow it.
+    // Uniform liquidity over an m-times range varies 1% depth by sqrt(m), so
+    // tight-nav's default has to be a small multiple to deserve its name.
+    const nav = CURVE_PRESETS["tight-nav"];
+    expect(nav.maxCapMultiple).toBeDefined();
+    expect(nav.defaultCapMultiple).toBeLessThanOrEqual(nav.maxCapMultiple!);
+    expect(Math.sqrt(nav.defaultCapMultiple)).toBeLessThan(1.25);
+    for (const preset of CURVE_PRESET_LIST) {
+      expect(preset.defaultCapMultiple).toBeGreaterThan(1);
+      if (preset.maxCapMultiple) {
+        expect(preset.defaultCapMultiple).toBeLessThanOrEqual(preset.maxCapMultiple);
+      }
+    }
+  });
 });

@@ -35,7 +35,7 @@ import BN from "bn.js";
 
 import { isMainnet, rpcEndpoint } from "./cluster";
 import { gatedFetch, withRetry, ttlCache } from "./rpc";
-import { buildPresetParams, type BuildPresetOptions } from "./curves";
+import { CURVE_PRESETS, buildPresetParams, type BuildPresetOptions } from "./curves";
 import type { CurveState, QuoteToken, TradeSide } from "./types";
 
 const COMMITMENT: Commitment = "confirmed";
@@ -539,6 +539,16 @@ export async function planLaunch(params: LaunchRequest): Promise<LaunchPlan> {
   const configKeypair = Keypair.generate();
   const baseMintKeypair = Keypair.generate();
   const quoteMint = new PublicKey(params.quote.mint);
+
+  const preset = CURVE_PRESETS[params.preset];
+  const multiple = params.migrationMarketCap / params.initialMarketCap;
+  if (preset?.maxCapMultiple && multiple > preset.maxCapMultiple) {
+    // A plain Error: this module also runs in the CLI scripts, outside the
+    // server. `buildLaunch` checks the same thing first and answers with a 400.
+    throw new Error(
+      `${preset.label} is only near-flat over a narrow range: its migration cap can be at most ${preset.maxCapMultiple}x its initial cap, and this is ${multiple.toFixed(1)}x.`,
+    );
+  }
 
   const curve = buildCurveWithLiquidityWeights(
     buildPresetParams({

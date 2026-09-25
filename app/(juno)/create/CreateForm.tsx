@@ -94,8 +94,13 @@ export function CreateForm() {
       }),
     [preset, initialMc, migrationMc, quote.decimals],
   );
+  const maxMultiple = CURVE_PRESETS[preset].maxCapMultiple;
+  const tooWide = maxMultiple !== undefined && migrationMc / initialMc > maxMultiple;
   const valid =
-    name.trim().length > 0 && symbol.trim().length > 0 && migrationMc > initialMc;
+    name.trim().length > 0 &&
+    symbol.trim().length > 0 &&
+    migrationMc > initialMc &&
+    !tooWide;
   const busy = state.status === "building" || state.status === "signing";
 
   if (state.status === "done") {
@@ -249,7 +254,12 @@ export function CreateForm() {
               key={option.id}
               type="button"
               aria-pressed={preset === option.id}
-              onClick={() => setPreset(option.id)}
+              onClick={() => {
+                setPreset(option.id);
+                // Each preset has its own range: a flat one is only flat
+                // over a narrow one.
+                setMigrationMc(Math.round(initialMc * option.defaultCapMultiple));
+              }}
               className={cn(
                 "rounded-j border p-3 text-left transition-colors",
                 "focus-visible:ring-2 focus-visible:ring-j-focus focus-visible:outline-none",
@@ -325,6 +335,13 @@ export function CreateForm() {
           <NumberInput value={migrationMc} onChange={setMigrationMc} min={1000} step={1000} />
         </Field>
       </div>
+
+      {tooWide && (
+        <p className="-mt-4 text-[12px] text-j-danger">
+          {CURVE_PRESETS[preset].label} is only near-flat over a narrow range: graduate at no more
+          than {maxMultiple}× the opening valuation.
+        </p>
+      )}
 
       {migrationMc <= initialMc && (
         <p className="-mt-4 text-[12px] text-j-danger">
