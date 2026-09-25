@@ -200,7 +200,7 @@ HyperFrames from `.juno/video/final/hf/index.html` (written by
 | 0:20 | Landing page, scrolled in a browser window |
 | 0:30 | Problem card |
 | 0:40 | Phone fly-in with two reels either side |
-| 0:45 | A wallet in seconds |
+| 0:45 | A wallet in seconds (Privy email sign-in) |
 | 0:53 | Every post has a price |
 | 1:04 | Reels are markets too |
 | 1:19 | Real likes, real comments |

@@ -17,7 +17,7 @@ VOICE = "am_michael"
 LINES = {
     "intro": "This is Juno. Every post is a market.",
     "problem": "Today, creators get paid by platforms, months later, in ad money. The fans who found them first get nothing. On Juno, every post is its own market on Solana.",
-    "c01": "Open the app, and you have a wallet in seconds. No seed phrase, no extension. Fund it from the faucet, claim a name, and you're in.",
+    "c01": "Sign in with your email, and Privy creates a Solana wallet for you. No seed phrase, nothing to install. Fund it from the faucet, claim a name with a signed message, and you're in.",
     "c02": "The feed is made of posts, and every post has a price. Tap buy, pick an amount, and the quote comes straight from the live bonding curve. Confirmed on Solana in a couple of seconds.",
     "c03": "Reels work the same way. Full screen video, with the market right under the caption. Market cap, progress to graduation, buy and sell, one tap away. Swipe, and the next creator's market is already loaded. Like it, and that like is stored against your wallet.",
     "c04": "Likes and comments come from real wallets. Every count on screen is stored, and every comment is signed by the wallet that wrote it.",
@@ -29,7 +29,7 @@ LINES = {
     "c10": "Every coin shows what a buy of each size does to its price, quoted from the live curve. And you can buy an exact number of tokens, capped by a maximum spend.",
     "c11": "When a curve fills, it graduates into a Meteora DAMM v2 pool, and trading carries on there.",
     "c12": "And it isn't just devnet. All four curve shapes are live on mainnet, indexed by Jupiter within minutes. And this pool is priced in TSLAx, tokenized Tesla. Its config's quote mint is the Tesla xStock itself, accepted through Meteora's token badge. Every address is in the README, verifiable on chain.",
-    "stack": "Under the hood, one Expo app runs on iOS, Android and the web. The server builds every transaction, and the phone signs it, so keys never leave the device. Meteora runs the curves, Tessera and Pyth supply reference prices, and IPFS holds the media.",
+    "stack": "Under the hood, one Expo app runs on iOS, Android and the web. The server builds every transaction, and your Privy wallet signs it. Meteora runs the curves, Tessera and Pyth supply reference prices, and IPFS holds the media.",
     "outro": "Juno. Every post is a market. Built on Solana.",
 }
 

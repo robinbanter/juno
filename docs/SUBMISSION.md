@@ -26,9 +26,9 @@ the way a launchpad makes one in a meme.
 ## What Juno does
 
 - **A feed where every item has a price.** Posts and full-screen reels, each
-  with a buy dock: market cap, curve progress, buy and sell in two taps. The
-  keys stay on the phone; the server builds unsigned transactions and the
-  device signs them.
+  with a buy dock: market cap, curve progress, buy and sell in two taps. You sign
+  in with email and Privy creates an embedded Solana wallet; the server builds
+  unsigned transactions and the Privy wallet signs them.
 - **Pre-IPO markets.** Trade → Pre-IPO lists OpenAI, Kalshi and SpaceX with
   Tessera's live marks, holders and implied valuation. Each Juno curve beside
   them shows how far its implied price sits from the mark and whether it is

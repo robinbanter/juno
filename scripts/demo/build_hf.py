@@ -25,8 +25,8 @@ words = {k: json.load(open(f"{VO}/{k}.words.json")) for k in vo}
 INK, LIME, SAGE = "#12150E", "#D6FF3D", "#DCE6D4"
 
 CHAPTERS = [
-    ("c01", "A wallet in seconds", "No seed phrase, no extension. The key lives in the phone's keychain.",
-     ["Create a wallet in one tap", "Fund it from the in-app faucet", "Claim a name with a signed message"], ["Solana"]),
+    ("c01", "A wallet in seconds", "Sign in with email. Privy creates a Solana wallet, with no seed phrase.",
+     ["Email sign-in, secured by Privy", "Embedded Solana wallet, made on sign-in", "Fund it, then claim a name with a signed message"], ["Privy", "Solana"]),
     ("c02", "Every post has a price", "Buy the posts you believe in. The quote comes from the live bonding curve.",
      ["Live quote, fee and price impact", "Signed on the phone, confirmed on Solana", "“Bought by” read from real swaps"], ["Meteora DBC"]),
     ("c03", "Reels are markets too", "Full-screen video, with the market right under the caption.",
@@ -199,7 +199,7 @@ for n, (cid, title, body, facts, chips) in enumerate(CHAPTERS):
 # ------------------------------------------------------------------ stack
 s, d = T["stack"]
 cards = [("One app, three platforms", "Expo on iOS, Android and the web."),
-         ("Keys stay on the phone", "The server builds each transaction. The device signs it."),
+         ("Wallets by Privy", "The server builds each transaction. The Privy wallet signs it."),
          ("Meteora curves", "Dynamic Bonding Curve into DAMM v2, four measured shapes."),
          ("Real reference prices", "Tessera for pre-IPO, Pyth on-chain for stocks, IPFS for media.")]
 stats = [("5", "pools on mainnet"), ("4", "curve shapes, measured"), ("236", "unit tests"), ("3", "platforms")]

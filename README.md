@@ -58,8 +58,10 @@ read fails the app says so — it does not print a zero it never measured.
 - **No indexer.** Fills are decoded from pool vault deltas in the transactions
   the RPC already returns; that one decode drives activity, volume, the chart,
   cost basis and "Bought by".
-- **Keys never leave the device.** The server builds unsigned transactions;
-  the phone signs; the server submits.
+- **Wallets by Privy.** On iOS and Android you sign in with email and Privy
+  creates an embedded Solana wallet, with no seed phrase. The server builds
+  unsigned transactions, the Privy wallet signs, and the server submits. The
+  web build keeps a device key.
 - **A full lifecycle on devnet** — launch → trade → curve to 100% → migrated to
   DAMM v2 → creator fees claimed. Links in [JUNO.md](JUNO.md#on-chain-proof-devnet).
 
