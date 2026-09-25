@@ -160,7 +160,16 @@ with pauses held to 2.5s rather than cut to the bone. `full/` has each part:
 | `09-depth-exactout` | Park Session: depth chart → buy exactly 1,000,000 KICK |
 | `10-mainnet-proof` | JUNOC on Jupiter (mainnet) → Solscan |
 
-The status bar now shows the real time of day, so it agrees with the receipts.
+Added in the third session (inserted in order, nothing re-recorded):
+
+| Part | What happens | Sponsor |
+|---|---|---|
+| `06b-creator-claim` | Wild Bloom, as its creator: "Claim $0.0619 in creator fees" → signed on the phone → "Claimed 0.0005 SOL · tx 4XRaE9RY… · 9:31:44 PM", rewards drop to $0 | Meteora DBC |
+| `08b-pyth-reference` | Stocks (prices have moved since the earlier take) → Tesla → TSLA reference card: Live, $370.88, "Read from Pyth on-chain" | Pyth |
+| `09b-graduated-damm-v2` | Memes → two coins marked Graduated / On DAMM v2 → one opened: its fill history up to migration | Meteora DBC → DAMM v2 |
+| `10b-mainnet-tslax` | Solana Explorer, Mainnet: the TSLAx-quoted pool (owned by the DBC program) → its config's decoded data, Quote Mint XsDoV…JHzoB → that mint is Tesla xStock | Meteora, stock-paired pool |
+
+The full flow is now 6:47. The status bar now shows the real time of day, so it agrees with the receipts.
 Framed versions of the new takes are in `raw2/`.
 
 ## Editing
