@@ -226,7 +226,7 @@ parts.append(f"""
   <div class="end">
     <div class="end-mark" id="end-mark">{LOGO.format(c=INK)}<span>juno</span></div>
     <div class="end-tag" id="end-tag">Every post is a market.</div>
-    <div class="end-links" id="end-links"><span>juno-app-chi.vercel.app</span><span class="sep">·</span><span>github.com/nickthelegend/juno</span></div>
+    <div class="end-links" id="end-links"><span>juno-app-chi.vercel.app</span><span class="sep">·</span><span>github.com/robinbanter/juno</span></div>
     <div class="end-built" id="end-built">Built on Solana with Meteora, Tessera and Pyth</div>
   </div>
 </div>""")

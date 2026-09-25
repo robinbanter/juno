@@ -14,7 +14,7 @@ Built for the Solana **STOCKLANA** hackathon.
 | | |
 |---|---|
 | **Try it** | **https://juno-app-chi.vercel.app** — the Expo app's web build. Open it on a phone, or on a laptop it runs in a phone-width frame. |
-| **Download** | **[Release v1.1.0](https://github.com/nickthelegend/juno/releases/tag/v1.1.0)**: the Android APK (arm64) and an iOS Simulator build, both signing with a Privy embedded wallet, plus the demo film. |
+| **Download** | **[Release v1.1.0](https://github.com/robinbanter/juno/releases/tag/v1.1.0)**: the Android APK (arm64) and an iOS Simulator build, both signing with a Privy embedded wallet, plus the demo film. |
 | **Network** | The app runs on Solana **devnet**: no real money, and Profile → *Get devnet SOL* funds a new wallet. The four curve presets are also **[live on mainnet](#live-on-mainnet)**. |
 | **API** | https://juno-web-production-bd2e.up.railway.app/api/juno/… |
 | **Landing** | https://juno-landing-beta.vercel.app |
@@ -23,7 +23,7 @@ Built for the Solana **STOCKLANA** hackathon.
 ## Install it
 
 - **Android:** download `juno-v1.1.0-android.apk` from the
-  [release](https://github.com/nickthelegend/juno/releases/tag/v1.1.0), allow
+  [release](https://github.com/robinbanter/juno/releases/tag/v1.1.0), allow
   installs from your browser, and open it. Profile → *Continue with email*
   signs in with Privy and creates your Solana wallet.
 - **iOS Simulator (Mac with Xcode):** download
