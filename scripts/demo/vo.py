@@ -33,17 +33,18 @@ LINES = {
     "outro": "Juno. Every post is a market. Built on Solana.",
 }
 
-out = sys.argv[1]
-kokoro = Kokoro(MODEL, VOICES)
-durations = {}
-only = set(sys.argv[2].split(",")) if len(sys.argv) > 2 else None
-old = json.load(open(f"{out}/durations.json")) if only else {}
-durations.update(old)
-for key, text in LINES.items():
-    if only and key not in only:
-        continue
-    samples, rate = kokoro.create(text, voice=VOICE, speed=1.02, lang="en-us")
-    sf.write(f"{out}/{key}.wav", samples, rate)
-    durations[key] = round(len(samples) / rate, 2)
-    print(key, durations[key])
-json.dump(durations, open(f"{out}/durations.json", "w"), indent=1)
+if __name__ == "__main__":
+    out = sys.argv[1]
+    kokoro = Kokoro(MODEL, VOICES)
+    durations = {}
+    only = set(sys.argv[2].split(",")) if len(sys.argv) > 2 else None
+    old = json.load(open(f"{out}/durations.json")) if only else {}
+    durations.update(old)
+    for key, text in LINES.items():
+        if only and key not in only:
+            continue
+        samples, rate = kokoro.create(text, voice=VOICE, speed=1.22, lang="en-us")
+        sf.write(f"{out}/{key}.wav", samples, rate)
+        durations[key] = round(len(samples) / rate, 2)
+        print(key, durations[key])
+    json.dump(durations, open(f"{out}/durations.json", "w"), indent=1)

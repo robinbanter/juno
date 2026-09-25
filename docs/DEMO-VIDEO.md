@@ -174,36 +174,51 @@ Framed versions of the new takes are in `raw2/`.
 
 ## The final film
 
-`.juno/video/final/juno-demo-film.mp4`, 4:44, 1920×1080, rendered with
+`.juno/video/final/juno-demo-film.mp4`, 3:41, 1920×1080, rendered with
 HyperFrames from `.juno/video/final/hf/index.html` (written by
 `scripts/demo/build_hf.py`). Text is Plus Jakarta Sans, the landing page's font.
-Voiceover: Kokoro TTS, male voice `am_michael` (`scripts/demo/vo.py`). Music:
-MusicGen small, two passes looped under the voice at about −28 LUFS
-(`scripts/demo/music.py`). The iOS footage is fast-forwarded per chapter
-(1.3× to 2.5×) to fit its narration; nothing is cut.
+
+- **Layout.** Follows the Mixkit app-promo template (#596): a dark stage, the
+  phone alternating sides with a lime disc behind it, a 3D swing between
+  chapters, and titles that type in letter by letter. The phone body is drawn
+  in HTML over the cropped screen recording, so the disc can sit behind it.
+  There are no chapter numbers.
+- **Voiceover.** ElevenLabs `eleven_multilingual_v2`, voice
+  `JBFqnCBsd6RMkjVDRZzb`, at speed 1.2 (`scripts/demo/vo_eleven.py`). The script
+  is in `vo.py` (`LINES`). The key comes from the `ELEVENLABS_API_KEY`
+  environment variable and is never saved.
+- **Subtitles.** Burned in from the ElevenLabs word timings, one phrase at a
+  time, with each word lit in lime as it's spoken.
+- **Music.** MusicGen small, looped under the voice at about −28 LUFS
+  (`scripts/demo/music.py`).
+- **Footage.** `scripts/demo/clips.py` crops the screen out of each iOS take
+  and fast-forwards it to fit its line (1.8× to 3×). Nothing is cut.
 
 | Starts | Section |
 |---|---|
 | 0:00 | “Gone Public” cat film (its own sound) |
 | 0:20 | Landing page, scrolled in a browser window |
-| 0:31 | Problem card |
-| 0:45 | 01 A wallet in seconds |
-| 0:57 | 02 Every post has a price |
-| 1:11 | 03 Reels are markets too |
-| 1:34 | 04 Real likes, real comments |
-| 1:44 | 05 Posting is launching (live receipts) |
-| 2:09 | 06 Reels launch the same way |
-| 2:37 | 07 Creators get paid |
-| 2:49 | 08 Pre-IPO, on a curve (Tessera) |
-| 3:09 | 09 Listed stocks, priced by Pyth |
-| 3:25 | 10 Depth, and exact-out (Meteora) |
-| 3:42 | 11 Graduation to DAMM v2 |
-| 3:51 | 12 Live on mainnet |
-| 4:14 | How it's built |
-| 4:35 | End card |
+| 0:30 | Problem card |
+| 0:40 | Phone fly-in with two reels either side |
+| 0:45 | A wallet in seconds |
+| 0:53 | Every post has a price |
+| 1:04 | Reels are markets too |
+| 1:19 | Real likes, real comments |
+| 1:27 | Posting is launching (live receipts) |
+| 1:44 | Reels launch the same way |
+| 2:07 | Creators get paid |
+| 2:15 | Pre-IPO, on a curve (Tessera) |
+| 2:29 | Listed stocks, priced by Pyth |
+| 2:40 | Depth, and exact-out (Meteora) |
+| 2:51 | Graduation to DAMM v2 |
+| 2:58 | Live on mainnet |
+| 3:17 | How it's built |
+| 3:34 | End card |
 
-To change a line of narration: edit `scripts/demo/vo.py`, run it for that key,
-re-run `build_hf.py`, then `npx hyperframes render` in `hf/`.
+To change a line of narration: edit `LINES` in `scripts/demo/vo.py`, run
+`vo_eleven.py` for that key and normalise it into `hf/assets/audio/`. Then re-run
+`clips.py` (the chapter lengths follow the voice), then `build_hf.py`, and
+finally `npx hyperframes render` in `hf/`.
 
 ## Editing
 
