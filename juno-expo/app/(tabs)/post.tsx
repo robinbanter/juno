@@ -145,6 +145,14 @@ export default function PostScreen() {
       setUnlisted(null);
       setStatus(null);
       feedChanged();
+      // A blank composer for the next one. The tab stays mounted, so coming
+      // back to it showed the last post filled in — one tap from launching a
+      // duplicate coin.
+      setMedia(null);
+      setName("");
+      setSymbol("");
+      setCaption("");
+      setPreset("content");
       router.push(`/coin/${record.baseMint}`);
     } catch (caught) {
       setUnlisted(record);

@@ -415,6 +415,38 @@ const LISTED: Record<string, { name: string; venue: string }> = {
 };
 
 /**
+ * The company's own logo, so a listed name reads as that company at a glance.
+ *
+ * Loaded from a public stock-logo endpoint by ticker. Should it fail — an
+ * unknown ticker, no network — the tile falls back to the ticker in type, so
+ * the card never shows a broken image.
+ */
+function StockLogo({ ticker }: { ticker: string }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) {
+    return (
+      <View style={styles.tickerTile}>
+        {/* Sized by length rather than `adjustsFontSizeToFit`, which web ignores. */}
+        <Text style={[styles.tickerTileText, { fontSize: ticker.length > 3 ? 12 : 15 }]} numberOfLines={1}>
+          {ticker.slice(0, 4)}
+        </Text>
+      </View>
+    );
+  }
+  return (
+    <View style={styles.logoTile}>
+      <ExpoImage
+        source={{ uri: `https://financialmodelingprep.com/image-stock/${encodeURIComponent(ticker)}.png` }}
+        style={{ width: 34, height: 34 }}
+        contentFit="contain"
+        accessibilityLabel={`${LISTED[ticker]?.name ?? ticker} logo`}
+        onError={() => setFailed(true)}
+      />
+    </View>
+  );
+}
+
+/**
  * One market, as a card — the same shape as a pre-IPO company.
  *
  * A stock card leads with the thing the tracker is *of*: the company, its
@@ -446,15 +478,7 @@ function MarketCard({
       <View style={styles.company}>
         <View style={styles.companyHead}>
           {stock ? (
-            <View style={styles.tickerTile}>
-              {/* Sized by length rather than `adjustsFontSizeToFit`, which web ignores. */}
-              <Text
-                style={[styles.tickerTileText, { fontSize: (ticker ?? coin.symbol).length > 3 ? 12 : 15 }]}
-                numberOfLines={1}
-              >
-                {(ticker ?? coin.symbol).slice(0, 4)}
-              </Text>
-            </View>
+            <StockLogo ticker={ticker ?? coin.symbol} />
           ) : (
             <CoinArt uri={juno.still(coin.media)} seed={coin.address} size={48} radius={14} />
           )}
@@ -632,6 +656,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: theme.colors.ink,
+  },
+  logoTile: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FFFFFF",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.line,
   },
   tickerTileText: { fontSize: 13, fontWeight: "900", color: theme.colors.lime, letterSpacing: -0.2 },
 
