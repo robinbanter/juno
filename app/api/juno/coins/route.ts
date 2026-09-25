@@ -1,6 +1,6 @@
 import { hydratePools } from "@/lib/juno/chain";
 import { listPools } from "@/lib/juno/registry";
-import { junoHandler, junoJson, junoOptions } from "@/lib/juno/api";
+import { junoJson, junoOptions, junoRead } from "@/lib/juno/api";
 import { cluster } from "@/lib/juno/cluster";
 import { socialCounts } from "@/lib/juno/social";
 import type { Coin } from "@/lib/juno/types";
@@ -16,7 +16,7 @@ export const OPTIONS = junoOptions;
  * against an endpoint that throttles.
  */
 export async function GET(request: Request) {
-  return junoHandler(async () => {
+  return junoRead(async () => {
     const url = new URL(request.url);
     const limit = Math.min(Number(url.searchParams.get("limit") ?? 40) || 40, 60);
     const sort = url.searchParams.get("sort");

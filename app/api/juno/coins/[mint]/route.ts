@@ -6,7 +6,7 @@ import { listSwapHistory } from "@/lib/juno/swaps";
 import { quoteTokenUsdPrice } from "@/lib/juno/pyth";
 import { getPool } from "@/lib/juno/registry";
 import { cluster } from "@/lib/juno/cluster";
-import { junoError, junoHandler, junoJson, junoOptions } from "@/lib/juno/api";
+import { junoError, junoJson, junoOptions, junoRead } from "@/lib/juno/api";
 
 export const dynamic = "force-dynamic";
 export const OPTIONS = junoOptions;
@@ -22,7 +22,7 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ mint: string }> },
 ) {
-  return junoHandler(async () => {
+  return junoRead(async () => {
     const { mint } = await params;
 
     const row = await getPool(mint);

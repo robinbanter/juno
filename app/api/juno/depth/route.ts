@@ -1,4 +1,4 @@
-import { junoError, junoHandler, junoJson, junoOptions } from "@/lib/juno/api";
+import { junoError, junoJson, junoOptions, junoRead } from "@/lib/juno/api";
 import { fetchPoolSnapshot } from "@/lib/juno/dbc";
 import { sampleDepth, suggestSize } from "@/lib/juno/depth";
 import { quoteTokenUsdPrice } from "@/lib/juno/pyth";
@@ -19,7 +19,7 @@ export const OPTIONS = junoOptions;
  * account, so twenty-eight probes cost one RPC call between them.
  */
 export async function GET(request: Request) {
-  return junoHandler(async () => {
+  return junoRead(async () => {
     const url = new URL(request.url);
     const mint = url.searchParams.get("mint") ?? "";
     if (!mint) return junoError("A mint is required");

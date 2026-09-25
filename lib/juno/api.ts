@@ -89,6 +89,15 @@ export async function retryWhenBusy<T>(run: () => Promise<T>, delays = [1_200, 2
   }
 }
 
+/**
+ * `junoHandler` for a read: a brief public-RPC refusal is waited out instead of
+ * answered with a 503. Only for handlers that change nothing — see
+ * `retryWhenBusy`.
+ */
+export function junoRead(run: () => Promise<Response>): Promise<Response> {
+  return junoHandler(() => retryWhenBusy(run));
+}
+
 /** Run a handler, turning a thrown error into a clean 4xx/5xx. */
 export async function junoHandler(
   run: () => Promise<Response>,

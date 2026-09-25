@@ -5,7 +5,7 @@ import { shortAddress } from "@/lib/juno/format";
 import { listPosts, replyCounts } from "@/lib/juno/posts";
 import { notesForSignatures } from "@/lib/juno/social";
 import { listPools } from "@/lib/juno/registry";
-import { junoError, junoHandler, junoJson, junoOptions } from "@/lib/juno/api";
+import { junoError, junoJson, junoOptions, junoRead } from "@/lib/juno/api";
 import { following } from "@/lib/juno/social-graph";
 import { cluster } from "@/lib/juno/cluster";
 
@@ -101,7 +101,7 @@ type FeedItem =
  * share.
  */
 export async function GET(request: Request) {
-  return junoHandler(async () => {
+  return junoRead(async () => {
     const url = new URL(request.url);
     const limit = Math.min(Number(url.searchParams.get("limit") ?? 40) || 40, 80);
 

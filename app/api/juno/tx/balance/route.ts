@@ -1,6 +1,6 @@
 import { PublicKey } from "@solana/web3.js";
 
-import { junoError, junoHandler, junoJson, junoOptions } from "@/lib/juno/api";
+import { junoError, junoJson, junoOptions, junoRead } from "@/lib/juno/api";
 import { getConnection } from "@/lib/juno/dbc";
 import { assertAddress } from "@/lib/juno/social-graph";
 
@@ -29,7 +29,7 @@ const WRAPPED_SOL = "So11111111111111111111111111111111111111112";
  * `GET ?wallet=&mint=`.
  */
 export async function GET(request: Request) {
-  return junoHandler(async () => {
+  return junoRead(async () => {
     const url = new URL(request.url);
     const wallet = url.searchParams.get("wallet") ?? "";
     const mint = url.searchParams.get("mint") ?? "";
