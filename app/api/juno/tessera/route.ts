@@ -47,11 +47,20 @@ export async function GET() {
     const withFacts = await Promise.all(
       tokens.map(async (token) => {
         const chain = await tesseraOnChain(token.mint).catch(() => null);
-        const markets = coins.filter(
-          (coin) =>
-            rows.find((row) => row.baseMint === coin.address)?.navFeedId ===
-            tesseraRef(token.id),
-        );
+        /*
+         * From the registry, not from what the chain answered.
+         *
+         * This filtered the *hydrated* coins, so one throttled RPC burst —
+         * every read refused at once — emptied all three companies and the
+         * page said "No Juno market on OpenAI yet" over a live market. The
+         * rows are the list; a read that failed costs that row its figures.
+         */
+        const markets = referenced
+          .filter((row) => row.navFeedId === tesseraRef(token.id))
+          .map((row) => ({
+            row,
+            coin: coins.find((coin) => coin.address === row.baseMint) ?? null,
+          }));
 
         return {
           ...token,
@@ -69,19 +78,19 @@ export async function GET() {
           /** Total value of every T-token in existence, at the mark. */
           floatUsd: token.supply === null ? null : token.supply * token.markPrice,
           onChain: chain,
-          markets: markets.map((coin) => ({
-            address: coin.address,
-            name: coin.name,
-            symbol: coin.symbol,
-            priceUsd: coin.priceUsd,
-            marketCap: coin.marketCap,
-            currency: coin.marketCapCurrency,
-            curvePreset: coin.curvePreset,
-            progress: coin.curve.progress,
-            graduated: coin.curve.graduated,
+          markets: markets.map(({ row, coin }) => ({
+            address: row.baseMint,
+            name: row.name,
+            symbol: row.symbol,
+            priceUsd: coin?.priceUsd ?? null,
+            marketCap: coin?.marketCap ?? null,
+            currency: coin?.marketCapCurrency ?? null,
+            curvePreset: row.curvePreset,
+            progress: coin?.curve.progress ?? null,
+            graduated: coin?.curve.graduated ?? null,
             /** Where the curve sits against Tessera's mark, if it could be read. */
-            deviation: coin.nav?.deviation ?? null,
-            withinBand: coin.nav?.withinBand ?? null,
+            deviation: coin?.nav?.deviation ?? null,
+            withinBand: coin?.nav?.withinBand ?? null,
           })),
         };
       }),

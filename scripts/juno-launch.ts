@@ -16,7 +16,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
 
 import { cluster, explorer, marketUrl, rpcEndpoint } from "../lib/juno/cluster";
-import { getConnection, planLaunch, sendLaunch, USDC, WSOL } from "../lib/juno/dbc";
+import { getConnection, planLaunch, sendLaunch, TSLAX, USDC, WSOL } from "../lib/juno/dbc";
 import { CURVE_PRESETS } from "../lib/juno/curves";
 import { pinTokenMetadata } from "../lib/juno/pinata";
 import type { CurvePresetId } from "../lib/juno/types";
@@ -69,7 +69,11 @@ async function main() {
   const symbol = arg("symbol", "JUNOTEST")!;
   // SOL is the safe default on devnet: it is the only quote mint guaranteed to
   // exist there. USDC is the right choice for an equity-shaped mainnet launch.
-  const quote = arg("quote") === "usdc" ? USDC : WSOL;
+  const quote =
+    arg("quote") === "usdc" ? USDC : arg("quote") === "tslax" ? TSLAX : WSOL;
+  if (quote === TSLAX && cluster() !== "mainnet-beta") {
+    throw new Error("TSLAx has a DBC token badge on mainnet only.");
+  }
   const initialMarketCap = Number(arg("initial", "1000"));
   const migrationMarketCap = Number(arg("migration", "25000"));
 
@@ -87,7 +91,7 @@ async function main() {
 
   // A launch costs ~0.027 SOL. Devnet tops up at 0.1 because the faucet is
   // free; mainnet only needs enough for the one launch in hand.
-  const minimum = cluster() === "devnet" ? 0.1 : 0.035;
+  const minimum = cluster() === "devnet" ? 0.1 : 0.028;
   if (balance < minimum * LAMPORTS_PER_SOL) {
     if (cluster() !== "devnet") {
       throw new Error(

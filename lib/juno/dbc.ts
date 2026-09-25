@@ -18,6 +18,7 @@ import {
   TokenDecimal,
   buildCurveWithLiquidityWeights,
   deriveDbcPoolAddress,
+  deriveTokenBadgeAddress,
   getCurrentPoint,
   getPriceFromSqrtPrice,
   getTokenDecimals,
@@ -97,6 +98,22 @@ export const USDC: QuoteToken = {
     : "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
   symbol: "USDC",
   decimals: 6,
+};
+
+/**
+ * Tokenized Tesla (xStocks), mainnet only.
+ *
+ * A curve priced in TSLAx is a stock-paired market: the thing people pay with
+ * is the stock itself. It is Token-2022 with extensions DBC would normally
+ * refuse, and Meteora has issued it a DBC token badge on mainnet — none exists
+ * on devnet — so launches pass the badge and it is a launch-script option,
+ * not an app one.
+ */
+export const TSLAX: QuoteToken = {
+  mint: "XsDoVfqeBukxuZHWhdvWHBhgEHjGNst4MLodqsJHzoB",
+  symbol: "TSLAx",
+  decimals: 8,
+  badged: true,
 };
 
 /**
@@ -715,6 +732,8 @@ export async function planLaunch(params: LaunchRequest): Promise<LaunchPlan> {
       leftoverReceiver: params.leftoverReceiver ?? params.creator,
       payer: params.payer,
       quoteMint,
+      // Only for a badged quote mint; everything else is permissionless.
+      tokenBadge: params.quote.badged ? deriveTokenBadgeAddress(quoteMint) : undefined,
       preCreatePoolParam: {
         name: params.name,
         symbol: params.symbol,

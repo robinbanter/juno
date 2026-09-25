@@ -14,6 +14,12 @@ export type QuoteToken = {
   decimals: number;
   /** Shown in the trade panel's token selector. */
   icon?: string;
+  /**
+   * A Token-2022 mint Meteora has whitelisted with a DBC token badge — the
+   * tokenized stocks (xStocks). The badge account rides along on the launch;
+   * without it the program rejects the mint's extensions.
+   */
+  badged?: boolean;
 };
 
 export type Creator = {
