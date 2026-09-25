@@ -1,0 +1,25 @@
+cluster   mainnet-beta
+rpc       https://api.mainnet-beta.solana.com
+launcher  47uNkySS2FmZ9QoMWyMnzPWK56FChaAxSRbyToSu3Dv8
+preset    Tight NAV — Near-flat curve for assets that should track an underlying.
+quote     TSLAx (XsDoVfqeBukxuZHWhdvWHBhgEHjGNst4MLodqsJHzoB)
+balance   0.0319 SOL
+metadata  https://gateway.pinata.cloud/ipfs/QmUEai2EHYRfG6ZX29crtRbSdgar1YxXwbzaULty6StPzS
+
+Building…
+Sending…
+  [1/2] Creating the curve config
+  [2/2] Opening the pool
+
+✅ Pool is live
+
+tx 1      https://solscan.io/tx/3tkWYgD3GhSg2MpWVkq4UqS6NffCiVgH37tZjtgL1Xmhw7vrWuWQFtcftEMjCSiZxm9dNRma14FkoNWpMn5PjRTG
+tx 2      https://solscan.io/tx/2ZTNonXdzBNSamrVjczTfMGXxeU5K8HZ8HUpZF2c3wSGAnpWyzZ2DGfAY2WhkDp2HmtbgifUxyLdp9rWSE2MXHg
+pool      https://solscan.io/account/Debp87Rb9kTFtMbbNJDdaXSJdSQghQkx2FABfxdo726N
+mint      https://solscan.io/token/APvmfhSRb4cpSvUKx7izcPdEwTvairDNbrezSWSAJjLZ
+config    https://solscan.io/account/u71dgTupc65vk4M9X9CwwBGenyoVmEeAFvSgT9PW6eg
+jupiter   https://jup.ag/tokens/APvmfhSRb4cpSvUKx7izcPdEwTvairDNbrezSWSAJjLZ
+
+app       /coin/APvmfhSRb4cpSvUKx7izcPdEwTvairDNbrezSWSAJjLZ
+metadata  ipfs://QmUEai2EHYRfG6ZX29crtRbSdgar1YxXwbzaULty6StPzS
+indexed   failed (is the dev server running?)

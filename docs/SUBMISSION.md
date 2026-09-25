@@ -93,11 +93,11 @@ flagged on the coin page and in the trade sheet. The feeds are read on-chain
 | Track | Target | What Juno does for it |
 |---|---|---|
 | **Main ($100k)** | Yes | A real consumer app: feed, reels, launch from a phone in two signatures, live receipts, comments and likes from real wallets, iOS + Android + web builds. |
-| **Meteora DBC ($5k)** | Yes | Four measured issuance shapes, depth tooling, exact-out buys, full lifecycle to DAMM v2, all four presets live on mainnet, and a stock-paired curve priced in TSLAx using Meteora's DBC token badge. |
+| **Meteora DBC ($5k)** | Yes | Four measured issuance shapes, depth tooling, exact-out buys, full lifecycle to DAMM v2, all four presets live on mainnet, and a stock-paired curve priced in TSLAx using Meteora's DBC token badge, live on mainnet (`Debp87Rb…`). |
 | **Tessera ($6k)** | Yes | Pre-IPO tab on Tessera's live marks for OpenAI, Kalshi and SpaceX; a bonding curve per name, marked against the T-token mark with a band warning before signing. |
 | **Pyth** | Yes | Listed trackers marked against on-chain `PriceUpdateV2`; the band warning changes what the trade sheet says. |
 | **PreStocks ($10k)** | No | Its rules exclude any entry that integrates non-PreStocks pre-IPO tokens, and Juno's Pre-IPO tab is built on Tessera. We chose depth on one track over a split. |
-| **Clawpump ($5k)** | No | Clawpump launches through pump.fun on mainnet only; the stock-paired pool it asks for is shown instead with Juno's own TSLAx-quoted Meteora curve. |
+| **Clawpump ($5k)** | No | Clawpump launches through pump.fun on mainnet only; the stock-paired pool it asks for is shown instead with Juno's own TSLAx-quoted Meteora curve, live on mainnet. |
 
 ## Why Solana
 

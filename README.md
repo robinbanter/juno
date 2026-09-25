@@ -67,7 +67,8 @@ read fails the app says so — it does not print a zero it never measured.
 
 The app runs on devnet so anyone can try it for free. The curves also run on
 **Solana mainnet**: one pool per preset, launched 25 Sep 2026 by
-`scripts/mainnet-proof.sh`, all nine transactions finalized.
+`scripts/mainnet-proof.sh`, all nine transactions finalized, plus a fifth pool
+priced in tokenized Tesla (below).
 
 | Pool | Curve | Quote | Open it | Launch transactions |
 |---|---|---|---|---|
@@ -80,6 +81,15 @@ The app runs on devnet so anyone can try it for free. The curves also run on
 shows its price chart, holders and trades by other wallets, $100 to $440
 each, in its first hour. Meteora's app has no page for a DBC pool, so the
 links above go to Jupiter and Solscan.
+
+**A stock-paired curve.** `JUNOTSLA` is priced in **TSLAx**, tokenized Tesla:
+the thing you pay with is the stock. TSLAx is Token-2022 with extensions DBC
+would normally refuse; Meteora has issued it a DBC token badge on mainnet, and
+Juno passes that badge at launch. `tight-nav` preset, 26 → 39 TSLAx.
+[pool](https://solscan.io/account/Debp87Rb9kTFtMbbNJDdaXSJdSQghQkx2FABfxdo726N) ·
+[token](https://solscan.io/token/APvmfhSRb4cpSvUKx7izcPdEwTvairDNbrezSWSAJjLZ) ·
+[config tx](https://solscan.io/tx/3tkWYgD3GhSg2MpWVkq4UqS6NffCiVgH37tZjtgL1Xmhw7vrWuWQFtcftEMjCSiZxm9dNRma14FkoNWpMn5PjRTG) ·
+[pool tx](https://solscan.io/tx/2ZTNonXdzBNSamrVjczTfMGXxeU5K8HZ8HUpZF2c3wSGAnpWyzZ2DGfAY2WhkDp2HmtbgifUxyLdp9rWSE2MXHg).
 
 **A real mainnet buy:** 0.01 SOL of JUNOC, [`DWAAoN5U…`](https://solscan.io/tx/DWAAoN5Uj344EyGwNK9AiG4UR48x5sCDqWRLccBxop67Nez11vSBs6DqqmpXgjt2UvCPhozvDz1DT5q42jsLFgV).
 
