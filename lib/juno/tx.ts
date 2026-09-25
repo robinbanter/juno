@@ -10,6 +10,9 @@ import {
   invalidatePoolSnapshot,
   planLaunch,
   quoteTrade,
+  quoteExactOutBuy,
+  buildExactOutBuyTransaction,
+  type ExactOutQuote,
   type LaunchRequest,
   type TradeQuote,
 } from "./dbc";
@@ -143,6 +146,11 @@ export type SwapBuildRequest = {
   side: TradeSide;
   /** Input amount in UI units — quote units on a buy, base units on a sell. */
   amountIn: number;
+  /**
+   * Buy exactly this many tokens instead. Replaces `amountIn`; the quote then
+   * reports what it costs and the most it may cost.
+   */
+  amountOut?: number;
   /** The wallet that will sign and pay. */
   owner: string;
   slippageBps?: number;
@@ -151,7 +159,7 @@ export type SwapBuildRequest = {
 export type SwapBuildResult = {
   unsigned: UnsignedTransaction;
   window: BlockhashWindow;
-  quote: TradeQuote;
+  quote: TradeQuote | ExactOutQuote;
   /** What the quote is denominated in, for honest labelling on the client. */
   quoteSymbol: string;
   /** Null when no USD feed is available for the quote token. */
@@ -159,6 +167,7 @@ export type SwapBuildResult = {
 };
 
 export async function buildSwap(request: SwapBuildRequest): Promise<SwapBuildResult> {
+  if (request.amountOut !== undefined) return buildExactOutBuy(request);
   if (!Number.isFinite(request.amountIn) || request.amountIn <= 0) {
     throw new CallerError("Amount must be greater than zero");
   }
@@ -211,6 +220,58 @@ export async function buildSwap(request: SwapBuildRequest): Promise<SwapBuildRes
 
   return {
     unsigned: serialise(prepared.transaction, request.side === "buy" ? "Buying" : "Selling"),
+    window: prepared.window,
+    quote,
+    quoteSymbol: quoteMint?.symbol ?? "SOL",
+    quoteUsdRate,
+  };
+}
+
+/**
+ * "Buy exactly 1M tokens" — `SwapMode.ExactOut`.
+ *
+ * Buy side only: a sell already names its exact input, which is the token.
+ */
+async function buildExactOutBuy(request: SwapBuildRequest): Promise<SwapBuildResult> {
+  const amountOut = request.amountOut!;
+  if (request.side !== "buy") throw new CallerError("Exact-out is for buys only");
+  if (!Number.isFinite(amountOut) || amountOut <= 0) {
+    throw new CallerError("Amount must be greater than zero");
+  }
+
+  const owner = new PublicKey(request.owner);
+  const snapshot = await fetchPoolSnapshot(request.poolAddress);
+  if (!snapshot) throw new CallerError("Pool not found on this cluster");
+  if (snapshot.curve.graduated) {
+    throw new CallerError("This pool has graduated — trade it in its DAMM v2 pool");
+  }
+
+  const quote = await quoteExactOutBuy({
+    snapshot,
+    amountOut,
+    slippageBps: request.slippageBps ?? 100,
+  }).catch((error: unknown) => {
+    if (error instanceof Error && /insufficient liquidity|completed/i.test(error.message)) {
+      throw new CallerError("This curve does not have that many tokens left to sell. Try fewer.");
+    }
+    throw error;
+  });
+
+  const transaction = await buildExactOutBuyTransaction({
+    snapshot,
+    owner,
+    amountOut,
+    maximumAmountIn: quote.maximumAmountIn,
+  });
+
+  const prepared = await prepare(transaction, owner);
+  const quoteMint = QUOTE_TOKENS.find((token) => token.mint === snapshot.config.quoteMint.toBase58());
+  const quoteUsdRate = await quoteTokenUsdPrice(snapshot.config.quoteMint.toBase58()).catch(
+    () => null,
+  );
+
+  return {
+    unsigned: serialise(prepared.transaction, "Buying"),
     window: prepared.window,
     quote,
     quoteSymbol: quoteMint?.symbol ?? "SOL",

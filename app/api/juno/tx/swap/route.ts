@@ -35,7 +35,11 @@ export async function POST(request: Request) {
     if (side !== "buy" && side !== "sell") {
       throw new CallerError('"side" must be "buy" or "sell"');
     }
-    const amountIn = requireNumber(body.amountIn, "amountIn");
+    // Either what to spend (`amountIn`) or, on a buy, exactly what to receive
+    // (`amountOut`, in tokens).
+    const amountOut =
+      body.amountOut === undefined ? undefined : requireNumber(body.amountOut, "amountOut");
+    const amountIn = amountOut === undefined ? requireNumber(body.amountIn, "amountIn") : 0;
 
     const row = await getPool(mint);
     if (!row) throw new CallerError("Coin not found");
@@ -45,6 +49,7 @@ export async function POST(request: Request) {
       poolAddress: row.poolAddress,
       side,
       amountIn,
+      amountOut,
       owner,
       slippageBps:
         body.slippageBps === undefined ? undefined : requireNumber(body.slippageBps, "slippageBps"),

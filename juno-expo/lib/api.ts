@@ -385,7 +385,15 @@ export type BlockhashWindow = { blockhash: string; lastValidBlockHeight: number 
 export type SwapBuild = {
   unsigned: UnsignedTransaction;
   window: BlockhashWindow;
-  quote: { amountOut: number; minimumAmountOut: number; fee: number; priceImpact: number };
+  quote: {
+    amountOut: number;
+    minimumAmountOut: number;
+    fee: number;
+    priceImpact: number;
+    /** Exact-out buys only: expected cost, and the most the transaction may spend. */
+    amountIn?: number;
+    maximumAmountIn?: number;
+  };
   quoteSymbol: string;
   quoteUsdRate: number | null;
   pool: string;
@@ -788,7 +796,10 @@ export const juno = {
       mint: string;
       owner: string;
       side: "buy" | "sell";
-      amountIn: number;
+      /** What to spend. */
+      amountIn?: number;
+      /** Or, on a buy, exactly how many tokens to receive (`SwapMode.ExactOut`). */
+      amountOut?: number;
       slippageBps?: number;
     },
     /** Shorter than the default when the caller has a usable quote to fall back on. */

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Linking, Modal, TextInput } from "react-native";
+import { Linking, Modal, Pressable, TextInput } from "react-native";
 import Svg, { Circle, Path } from "react-native-svg";
 import styled from "styled-components/native";
 
@@ -48,6 +48,8 @@ const QUICK_USD = [2, 20, 50, 100];
 const QUICK_QUOTE = [0.1, 0.25, 0.5, 1];
 /** A sell is a fraction of what you hold; absolute sizes mean nothing there. */
 const QUICK_SELL = [0.25, 0.5, 0.75, 1];
+/** Exact-out sizes, in tokens. Every Juno coin has a 1B supply. */
+const QUICK_TOKENS = [100_000, 1_000_000, 10_000_000, 50_000_000];
 
 /**
  * The move the size suggester searches against.
@@ -113,6 +115,15 @@ export function TradeSheet({
   const wallet = useWallet();
   const [side, setSide] = useState<"buy" | "sell">(initialSide);
   const [amount, setAmount] = useState(initialAmount);
+  /**
+   * Buy an exact number of tokens rather than spend an exact amount.
+   *
+   * `SwapMode.ExactOut`: the trader names what they want to hold and the
+   * curve names the price, with the transaction capped at a maximum spend
+   * instead of guarded by a minimum out. Buys only — a sell already names
+   * its token amount exactly.
+   */
+  const [exact, setExact] = useState(false);
   const [quote, setQuote] = useState<Awaited<ReturnType<typeof juno.buildSwap>> | null>(null);
   const [quoting, setQuoting] = useState(false);
   const [stage, setStage] = useState<Stage>("entry");
@@ -139,7 +150,10 @@ export function TradeSheet({
 
   const value = Number(amount || "0");
   const valid = Number.isFinite(value) && value > 0;
-  const unit = side === "buy" ? coin.quote.symbol : coin.symbol;
+  const exactOut = side === "buy" && exact;
+  const unit = side === "buy" && !exactOut ? coin.quote.symbol : coin.symbol;
+  /** What the balance is counted in — never the exact-out token. */
+  const balanceUnit = side === "buy" ? coin.quote.symbol : coin.symbol;
   const rate = coin.quoteUsdRate;
 
   /**
@@ -163,9 +177,12 @@ export function TradeSheet({
    * them. Unknown balances are not checked: a read that failed is not "empty".
    */
   const FEE_RESERVE = 0.01;
+  // What this trade takes out of the wallet. For an exact-out buy that is only
+  // known once quoted, and the bound that matters is the most it may cost.
+  const spend = exactOut ? (quote?.quote.maximumAmountIn ?? null) : value;
   const blocker = useMemo((): { text: string; url?: string } | null => {
     if (!valid) return null;
-    if (balance !== null && value > balance) {
+    if (balance !== null && spend !== null && spend > balance) {
       if (side === "sell") return { text: `You hold ${tokens(balance)} ${coin.symbol}.` };
       return coin.quote.symbol === "USDC"
         ? {
@@ -175,7 +192,7 @@ export function TradeSheet({
         : { text: `You have ${tokens(balance)} SOL. Get devnet SOL from your profile.` };
     }
     const sol = coin.quote.symbol === "SOL" && side === "buy" ? balance : feeBalance;
-    const spending = coin.quote.symbol === "SOL" && side === "buy" ? value : 0;
+    const spending = coin.quote.symbol === "SOL" && side === "buy" ? (spend ?? 0) : 0;
     if (sol !== null && sol !== undefined && sol - spending < FEE_RESERVE) {
       return {
         text:
@@ -185,18 +202,20 @@ export function TradeSheet({
       };
     }
     return null;
-  }, [valid, balance, value, side, coin.symbol, coin.quote.symbol, feeBalance]);
+  }, [valid, balance, spend, side, coin.symbol, coin.quote.symbol, feeBalance]);
 
   const usdEquivalent = useMemo(() => {
     if (!valid) return null;
     const live = quote?.quoteUsdRate ?? rate;
-    if (side === "buy") return live === null ? null : money(value * live, "USD", { compact: false });
+    if (side === "buy" && !exactOut) {
+      return live === null ? null : money(value * live, "USD", { compact: false });
+    }
     return coin.priceUsd > 0 ? money(value * coin.priceUsd, coin.marketCapCurrency, { compact: false }) : null;
-  }, [valid, value, side, quote?.quoteUsdRate, rate, coin.priceUsd, coin.marketCapCurrency]);
+  }, [valid, value, side, exactOut, quote?.quoteUsdRate, rate, coin.priceUsd, coin.marketCapCurrency]);
 
   // An amount the wallet cannot cover is refused in words above; quoting it
   // would spend a round trip on a transaction nobody can sign.
-  const overBalance = valid && balance !== null && value > balance;
+  const overBalance = valid && balance !== null && !exactOut && value > balance;
 
   useEffect(() => {
     if (!valid || !wallet.address || overBalance) {
@@ -214,7 +233,7 @@ export function TradeSheet({
           mint: coin.address,
           owner: wallet.address!,
           side,
-          amountIn: value,
+          ...(exactOut ? { amountOut: value } : { amountIn: value }),
         });
         if (!cancelled) {
           setQuote(built);
@@ -234,7 +253,7 @@ export function TradeSheet({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [amount, valid, value, side, coin.address, wallet.address, overBalance]);
+  }, [amount, valid, value, side, exactOut, coin.address, wallet.address, overBalance]);
 
   useEffect(() => {
     let cancelled = false;
@@ -303,7 +322,15 @@ export function TradeSheet({
        * signed is what the sheet shows.
        */
       const fresh = await juno
-        .buildSwap({ mint: coin.address, owner: address, side, amountIn: value }, REQUOTE_MS)
+        .buildSwap(
+          {
+            mint: coin.address,
+            owner: address,
+            side,
+            ...(exactOut ? { amountOut: value } : { amountIn: value }),
+          },
+          REQUOTE_MS,
+        )
         // A refresh that times out is not a reason to refuse the trade: the
         // quote on screen may still be inside its blockhash window, and
         // failing here would turn a slow endpoint into a failed buy. If the
@@ -323,7 +350,7 @@ export function TradeSheet({
       });
       setSignature(landed);
       setStage("done");
-      onFilled?.(value);
+      onFilled?.(exactOut ? (live.quote.amountIn ?? value) : value);
 
       // The announcement, if one was written. Its failure is reported on its
       // own line: the trade is already on chain and saying "the trade failed"
@@ -379,11 +406,14 @@ export function TradeSheet({
         amount: balance === null ? null : balance * fraction,
       }));
     }
+    if (exactOut) {
+      return QUICK_TOKENS.map((size) => ({ label: tokens(size), amount: size }));
+    }
     if (rate === null || rate <= 0) {
       return QUICK_QUOTE.map((size) => ({ label: `${size} ${coin.quote.symbol}`, amount: size }));
     }
     return QUICK_USD.map((dollars) => ({ label: `$${dollars}`, amount: dollars / rate }));
-  }, [side, balance, rate, coin.quote.symbol]);
+  }, [side, exactOut, balance, rate, coin.quote.symbol]);
 
   const done = stage === "done" && signature !== null;
 
@@ -454,12 +484,31 @@ export function TradeSheet({
                 <Caption>{usdEquivalent ? `~${usdEquivalent}` : " "}</Caption>
               </Col>
               <Col gap={4} style={{ alignItems: "flex-end" }}>
-                <TokenChip>
-                  <TokenDot />
-                  <TokenText>{unit}</TokenText>
-                </TokenChip>
+                {/* On a buy the chip is the switch: spend an exact amount of
+                    the quote token, or receive an exact number of tokens. */}
+                <Pressable
+                  disabled={side !== "buy"}
+                  onPress={() => {
+                    setExact((on) => !on);
+                    setAmount("");
+                    setQuote(null);
+                    setError(null);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    exactOut
+                      ? `Buying an exact number of ${coin.symbol}. Switch to spending ${coin.quote.symbol}`
+                      : `Spending ${coin.quote.symbol}. Switch to buying an exact number of ${coin.symbol}`
+                  }
+                >
+                  <TokenChip>
+                    <TokenDot />
+                    <TokenText>{unit}</TokenText>
+                    {side === "buy" ? <TokenText>⇅</TokenText> : null}
+                  </TokenChip>
+                </Pressable>
                 <Caption>
-                  Balance: {balance === null ? "—" : `${tokens(balance)} ${unit}`}
+                  Balance: {balance === null ? "—" : `${tokens(balance)} ${balanceUnit}`}
                 </Caption>
               </Col>
             </Field>
@@ -484,11 +533,11 @@ export function TradeSheet({
                 A bonding curve's whole character is how it absorbs size, and
                 that number was invisible in the one place a trader is deciding
                 on size. */}
-            {suggesting ? (
+            {suggesting && !exactOut ? (
               <Depth>
                 <Caption>Measuring what this curve will take…</Caption>
               </Depth>
-            ) : suggestion ? (
+            ) : suggestion && !exactOut ? (
               <Tappable
                 onPress={() => setAmount(trimTrailingZeros(suggestion.amountIn))}
                 to={0.98}
@@ -547,7 +596,17 @@ export function TradeSheet({
                 saying "type here", and a second voice saying it sat between
                 two rows of figures where a figure belongs. */}
             <Receive>
-              {quoting ? "Quoting against the curve…" : receiving ? `You'll receive ${receiving}` : " "}
+              {quoting
+                ? "Quoting against the curve…"
+                : exactOut && quote?.quote.amountIn !== undefined
+                  ? `Costs ${money(quote.quote.amountIn, coin.quote.symbol, { compact: false })} · at most ${money(
+                      quote.quote.maximumAmountIn ?? quote.quote.amountIn,
+                      coin.quote.symbol,
+                      { compact: false },
+                    )}`
+                  : receiving
+                    ? `You'll receive ${receiving}`
+                    : " "}
             </Receive>
 
             {/* The announcement. Optional, and never the default — a trade is

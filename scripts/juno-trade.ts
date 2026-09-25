@@ -6,6 +6,7 @@
  * browser wallet.
  *
  *   npm run juno:trade -- --mint <baseMint> --side buy --amount 0.1 --yes
+ *   npm run juno:trade -- --mint <baseMint> --out 1000000 --yes   # exactly 1M tokens
  */
 import { Keypair } from "@solana/web3.js";
 import { PublicKey } from "@solana/web3.js";
@@ -13,10 +14,13 @@ import { readFileSync } from "node:fs";
 
 import { cluster, explorer } from "../lib/juno/cluster";
 import {
+  buildExactOutBuyTransaction,
   buildPartialFillSwapTransaction,
   buildSwapTransaction,
   fetchPoolSnapshot,
   getDbcClient,
+  invalidatePoolSnapshot,
+  quoteExactOutBuy,
   quoteTrade,
   sendTransaction,
 } from "../lib/juno/dbc";
@@ -44,18 +48,39 @@ async function main() {
   const snapshot = await fetchPoolSnapshot(poolAddress);
   if (!snapshot) throw new Error("Pool not readable");
 
+  // Exact-out: name the tokens, let the curve name the price.
+  const exactOut = arg("out") === undefined ? null : Number(arg("out"));
+  const outQuote =
+    exactOut === null
+      ? null
+      : await quoteExactOutBuy({ snapshot, amountOut: exactOut, slippageBps: 300 });
+  if (outQuote) {
+    console.log(`cluster        ${cluster()}`);
+    console.log(`pool           ${poolAddress}`);
+    console.log(`mode           exact out (SwapMode.ExactOut)`);
+    console.log(`tokens wanted  ${exactOut}`);
+    console.log(`expected cost  ${outQuote.amountIn}`);
+    console.log(`maximum cost   ${outQuote.maximumAmountIn}`);
+    console.log(`fee            ${outQuote.fee}`);
+    console.log(`price impact   ${(outQuote.priceImpact * 100).toFixed(4)}%`);
+  }
+
   const partial = process.argv.includes("--partial");
   // An exact-in quote throws once the input exceeds the curve's remaining
   // capacity — which is precisely when a partial fill is the right tool, so
   // the quote is skipped rather than allowed to block it.
-  const quote = partial
+  const quote = partial || outQuote
     ? null
     : await quoteTrade({ snapshot, side, amountIn, slippageBps: 300 });
-  console.log(`cluster        ${cluster()}`);
-  console.log(`pool           ${poolAddress}`);
-  console.log(`side           ${side}`);
-  console.log(`amount in      ${amountIn}`);
-  if (quote) {
+  if (!outQuote) {
+    console.log(`cluster        ${cluster()}`);
+    console.log(`pool           ${poolAddress}`);
+    console.log(`side           ${side}`);
+    console.log(`amount in      ${amountIn}`);
+  }
+  if (outQuote) {
+    // printed above
+  } else if (quote) {
     console.log(`expected out   ${quote.amountOut}`);
     console.log(`minimum out    ${quote.minimumAmountOut}`);
     console.log(`fee            ${quote.fee}`);
@@ -69,7 +94,14 @@ async function main() {
     return;
   }
 
-  const transaction = partial
+  const transaction = outQuote
+    ? await buildExactOutBuyTransaction({
+        snapshot,
+        owner: payer.publicKey,
+        amountOut: exactOut!,
+        maximumAmountIn: outQuote.maximumAmountIn,
+      })
+    : partial
     ? await buildPartialFillSwapTransaction({
         snapshot,
         owner: payer.publicKey,
@@ -94,6 +126,8 @@ async function main() {
     onSent: (sig) => console.log(`\nsent           ${sig}`),
   });
 
+  // The snapshot cache would otherwise answer with the pre-trade read.
+  invalidatePoolSnapshot(poolAddress);
   const after = await fetchPoolSnapshot(poolAddress);
   console.log(`\n✅ Trade confirmed`);
   console.log(`tx             ${explorer.tx(signature)}`);

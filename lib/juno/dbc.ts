@@ -540,6 +540,88 @@ export async function quoteTrade(params: {
   };
 }
 
+export type ExactOutQuote = TradeQuote & {
+  /** What the buy is expected to cost, fee included, in quote UI units. */
+  amountIn: number;
+  /** The most the transaction may spend; the program reverts above it. */
+  maximumAmountIn: number;
+};
+
+/**
+ * Quote a buy of an exact number of tokens.
+ *
+ * The other direction from `quoteTrade`: the trader names what they want to
+ * hold and the curve says what it costs. On a bonding curve that is not a
+ * division — the price moves while you fill — so it is solved by the SDK's
+ * `swapQuote2` in `SwapMode.ExactOut`, the same maths the program runs, and the
+ * transaction carries `maximumAmountIn` as the slippage bound instead of a
+ * minimum out.
+ */
+export async function quoteExactOutBuy(params: {
+  snapshot: PoolSnapshot;
+  /** Tokens wanted, in base UI units. */
+  amountOut: number;
+  slippageBps?: number;
+  currentPoint?: BN;
+}): Promise<ExactOutQuote> {
+  const { snapshot, amountOut, slippageBps = 100 } = params;
+  const { baseDecimals, quoteDecimals } = snapshot;
+  const currentPoint =
+    params.currentPoint ?? (await getCurrentPoint(getConnection(), ActivationType.Timestamp));
+
+  const result = getDbcClient().pool.swapQuote2({
+    virtualPool: snapshot.pool,
+    config: snapshot.config,
+    swapBaseForQuote: false,
+    swapMode: SwapMode.ExactOut,
+    amountOut: uiToBn(amountOut, baseDecimals),
+    slippageBps,
+    hasReferral: false,
+    eligibleForFirstSwapWithMinFee: false,
+    currentPoint,
+  }) as unknown as {
+    includedFeeInputAmount: BN;
+    excludedFeeInputAmount: BN;
+    maximumAmountIn?: BN;
+  };
+
+  const amountIn = bnToUi(result.includedFeeInputAmount, quoteDecimals);
+  const curveIn = bnToUi(result.excludedFeeInputAmount, quoteDecimals);
+  const fee = Math.max(amountIn - curveIn, 0);
+  // Measured the same way as `quoteTrade`: what spot would have charged for
+  // these tokens, against what the fill actually costs.
+  const spotIn = amountOut * snapshot.price;
+
+  return {
+    amountIn,
+    maximumAmountIn: bnToUi(result.maximumAmountIn ?? result.includedFeeInputAmount, quoteDecimals),
+    amountOut,
+    minimumAmountOut: amountOut,
+    fee,
+    priceImpact: amountIn > 0 ? Math.max(0, (amountIn - spotIn) / amountIn) : 0,
+    curveImpact: curveIn > 0 ? Math.max(0, (curveIn - spotIn) / curveIn) : 0,
+  };
+}
+
+/** The transaction for `quoteExactOutBuy`: exactly `amountOut`, or it reverts. */
+export async function buildExactOutBuyTransaction(params: {
+  snapshot: PoolSnapshot;
+  owner: PublicKey;
+  amountOut: number;
+  maximumAmountIn: number;
+}): Promise<Transaction> {
+  const { baseDecimals, quoteDecimals } = params.snapshot;
+  return getDbcClient().pool.swap2({
+    owner: params.owner,
+    pool: params.snapshot.poolAddress,
+    swapMode: SwapMode.ExactOut,
+    amountOut: uiToBn(params.amountOut, baseDecimals),
+    maximumAmountIn: uiToBn(params.maximumAmountIn, quoteDecimals),
+    swapBaseForQuote: false,
+    referralTokenAccount: null,
+  });
+}
+
 /* ------------------------------------------------------------------ */
 /* Writes                                                              */
 /* ------------------------------------------------------------------ */
